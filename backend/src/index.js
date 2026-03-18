@@ -23,6 +23,8 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const bcrypt = require('bcryptjs');
+const BCRYPT_ROUNDS = 10;
 
 // =================================================================
 // CONFIGURACIÓN DE MULTER (SUBIDA DE IMÁGENES)
@@ -191,17 +193,30 @@ const productos = [
   console.log('Productos de ejemplo insertados');
 }
 
-// Seed de usuarios (admin y standard)
+// Seed de usuarios (admin y standard) con contraseñas hasheadas
 const usuariosExistentes = db.prepare('SELECT COUNT(*) as count FROM usuarios').get();
 if (usuariosExistentes.count === 0) {
   const adminUser = process.env.ADMIN_USER || 'admin';
   const adminPass = process.env.ADMIN_PASS || 'admin123';
   const stdUser = process.env.USER_STANDARD || 'user';
   const stdPass = process.env.USER_PASS || 'user123';
-  
-  db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run(adminUser, adminPass, 'admin@kratamex.com', 'admin');
-  db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run(stdUser, stdPass, 'user@kratamex.com', 'standard');
-  console.log('Usuarios de ejemplo insertados');
+
+  const adminHash = bcrypt.hashSync(adminPass, BCRYPT_ROUNDS);
+  const stdHash = bcrypt.hashSync(stdPass, BCRYPT_ROUNDS);
+
+  db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run(adminUser, adminHash, 'admin@kratamex.com', 'admin');
+  db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run(stdUser, stdHash, 'user@kratamex.com', 'standard');
+  console.log('Usuarios de ejemplo insertados con contraseñas hasheadas');
+} else {
+  // Migrar contraseñas en texto plano si las hay (las hasheadas empiezan con $2)
+  const usuarios = db.prepare('SELECT id, password FROM usuarios').all();
+  const updateStmt = db.prepare('UPDATE usuarios SET password = ? WHERE id = ?');
+  for (const u of usuarios) {
+    if (!u.password.startsWith('$2')) {
+      const hash = bcrypt.hashSync(u.password, BCRYPT_ROUNDS);
+      updateStmt.run(hash, u.id);
+    }
+  }
 }
 
 // Seed de pedidos de ejemplo
@@ -507,9 +522,10 @@ app.post('/api/login', loginRateLimiter, (req, res) => {
     return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
   }
 
-  const user = db.prepare('SELECT * FROM usuarios WHERE username = ? AND password = ?').get(username, password);
+  const user = db.prepare('SELECT * FROM usuarios WHERE username = ?').get(username);
+  const passwordValida = user && bcrypt.compareSync(password, user.password);
 
-  if (!user) {
+  if (!user || !passwordValida) {
     recordFailedLogin(ip);
     const intentos = loginAttempts[ip]?.count || 1;
     const restantes = MAX_ATTEMPTS - intentos;

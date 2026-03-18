@@ -140,10 +140,16 @@ En background:
 docker compose up --build -d
 ```
 
-- Frontend: http://localhost:3000
-- Backend: http://localhost:3001
+| Servicio | URL |
+|----------|-----|
+| Web (HTTPS) | https://localhost |
+| Web (HTTP → redirige) | http://localhost |
+| Frontend directo | http://localhost:3000 |
+| Backend directo | http://localhost:3001 |
 
-El proxy del frontend enruta `/api/*` al backend automáticamente dentro de la red Docker.
+> El certificado SSL es autofirmado. El navegador mostrará una advertencia de seguridad — es esperado en entorno de desarrollo. En producción se debe usar un certificado válido (Let's Encrypt, etc.)
+
+nginx actúa como reverse proxy: termina TLS, redirige HTTP→HTTPS y enruta `/api/*` al backend y `/` al frontend.
 
 ### Manual
 
