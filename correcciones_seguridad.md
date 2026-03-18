@@ -128,33 +128,46 @@ El sistema permite subir archivos sin validación suficiente del tipo de conteni
 ---
 
 ## [ID-007] Contraseñas Sin Hash
-**Fecha:** 18/03/2026
+**Fecha:** 19/03/2026
 **Nivel de Riesgo:** 🔴 Crítico
 
 ### 1. Descripción del fallo
-Las contraseñas se almacenan en texto plano en la base de datos.
+Las contraseñas se almacenaban en texto plano en la base de datos. Un volcado de la BD exponía todas las credenciales directamente.
 
 ### 2. Impacto
 - Exposición de contraseñas si la base de datos es comprometida
-- Violación de principios de seguridad
+- Violación de principios de seguridad (OWASP A02)
 
 ### 3. Solución (Parche)
-- No implementado aún (necesario para producción)
+- Instalada librería `bcryptjs` (pure JS, compatible con Alpine/Docker)
+- Contraseñas hasheadas con bcrypt (10 rondas) en el seed de usuarios
+- Login actualizado para usar `bcrypt.compareSync` en vez de comparación directa
+- Migración automática al arrancar: si existen contraseñas en texto plano en la BD, se hashean automáticamente
+
+### 4. Commits relacionados
+- `pendiente` - fix: hash passwords with bcrypt and add HTTPS via nginx
 
 ---
 
 ## [ID-008] Falta de HTTPS
-**Fecha:** 18/03/2026
+**Fecha:** 19/03/2026
 **Nivel de Riesgo:** 🔴 Crítico
 
 ### 1. Descripción del fallo
-La aplicación funciona solo sobre HTTP sin cifrado TLS/SSL.
+La aplicación funcionaba solo sobre HTTP sin cifrado TLS/SSL, exponiendo credenciales y datos en tránsito.
 
 ### 2. Impacto
 - Interceptación de tráfico (man-in-the-middle)
 - Exposición de credenciales en texto plano durante transmisión
 
 ### 3. Solución (Parche)
-- No implementado aún (necesario para producción)
+- Añadido servicio nginx como reverse proxy con terminación TLS en `docker-compose.yml`
+- Certificado SSL autofirmado (RSA 2048, válido 365 días) en `nginx/certs/`
+- nginx escucha en puerto 443 (HTTPS) con TLSv1.2 y TLSv1.3
+- HTTP (puerto 80) redirige automáticamente a HTTPS con código 301
+- nginx enruta `/api/` al backend y `/` al frontend internamente
+
+### 4. Commits relacionados
+- `pendiente` - fix: hash passwords with bcrypt and add HTTPS via nginx
 
 ---
