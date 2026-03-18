@@ -75,14 +75,15 @@ Los estilos globales se encuentran en `index.css`. El componente `Admin` ha sido
 - `productos` - Catálogo de productos
 - `pedidos` - Pedidos realizados
 - `pedido_items` - Ítems de cada pedido
+- `usuarios` - Usuarios del sistema (RBAC)
 
-**Seed:** Se insertan 8 productos de ejemplo al iniciar.
+**Seed:** Se insertan 8 productos de ejemplo y 2 usuarios (admin/user) al iniciar.
 
 ### Endpoints API
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| GET    | /api/productos   | Listar todos los productos |
+| GET    | /api/productos   | Listar todos los productos (filtros: busqueda, categoria, desde, hasta, fechaDesde, fechaHasta, orden) |
 | GET    | /api/productos/:id | Obtener producto por ID   |
 | POST   | /api/productos   | Crear producto              |
 | PUT    | /api/productos/:id | Actualizar producto         |
@@ -90,14 +91,35 @@ Los estilos globales se encuentran en `index.css`. El componente `Admin` ha sido
 | GET    | /api/pedidos     | Listar pedidos              |
 | GET    | /api/pedidos/:id | Obtener pedido con items    |
 | POST   | /api/pedidos     | Crear nuevo pedido          |
-| POST   | /api/login       | Autenticar administrador    |
+| POST   | /api/login       | Autenticar usuario (devuelve token)    |
+| POST   | /api/logout      | Cerrar sesión               |
+| GET    | /api/usuario     | Obtener datos del usuario autenticado |
+| POST   | /api/usuario/avatar | Subir imagen de perfil   |
+| GET    | /api/admin/pedidos | Listar pedidos (solo admin) |
+| DELETE | /api/admin/pedidos/:id | Eliminar pedido (solo admin) |
 
-## Autenticación
+## Autenticación y RBAC
 
-El panel de administración (`/admin`) está protegido por contraseña. La autenticación se realiza a través del endpoint `/api/login` en el backend.
+El sistema implementa **RBAC (Role-Based Access Control)** con dos roles:
+- **admin**: Acceso total, incluyendo panel de administración y gestión de pedidos
+- **standard**: Usuario regular, puede ver productos y hacer pedidos
 
-- **Contraseña**: `admin123`
-- La sesión es temporal y se pierde al cerrar el navegador.
+### Usuarios de ejemplo
+| Username | Password | Rol     |
+|----------|----------|---------|
+| admin    | admin123 | admin   |
+| user     | user123  | standard|
+
+La autenticación funciona con tokens de sesión:
+1. `POST /api/login` - Enviar `{username, password}` → devuelve `{token, user}`
+2. Incluir `Authorization: <token>` en las peticiones protegidas
+3. `POST /api/logout` - Cerrar sesión
+
+### Rutas protegidas
+- `/api/usuario` - Datos del usuario autenticado
+- `/api/usuario/avatar` - Subir imagen de perfil
+- `/api/admin/pedidos` - Solo admin
+- `/api/admin/pedidos/:id` - Solo admin
 
 ## Ejecución
 

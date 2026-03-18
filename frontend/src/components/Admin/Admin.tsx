@@ -10,11 +10,13 @@ import { sanitize } from '../../utils';
 // =================================================================
 function Admin() {
   const [autenticado, setAutenticado] = useState(false);
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [error, setError] = useState('');
   const [productos, setProductos] = useState<Producto[]>([]);
   const [pedidos, setPedidos] = useState<any[]>([]);
+  const [token, setToken] = useState('');
   const [vista, setVista] = useState<'productos' | 'pedidos'>('productos');
   const [editando, setEditando] = useState<Producto | null>(null);
   const [formProducto, setFormProducto] = useState({
@@ -26,21 +28,27 @@ function Admin() {
   });
 
   const verificarPassword = async () => {
+    if (!username || !password) {
+      setError('Usuario y contraseña son requeridos');
+      return;
+    }
     try {
       const response = await fetch('http://localhost:3001/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ username, password }),
       });
 
       if (response.ok) {
+        const data = await response.json();
         setAutenticado(true);
+        setToken(data.token);
         setError('');
       } else {
         const data = await response.json();
-        setError(data.error || 'Contraseña incorrecta');
+        setError(data.error || 'Credenciales incorrectas');
       }
     } catch (error) {
       console.error('Error al iniciar sesión:', error);
@@ -54,28 +62,42 @@ function Admin() {
         <div className={styles['login-box']}>
           <Lock size={48} className={styles['login-icon']} />
           <h2>Acceso Administrador</h2>
-          <p>Ingresa la contraseña para continuar</p>
+          <p>Ingresa tus credenciales para continuar</p>
           <div className={styles['login-form']}>
-            <div className={styles['password-input-wrapper']}>
+            <div className={styles['input-group']}>
+              <label className={styles['input-label']}>Usuario</label>
               <input
-                type={mostrarPassword ? 'text' : 'password'}
-                placeholder="Contraseña"
+                type="text"
+                placeholder="Nombre de usuario"
                 className={styles['form-input']}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && verificarPassword()}
               />
-              <button
-                type="button"
-                className={styles['toggle-password']}
-                onClick={() => setMostrarPassword(!mostrarPassword)}
-              >
-                {mostrarPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
+            </div>
+            <div className={styles['input-group']}>
+              <label className={styles['input-label']}>Contraseña</label>
+              <div className={styles['password-input-wrapper']}>
+                <input
+                  type={mostrarPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  className={styles['form-input']}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && verificarPassword()}
+                />
+                <button
+                  type="button"
+                  className={styles['toggle-password']}
+                  onClick={() => setMostrarPassword(!mostrarPassword)}
+                >
+                  {mostrarPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
             {error && <p className={styles['login-error']}>{error}</p>}
             <button className={styles['login-btn']} onClick={verificarPassword}>
-              Ingresar
+              Iniciar Sesión
             </button>
           </div>
           <Link to="/" className={styles['back-link']}>
@@ -88,7 +110,7 @@ function Admin() {
 
   useEffect(() => {
     cargarDatos();
-  }, []);
+  }, [token]);
 
   const cargarDatos = () => {
     fetch('http://localhost:3001/api/productos')
@@ -96,7 +118,9 @@ function Admin() {
       .then((data) => setProductos(data))
       .catch((err) => console.error('Error:', err));
 
-    fetch('http://localhost:3001/api/pedidos')
+    fetch('http://localhost:3001/api/admin/pedidos', {
+      headers: { 'Authorization': token },
+    })
       .then((res) => res.json())
       .then((data) => setPedidos(data))
       .catch((err) => console.error('Error:', err));
@@ -193,9 +217,15 @@ function Admin() {
           </div>
           <button
             className={styles['logout-btn']}
-            onClick={() => {
+            onClick={async () => {
+              await fetch('http://localhost:3001/api/logout', {
+                method: 'POST',
+                headers: { 'Authorization': token },
+              });
               setAutenticado(false);
+              setUsername('');
               setPassword('');
+              setToken('');
             }}
           >
             <Lock size={18} /> Cerrar Sesión

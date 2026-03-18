@@ -77,6 +77,7 @@ app.use(cors());
 app.use(express.json());
 app.use(logRequest);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/avatars', express.static(path.join(__dirname, 'avatars')));
 
 // =================================================================
 // BASE DE DATOS
@@ -98,7 +99,8 @@ db.exec(`
     descripcion TEXT,                       -- Descripción
     precio REAL NOT NULL,                   -- Precio (número decimal)
     imagen TEXT,                            -- URL de la imagen
-    categoria TEXT                          -- Categoría del producto
+    categoria TEXT,                         -- Categoría del producto
+    fecha TEXT DEFAULT CURRENT_TIMESTAMP    -- Fecha de creación
   );
 
   -- Tabla de pedidos (compras realizadas)
@@ -120,6 +122,17 @@ db.exec(`
     precio REAL NOT NULL,                  -- Precio en el momento de la compra
     FOREIGN KEY (pedido_id) REFERENCES pedidos(id),
     FOREIGN KEY (producto_id) REFERENCES productos(id)
+  );
+
+  -- Tabla de usuarios (para RBAC)
+  CREATE TABLE IF NOT EXISTS usuarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    email TEXT,
+    role TEXT DEFAULT 'standard' CHECK(role IN ('admin', 'standard')),
+    avatar TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
 `);
 
@@ -151,6 +164,35 @@ if (productosExistentes.count === 0) {
   console.log('Productos de ejemplo insertados');
 }
 
+// Seed de usuarios (admin y standard)
+const usuariosExistentes = db.prepare('SELECT COUNT(*) as count FROM usuarios').get();
+if (usuariosExistentes.count === 0) {
+  db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run('admin', 'admin123', 'admin@kratamex.com', 'admin');
+  db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run('user', 'user123', 'user@kratamex.com', 'standard');
+  console.log('Usuarios de ejemplo insertados');
+}
+
+// =================================================================
+// MIDDLEWARE DE AUTENTICACIÓN Y RBAC
+// =================================================================
+const sessions = {};
+
+function authenticate(req, res, next) {
+  const token = req.headers.authorization;
+  if (!token || !sessions[token]) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+  req.user = sessions[token];
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere rol de administrador' });
+  }
+  next();
+}
+
 // =================================================================
 // RUTAS DE LA API
 // =================================================================
@@ -163,11 +205,13 @@ if (productosExistentes.count === 0) {
 //   - categoria: filtrar por categoría específica
 //   - desde: precio mínimo
 //   - hasta: precio máximo
+//   - fechaDesde: fecha mínima de creación
+//   - fechaHasta: fecha máxima de creación
 //   - orden: 'asc' o 'desc' para ordenar por precio
 // --------------------------------------------------------------------------
 app.get('/api/productos', (req, res) => {
   // Obtener parámetros de la URL (query string)
-  const { busqueda, categoria, orden, desde, hasta } = req.query;
+  const { busqueda, categoria, orden, desde, hasta, fechaDesde, fechaHasta } = req.query;
   
   // Comenzar con consulta base (obtener todos)
   let sql = 'SELECT * FROM productos WHERE 1=1';  // 1=1 es siempre verdadero (para agregar condiciones)
@@ -194,6 +238,16 @@ app.get('/api/productos', (req, res) => {
   if (hasta) {
     sql += ' AND precio <= ?';
     params.push(parseFloat(hasta));
+  }
+  
+  // Filtro por rango de fecha
+  if (fechaDesde) {
+    sql += ' AND fecha >= ?';
+    params.push(fechaDesde);
+  }
+  if (fechaHasta) {
+    sql += ' AND fecha <= ?';
+    params.push(fechaHasta);
   }
   
   // Si hay orden especificado, agregar ORDER BY
@@ -353,24 +407,118 @@ app.delete('/api/productos/:id', (req, res) => {
 
 // --------------------------------------------------------------------------
 // POST /api/login
-// Autenticar al administrador
+// Autenticar usuario (devuelve token de sesión)
 // --------------------------------------------------------------------------
-// TODO: Usar variables de entorno para la contraseña en un entorno de producción
-const ADMIN_PASSWORD = 'admin123';
-
 app.post('/api/login', (req, res) => {
-  const { password } = req.body;
+  const { username, password } = req.body;
 
-  if (!password) {
-    return res.status(400).json({ error: 'La contraseña es requerida' });
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
   }
 
-  if (password === ADMIN_PASSWORD) {
-    // En una aplicación real, aquí se generaría un token (JWT)
-    res.json({ success: true, message: 'Inicio de sesión correcto' });
-  } else {
-    res.status(401).json({ success: false, error: 'Contraseña incorrecta' });
+  const user = db.prepare('SELECT * FROM usuarios WHERE username = ? AND password = ?').get(username, password);
+
+  if (!user) {
+    return res.status(401).json({ error: 'Credenciales incorrectas' });
   }
+
+  const token = 'token_' + Date.now() + '_' + Math.random().toString(36).substr(2);
+  sessions[token] = { id: user.id, username: user.username, role: user.role, avatar: user.avatar };
+
+  res.json({ 
+    success: true, 
+    token, 
+    user: { id: user.id, username: user.username, role: user.role, avatar: user.avatar },
+    message: 'Inicio de sesión correcto' 
+  });
+});
+
+// --------------------------------------------------------------------------
+// POST /api/logout
+// Cerrar sesión
+// --------------------------------------------------------------------------
+app.post('/api/logout', (req, res) => {
+  const token = req.headers.authorization;
+  if (token && sessions[token]) {
+    delete sessions[token];
+  }
+  res.json({ message: 'Sesión cerrada' });
+});
+
+// --------------------------------------------------------------------------
+// GET /api/usuario
+// Obtener datos del usuario autenticado
+// --------------------------------------------------------------------------
+app.get('/api/usuario', authenticate, (req, res) => {
+  res.json({ user: req.user });
+});
+
+// --------------------------------------------------------------------------
+// POST /api/usuario/avatar
+// Subir imagen de perfil de usuario
+// --------------------------------------------------------------------------
+const avatarUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const avatarDir = path.join(__dirname, 'avatars');
+      if (!fs.existsSync(avatarDir)) {
+        fs.mkdirSync(avatarDir);
+      }
+      cb(null, avatarDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+  }),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (extname && mimetype) {
+      return cb(null, true);
+    }
+    cb(new Error('Solo se permiten imágenes (jpeg, jpg, png, gif, webp)'));
+  }
+});
+
+app.post('/api/usuario/avatar', authenticate, avatarUpload.single('avatar'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No se ha proporcionado ninguna imagen' });
+  }
+
+  const avatarUrl = `/avatars/${req.file.filename}`;
+  db.prepare('UPDATE usuarios SET avatar = ? WHERE id = ?').run(avatarUrl, req.user.id);
+  
+  req.user.avatar = avatarUrl;
+  sessions[req.headers.authorization].avatar = avatarUrl;
+
+  res.json({ success: true, avatar: avatarUrl, message: 'Avatar actualizado' });
+});
+
+// --------------------------------------------------------------------------
+// GET /api/admin/pedidos
+// Obtener todos los pedidos (solo admin)
+// --------------------------------------------------------------------------
+app.get('/api/admin/pedidos', authenticate, requireAdmin, (req, res) => {
+  const pedidos = db.prepare('SELECT * FROM pedidos ORDER BY fecha DESC').all();
+  res.json(pedidos);
+});
+
+// --------------------------------------------------------------------------
+// DELETE /api/admin/pedidos/:id
+// Eliminar un pedido (solo admin)
+// --------------------------------------------------------------------------
+app.delete('/api/admin/pedidos/:id', authenticate, requireAdmin, (req, res) => {
+  const stmt = db.prepare('DELETE FROM pedidos WHERE id = ?');
+  const result = stmt.run(req.params.id);
+  
+  if (result.changes === 0) {
+    return res.status(404).json({ error: 'Pedido no encontrado' });
+  }
+  
+  res.json({ mensaje: 'Pedido eliminado' });
 });
 
 // =================================================================
