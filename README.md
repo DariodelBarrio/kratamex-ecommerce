@@ -22,6 +22,11 @@ proyecto/
 │   ├── src/
 │   │   └── index.js    # Servidor, rutas y base de datos
 │   ├── package.json
+│   ├── .dockerignore
+│   └── Dockerfile
+├── frontend/
+│   ├── ...
+│   ├── .dockerignore
 │   └── Dockerfile
 ├── docker-compose.yml  # Orquestación de servicios
 └── README.md           # Este documento
@@ -124,21 +129,27 @@ La autenticación funciona con tokens de sesión:
 
 ## Ejecución
 
-### Con Docker
-**Nota:** La construcción de las imágenes de Docker puede fallar debido a problemas de red. Si esto ocurre, se recomienda utilizar el método de ejecución manual.
+### Con Docker (recomendado)
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
+
+En background:
+```bash
+docker compose up --build -d
+```
+
 - Frontend: http://localhost:3000
 - Backend: http://localhost:3001
 
+El proxy del frontend enruta `/api/*` al backend automáticamente dentro de la red Docker.
+
 ### Manual
-Este es el método recomendado si Docker presenta problemas de red.
 
 ```bash
 # Backend
-cd backend && npm install && npm run dev
+cd backend && npm install && npm start
 
 # Frontend
 cd frontend && npm install && npm run dev
