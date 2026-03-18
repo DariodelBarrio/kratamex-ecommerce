@@ -66,18 +66,26 @@ El endpoint `/api/productos` permite filtros de búsqueda que podrían ser vulne
 ---
 
 ## [ID-004] Sin Limitación de Rate en Login
-**Fecha:** 18/03/2026
+**Fecha:** 19/03/2026
 **Nivel de Riesgo:** 🟡 Medio
 
 ### 1. Descripción del fallo
-El endpoint `/api/login` no tiene limitación de intentos, permitiendo ataques de fuerza bruta.
+El endpoint `/api/login` no tenía limitación de intentos, permitiendo ataques de fuerza bruta ilimitados contra las credenciales de usuario.
 
 ### 2. Impacto
 - Ataques de fuerza bruta para descifrar contraseñas
-- Denegación de servicio
+- Denegación de servicio por sobrecarga de peticiones
 
 ### 3. Solución (Parche)
-- No implementado aún
+- Implementado rate limiter en memoria en `backend/src/index.js`
+- Máximo 5 intentos fallidos por IP antes de bloqueo
+- Bloqueo de 15 minutos tras superar el límite
+- La respuesta informa de los intentos restantes antes del bloqueo
+- Los bloqueos quedan registrados en `access.log`
+- El contador se resetea al hacer login correcto
+
+### 4. Commits relacionados
+- `pendiente` - fix: add login rate limiting to prevent brute force attacks
 
 ---
 
