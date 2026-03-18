@@ -145,17 +145,43 @@ if (productosExistentes.count === 0) {
   // Preparar la consulta SQL para insertar productos
   const insert = db.prepare('INSERT INTO productos (nombre, descripcion, precio, imagen, categoria) VALUES (?, ?, ?, ?, ?)');
   
-  // Lista de productos de ejemplo
-  const productos = [
-    ['Laptop Pro 15"', 'Potente laptop con procesador Intel i7, 16GB RAM, 512GB SSD', 1299.99, 'https://picsum.photos/seed/laptop/400/300', 'Electrónica'],
-    ['Smartphone Ultra', 'Teléfono inteligente con pantalla OLED 6.7", 128GB almacenamiento', 899.99, 'https://picsum.photos/seed/phone/400/300', 'Electrónica'],
-    ['Auriculares Bluetooth', 'Auriculares inalámbricos con cancelación de ruido', 199.99, 'https://picsum.photos/seed/headphones/400/300', 'Audio'],
-    ['Smartwatch Sport', 'Reloj inteligente resistente al agua con GPS', 349.99, 'https://picsum.photos/seed/watch/400/300', 'Wearables'],
-    ['Cámara Digital 4K', 'Cámara profesional con sensor de 24MP', 799.99, 'https://picsum.photos/seed/camera/400/300', 'Cámaras'],
-    ['Tablet 10"', 'Tablet con pantalla retina, 64GB almacenamiento', 449.99, 'https://picsum.photos/seed/tablet/400/300', 'Electrónica'],
-    ['Consola de Juegos', 'Consola de próxima generación con 1TB SSD', 499.99, 'https://picsum.photos/seed/console/400/300', 'Gaming'],
-    ['Altavoz Inteligente', 'Altavoz con asistente de voz integrado', 129.99, 'https://picsum.photos/seed/speaker/400/300', 'Audio']
-  ];
+// =================================================================
+// GENERADOR DE IMÁGENES DE PLACEHOLDER
+// =================================================================
+function generatePlaceholderImage(text) {
+  const colors = {
+    'Portátiles': ['1a1a2e', '16213e', '0f3460'],
+    'Gaming': ['1a1a2e', '0f0f23', '2d132c'],
+    'Sobremesa': ['1e3a5f', '2c3e50', '34495e']
+  };
+  const color = colors['Portátiles'][Math.floor(Math.random() * 3)];
+  const textEncoded = encodeURIComponent(text);
+  return `https://placehold.co/400x300/${color}/ffffff?text=${textEncoded}`;
+}
+
+const getImageForProduct = (nombre, categoria) => {
+  const cleanName = nombre.replace(/"/g, '').split(' ')[0];
+  return generatePlaceholderImage(cleanName);
+};
+
+// Lista de productos de ejemplo
+const productos = [
+  ['MacBook Pro 14"', 'Apple M3 Pro, 18GB RAM, 512GB SSD, Pantalla Liquid Retina XDR', 2249.00, getImageForProduct('MacBook Pro 14"', 'Portátiles'), 'Portátiles'],
+  ['Dell XPS 15', 'Intel Core i7-13700H, 32GB RAM, 1TB SSD, NVIDIA RTX 4060, Pantalla 15.6" 3.5K OLED', 1899.00, getImageForProduct('Dell XPS 15', 'Portátiles'), 'Portátiles'],
+  ['HP Spectre x360', 'Intel Core i7-1255U, 16GB RAM, 512GB SSD, Pantalla 14" FHD Táctil 2-en-1', 1499.00, getImageForProduct('HP Spectre', 'Portátiles'), 'Portátiles'],
+  ['Lenovo ThinkPad X1 Carbon', 'Intel Core i7-1365U, 16GB RAM, 512GB SSD, Pantalla 14" 2.8K OLED', 1799.00, getImageForProduct('ThinkPad', 'Portátiles'), 'Portátiles'],
+  ['ASUS ROG Strix G16', 'Intel Core i9-13980HX, 32GB RAM, 1TB SSD, NVIDIA RTX 4070, Pantalla 16" FHD 165Hz', 2199.00, getImageForProduct('ROG Strix', 'Gaming'), 'Gaming'],
+  ['Alienware m18', 'Intel Core i9-13980HX, 64GB RAM, 2TB SSD, NVIDIA RTX 4090, Pantalla 18" QHD+ 165Hz', 3499.00, getImageForProduct('Alienware', 'Gaming'), 'Gaming'],
+  ['MSI Titan GT77', 'Intel Core i9-13900HX, 64GB RAM, 2TB SSD, NVIDIA RTX 4090, Pantalla 17.3" 4K 144Hz', 3799.00, getImageForProduct('MSI Titan', 'Gaming'), 'Gaming'],
+  ['Razer Blade 15', 'Intel Core i7-13800H, 16GB RAM, 1TB SSD, NVIDIA RTX 4070, Pantalla 15.6" QHD 240Hz', 2499.00, getImageForProduct('Razer Blade', 'Gaming'), 'Gaming'],
+  ['HP Omen 16', 'AMD Ryzen 9 7940HS, 32GB RAM, 1TB SSD, NVIDIA RTX 4070, Pantalla 16.1" QHD 165Hz', 1699.00, getImageForProduct('HP Omen', 'Gaming'), 'Gaming'],
+  ['Acer Predator Helios 18', 'Intel Core i9-13900HX, 32GB RAM, 1TB SSD, NVIDIA RTX 4080, Pantalla 18" WQXGA 240Hz', 2699.00, getImageForProduct('Predator', 'Gaming'), 'Gaming'],
+  ['Apple iMac 24"', 'Apple M3, 8GB RAM, 256GB SSD, Pantalla 4.5K Retina 24", Cámara 1080p', 1499.00, getImageForProduct('iMac', 'Sobremesa'), 'Sobremesa'],
+  ['Dell Inspiron 24', 'Intel Core i7-1355U, 16GB RAM, 512GB SSD, Pantalla 23.8" FHD Táctil', 1099.00, getImageForProduct('Inspiron', 'Sobremesa'), 'Sobremesa'],
+  ['HP Pavilion 27', 'AMD Ryzen 7 7735HS, 16GB RAM, 512GB SSD, Pantalla 27" QHD', 1199.00, getImageForProduct('Pavilion', 'Sobremesa'), 'Sobremesa'],
+  ['LG Gram 17', 'Intel Core i7-1360P, 32GB RAM, 1TB SSD, Pantalla 17" WQXGA, Peso 1.35kg', 2199.00, getImageForProduct('LG Gram', 'Portátiles'), 'Portátiles'],
+  ['Samsung Galaxy Book4 Pro', 'Intel Core Ultra 7 155H, 16GB RAM, 512GB SSD, Pantalla 14" AMOLED 120Hz', 1449.00, getImageForProduct('Galaxy Book', 'Portátiles'), 'Portátiles']
+];
 
   // Insertar cada producto
   for (const p of productos) {
@@ -170,6 +196,23 @@ if (usuariosExistentes.count === 0) {
   db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run('admin', 'admin123', 'admin@kratamex.com', 'admin');
   db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run('user', 'user123', 'user@kratamex.com', 'standard');
   console.log('Usuarios de ejemplo insertados');
+}
+
+// Seed de pedidos de ejemplo
+const pedidosExistentes = db.prepare('SELECT COUNT(*) as count FROM pedidos').get();
+if (pedidosExistentes.count === 0) {
+  db.prepare('INSERT INTO pedidos (cliente, email, direccion, total) VALUES (?, ?, ?, ?)').run('Juan Pérez', 'juan@email.com', 'Calle Mayor 123, Madrid', 1499.98);
+  db.prepare('INSERT INTO pedidos (cliente, email, direccion, total) VALUES (?, ?, ?, ?)').run('María García', 'maria@email.com', 'Av. Roma 45, Barcelona', 899.99);
+  db.prepare('INSERT INTO pedidos (cliente, email, direccion, total) VALUES (?, ?, ?, ?)').run('Carlos López', 'carlos@email.com', 'Plaza España 10, Valencia', 549.98);
+  const pedido1Id = 1;
+  const pedido2Id = 2;
+  const pedido3Id = 3;
+  db.prepare('INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio) VALUES (?, ?, ?, ?)').run(pedido1Id, 1, 1, 1299.99);
+  db.prepare('INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio) VALUES (?, ?, ?, ?)').run(pedido1Id, 2, 1, 199.99);
+  db.prepare('INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio) VALUES (?, ?, ?, ?)').run(pedido2Id, 2, 1, 899.99);
+  db.prepare('INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio) VALUES (?, ?, ?, ?)').run(pedido3Id, 7, 1, 499.99);
+  db.prepare('INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio) VALUES (?, ?, ?, ?)').run(pedido3Id, 8, 1, 129.99);
+  console.log('Pedidos de ejemplo insertados');
 }
 
 // =================================================================
