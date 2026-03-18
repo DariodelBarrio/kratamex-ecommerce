@@ -222,6 +222,47 @@ if (pedidosExistentes.count === 0) {
 }
 
 // =================================================================
+// RATE LIMITING EN LOGIN (protección fuerza bruta)
+// =================================================================
+const loginAttempts = {}; // { ip: { count, blockedUntil } }
+const MAX_ATTEMPTS = 5;
+const BLOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutos
+
+function loginRateLimiter(req, res, next) {
+  const ip = req.ip;
+  const now = Date.now();
+  const record = loginAttempts[ip];
+
+  if (record && record.blockedUntil && now < record.blockedUntil) {
+    const segundosRestantes = Math.ceil((record.blockedUntil - now) / 1000);
+    const logEntry = `[${new Date().toISOString()}] RATE_LIMIT BLOQUEADO ip=${ip} segundos_restantes=${segundosRestantes}\n`;
+    fs.appendFile(LOG_FILE, logEntry, () => {});
+    return res.status(429).json({
+      error: `Demasiados intentos fallidos. Intenta de nuevo en ${segundosRestantes} segundos.`
+    });
+  }
+
+  next();
+}
+
+function recordFailedLogin(ip) {
+  const now = Date.now();
+  if (!loginAttempts[ip]) {
+    loginAttempts[ip] = { count: 0, blockedUntil: null };
+  }
+  loginAttempts[ip].count += 1;
+  if (loginAttempts[ip].count >= MAX_ATTEMPTS) {
+    loginAttempts[ip].blockedUntil = now + BLOCK_DURATION_MS;
+    const logEntry = `[${new Date().toISOString()}] RATE_LIMIT ip=${ip} bloqueada por ${BLOCK_DURATION_MS / 60000} minutos tras ${MAX_ATTEMPTS} intentos fallidos\n`;
+    fs.appendFile(LOG_FILE, logEntry, () => {});
+  }
+}
+
+function resetLoginAttempts(ip) {
+  delete loginAttempts[ip];
+}
+
+// =================================================================
 // MIDDLEWARE DE AUTENTICACIÓN Y RBAC
 // =================================================================
 const sessions = {};
@@ -458,8 +499,9 @@ app.delete('/api/productos/:id', (req, res) => {
 // POST /api/login
 // Autenticar usuario (devuelve token de sesión)
 // --------------------------------------------------------------------------
-app.post('/api/login', (req, res) => {
+app.post('/api/login', loginRateLimiter, (req, res) => {
   const { username, password } = req.body;
+  const ip = req.ip;
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
@@ -468,17 +510,24 @@ app.post('/api/login', (req, res) => {
   const user = db.prepare('SELECT * FROM usuarios WHERE username = ? AND password = ?').get(username, password);
 
   if (!user) {
-    return res.status(401).json({ error: 'Credenciales incorrectas' });
+    recordFailedLogin(ip);
+    const intentos = loginAttempts[ip]?.count || 1;
+    const restantes = MAX_ATTEMPTS - intentos;
+    return res.status(401).json({
+      error: 'Credenciales incorrectas',
+      intentos_restantes: restantes > 0 ? restantes : 0
+    });
   }
 
+  resetLoginAttempts(ip);
   const token = 'token_' + Date.now() + '_' + Math.random().toString(36).substr(2);
   sessions[token] = { id: user.id, username: user.username, role: user.role, avatar: user.avatar };
 
-  res.json({ 
-    success: true, 
-    token, 
+  res.json({
+    success: true,
+    token,
     user: { id: user.id, username: user.username, role: user.role, avatar: user.avatar },
-    message: 'Inicio de sesión correcto' 
+    message: 'Inicio de sesión correcto'
   });
 });
 
