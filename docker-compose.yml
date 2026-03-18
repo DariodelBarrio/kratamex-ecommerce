@@ -4,19 +4,20 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - ./backend:/app
-      - /app/node_modules
+      - ./backend/src:/app/src
+      - ./backend/tienda.db:/app/tienda.db
     environment:
       - NODE_ENV=development
+    restart: unless-stopped
 
   frontend:
     build: ./frontend
     ports:
-      - "5173:5173"
+      - "3000:3000"
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - ./frontend/src:/app/src
     depends_on:
       - backend
     environment:
-      - VITE_API_URL=http://localhost:3001
+      - VITE_BACKEND_URL=http://backend:3001
+    restart: unless-stopped
