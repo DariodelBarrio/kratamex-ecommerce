@@ -118,11 +118,13 @@ if (productosExistentes.count === 0) {
 // Parámetros (query string):
 //   - busqueda: texto para buscar en nombre, descripción o categoría
 //   - categoria: filtrar por categoría específica
+//   - desde: precio mínimo
+//   - hasta: precio máximo
 //   - orden: 'asc' o 'desc' para ordenar por precio
 // --------------------------------------------------------------------------
 app.get('/api/productos', (req, res) => {
   // Obtener parámetros de la URL (query string)
-  const { busqueda, categoria, orden } = req.query;
+  const { busqueda, categoria, orden, desde, hasta } = req.query;
   
   // Comenzar con consulta base (obtener todos)
   let sql = 'SELECT * FROM productos WHERE 1=1';  // 1=1 es siempre verdadero (para agregar condiciones)
@@ -139,6 +141,16 @@ app.get('/api/productos', (req, res) => {
   if (categoria) {
     sql += ' AND categoria = ?';
     params.push(categoria);
+  }
+  
+  // Filtro por rango de precio
+  if (desde) {
+    sql += ' AND precio >= ?';
+    params.push(parseFloat(desde));
+  }
+  if (hasta) {
+    sql += ' AND precio <= ?';
+    params.push(parseFloat(hasta));
   }
   
   // Si hay orden especificado, agregar ORDER BY
