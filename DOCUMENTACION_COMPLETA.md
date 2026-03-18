@@ -16,17 +16,18 @@
 
 ## 🎯 Visión General
 
-KRATAMEX es una **tienda online completa** construida con tecnologías modernas del stack MERN simplificado (React + Node.js + SQLite). La aplicación permite a los usuarios navegar un catálogo de productos, agregar items al carrito de compras, realizar pedidos y gestionar inventario a través de un panel administrativo.
+KRATAMEX es una **tienda online completa** de ordenadores construida con React + Node.js + SQLite. Permite navegar el catálogo, agregar al carrito, realizar pedidos y gestionar inventario desde un panel administrativo protegido por RBAC.
 
 ### ✨ Características Principales
 
-- **🛍️ Catálogo de Productos**: Búsqueda, filtros y ordenamiento
-- **🛒 Carrito de Compras**: Agregar, modificar y eliminar productos
+- **🛍️ Catálogo de Productos**: Búsqueda, filtros por categoría, precio y fecha, ordenamiento
+- **🛒 Carrito de Compras**: Agregar, modificar cantidad y eliminar productos
 - **💳 Checkout**: Formulario de compra con validación
-- **👨‍💼 Panel Administrativo**: CRUD de productos y gestión de pedidos
-- **🔒 Autenticación**: Acceso protegido al panel admin
+- **👨‍💼 Panel Administrativo**: CRUD de productos y gestión de pedidos (solo admin)
+- **🔒 Autenticación RBAC**: Roles `admin` y `standard`, tokens de sesión
+- **🛡️ Seguridad**: bcrypt, rate limiting, HTTPS, prepared statements, validación de uploads
 - **📱 Diseño Responsive**: Funciona en desktop y móvil
-- **🐳 Docker**: Despliegue containerizado
+- **🐳 Docker**: Despliegue containerizado con nginx como reverse proxy HTTPS
 
 ### 🛠️ Tecnologías Utilizadas
 
@@ -36,41 +37,43 @@ KRATAMEX es una **tienda online completa** construida con tecnologías modernas 
 | **Backend** | Node.js + Express | 4.18.2 |
 | **Base de Datos** | SQLite + better-sqlite3 | 9.4.3 |
 | **Build Tool** | Vite | 5.1.6 |
-| **Icons** | Lucide React | 0.344.0 |
+| **Icons** | Lucide React | 0.577.0 |
 | **Routing** | React Router | 6.22.3 |
-| **Container** | Docker + Docker Compose | 3.8 |
+| **Hashing** | bcryptjs | latest |
+| **Uploads** | multer | 1.4.5-lts |
+| **Reverse Proxy** | nginx:alpine | latest |
+| **Container** | Docker + Docker Compose | - |
 
 ---
 
 ## 🏗️ Arquitectura del Sistema
 
 ```
-┌─────────────────┐    HTTP/REST    ┌─────────────────┐
-│   Frontend      │◄──────────────►│   Backend       │
-│   (React)       │                │   (Express)     │
-│   Port: 5173    │                │   Port: 3001    │
-└─────────────────┘                └─────────────────┘
-         │                                   │
-         └───────────────────────────────────┼─────────────────┐
-                                             ▼                 │
-                                   ┌─────────────────┐        │
-                                   │   Database      │        │
-                                   │   (SQLite)      │        │
-                                   │   tienda.db     │        │
-                                   └─────────────────┘        │
-                                                             │
-┌─────────────────┐    Volumes      ┌─────────────────┐      │
-│   Docker        │◄──────────────►│   Docker        │◄─────┘
-│   Compose       │                │   Containers    │
-└─────────────────┘                └─────────────────┘
+                        ┌─────────────────────┐
+  Usuario               │       nginx          │
+  http://localhost  ──► │  Puerto 80  → 301   │
+  https://localhost ──► │  Puerto 443 (TLS)   │
+                        └─────────┬───────────┘
+                                  │
+                  ┌───────────────┴───────────────┐
+                  ▼                               ▼
+        ┌─────────────────┐             ┌─────────────────┐
+        │    Frontend     │             │    Backend      │
+        │  (React+Vite)   │             │   (Express)     │
+        │  Puerto: 3000   │             │  Puerto: 3001   │
+        └─────────────────┘             └────────┬────────┘
+                                                 │
+                                        ┌────────▼────────┐
+                                        │   SQLite DB     │
+                                        │   tienda.db     │
+                                        └─────────────────┘
 ```
 
-### Componentes del Sistema
+### Flujo de red
 
-1. **Frontend (SPA)**: Interfaz de usuario en React
-2. **Backend (API REST)**: Lógica de negocio y persistencia
-3. **Base de Datos**: Almacenamiento de productos y pedidos
-4. **Docker**: Containerización y orquestación
+- **HTTPS (443)**: nginx termina TLS → enruta `/api/*` al backend, `/` al frontend
+- **HTTP (80)**: nginx redirige 301 → HTTPS
+- **Puertos directos** (solo desarrollo): frontend:3000, backend:3001
 
 ---
 
@@ -81,59 +84,52 @@ KRATAMEX es una **tienda online completa** construida con tecnologías modernas 
 ```
 frontend/
 ├── src/
-│   ├── App.tsx           # Componentes principales y lógica
+│   ├── components/
+│   │   └── Admin/
+│   │       ├── Admin.tsx         # Panel de administración
+│   │       └── Admin.module.css  # Estilos del panel (CSS Modules)
+│   ├── App.tsx           # Componente tienda principal
 │   ├── main.tsx          # Punto de entrada con React Router
 │   ├── index.css         # Estilos globales
-│   └── vite-env.d.ts     # Tipos de Vite
-├── package.json          # Dependencias y scripts
-├── vite.config.ts        # Configuración de Vite
-├── tsconfig.json         # Configuración de TypeScript
-├── tsconfig.node.json    # Configuración de TypeScript para Node
-├── index.html            # HTML base
-└── Dockerfile            # Containerización
+│   ├── interfaces.ts     # Interfaces TypeScript
+│   └── utils.ts          # Funciones de utilidad
+├── package.json
+├── vite.config.ts        # Proxy /api → backend, PWA, compresión
+├── index.html
+├── .dockerignore
+└── Dockerfile
 ```
 
 ### Componentes Principales
 
-#### 🏪 Componente Tienda (`/`)
+#### 🏪 Tienda (`/`)
+Página principal con catálogo, búsqueda, filtros y carrito.
 
-**Funcionalidad**: Página principal con catálogo de productos, búsqueda y carrito.
-
-**Estados del Componente**:
+**Estados principales**:
 ```typescript
-const [productos, setProductos] = useState<Producto[]>([])        // Lista de productos
-const [carrito, setCarrito] = useState<CarritoItem[]>([])        // Items en carrito
-const [carritoAbierto, setCarritoAbierto] = useState(false)      // Estado del modal
-const [checkoutExitoso, setCheckoutExitoso] = useState(false)    // Éxito de compra
-const [busqueda, setBusqueda] = useState('')                     // Texto de búsqueda
-const [categoriaFiltro, setCategoriaFiltro] = useState('')       // Filtro de categoría
-const [ordenPrecio, setOrdenPrecio] = useState<'asc' | 'desc' | ''>('') // Orden precio
-const [loading, setLoading] = useState(true)                     // Estado de carga
-const [formulario, setFormulario] = useState({                   // Datos del checkout
-  cliente: '',
-  email: '',
-  direccion: ''
-})
+const [productos, setProductos] = useState<Producto[]>([])
+const [carrito, setCarrito] = useState<CarritoItem[]>([])
+const [busqueda, setBusqueda] = useState('')
+const [categoriaFiltro, setCategoriaFiltro] = useState('')
+const [ordenPrecio, setOrdenPrecio] = useState<'asc' | 'desc' | ''>('')
+const [loading, setLoading] = useState(true)
 ```
 
-**Funciones Principales**:
+**Filtros disponibles**:
+- Búsqueda por nombre, descripción o categoría
+- Filtro por categoría (Portátiles, Gaming, Sobremesa)
+- Filtro por rango de precio (desde/hasta)
+- Filtro por rango de fecha
+- Ordenamiento por precio asc/desc
 
-- `cargarProductos()`: Obtiene productos del API con filtros
-- `agregarAlCarrito(producto)`: Agrega producto al carrito
-- `actualizarCantidad(id, cantidad)`: Modifica cantidad en carrito
-- `eliminarDelCarrito(id)`: Remueve producto del carrito
-- `calcularTotal()`: Suma total del carrito
-- `procesarCheckout()`: Envía pedido al backend
+#### 👨‍💼 Admin (`/admin`)
+Panel protegido por autenticación. Solo accesible con rol `admin`.
 
-#### 👨‍💼 Componente Admin (`/admin`)
-
-**Funcionalidad**: Panel de administración para gestionar productos y pedidos.
-
-**Características**:
-- Estadísticas del negocio (productos, pedidos, ventas)
-- CRUD completo de productos
-- Listado de pedidos con detalles
-- Autenticación requerida
+**Funcionalidades**:
+- Estadísticas (productos, pedidos, total ventas)
+- CRUD completo de productos con subida de imagen
+- Listado de pedidos con opción de eliminar
+- Gestión de perfil con avatar
 
 ### Interfaces TypeScript
 
@@ -162,39 +158,12 @@ interface Pedido {
 }
 ```
 
-### Funciones de Utilidad
+### Configuración Vite (`vite.config.ts`)
 
-#### `sanitize(str: string): string`
-Protege contra ataques XSS convirtiendo caracteres especiales HTML en entidades seguras.
-
-```typescript
-const sanitize = (str: string): string => {
-  const div = document.createElement('div')
-  div.textContent = str
-  return div.innerHTML
-}
-```
-
-### Estilos CSS
-
-**Variables CSS Personalizadas**:
-```css
-:root {
-  --primary: #2563eb;
-  --secondary: #64748b;
-  --success: #10b981;
-  --error: #ef4444;
-  --background: #f8fafc;
-  --text: #1e293b;
-}
-```
-
-**Características de Diseño**:
-- Diseño responsive con media queries
-- Cards para productos
-- Modales para carrito y formularios
-- Tablas para administración
-- Estados de carga y hover
+- **Proxy**: `/api` → `VITE_BACKEND_URL` (env var) o `http://localhost:3001` en local
+- **PWA**: manifest con nombre Kratamex, iconos e instalación offline
+- **Compresión**: gzip y brotli de assets estáticos
+- **Puerto**: 3000
 
 ---
 
@@ -205,36 +174,42 @@ const sanitize = (str: string): string => {
 ```
 backend/
 ├── src/
-│   └── index.js          # Servidor principal
-├── package.json          # Dependencias
-└── Dockerfile            # Containerización
+│   ├── index.js          # Servidor principal
+│   ├── uploads/          # Imágenes de productos (generado en runtime)
+│   ├── avatars/          # Avatares de usuarios (generado en runtime)
+│   └── access.log        # Log de peticiones y eventos de seguridad
+├── package.json
+├── .dockerignore
+└── Dockerfile
 ```
 
-### Configuración del Servidor
+### Middlewares Globales
 
 ```javascript
-const express = require('express')
-const cors = require('cors')
-const Database = require('better-sqlite3')
-
-const app = express()
-const PORT = 3001
-
-// Middlewares
 app.use(cors())
 app.use(express.json())
+app.use(logRequest)           // Logger a access.log
+app.use('/uploads', static)   // Imágenes de productos
+app.use('/avatars', static)   // Avatares de usuarios
 ```
 
-### Base de Datos SQLite
+### Seguridad implementada
 
-**Conexión**:
-```javascript
-const db = new Database('tienda.db')
-```
+- **Rate limiting**: 5 intentos fallidos por IP → bloqueo 15 min en `/api/login`
+- **bcrypt**: Contraseñas hasheadas con 10 rondas (bcryptjs)
+- **Prepared statements**: Prevención de SQL injection en todas las queries
+- **Validación de uploads**: Solo jpeg/jpg/png/gif/webp, límite 5MB productos / 2MB avatares
+- **RBAC**: Middleware `authenticate` + `requireAdmin` en rutas protegidas
+- **HTTPS**: TLS terminado en nginx (TLSv1.2 y TLSv1.3)
+- **Logging**: Todas las peticiones y bloqueos de rate limit registrados en `access.log`
 
-**Esquema de Tablas**:
+---
 
-#### Tabla `productos`
+## 🗄️ Base de Datos - SQLite
+
+### Tablas
+
+#### `productos`
 ```sql
 CREATE TABLE productos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -242,11 +217,12 @@ CREATE TABLE productos (
   descripcion TEXT,
   precio REAL NOT NULL,
   imagen TEXT,
-  categoria TEXT
+  categoria TEXT,
+  fecha TEXT DEFAULT CURRENT_TIMESTAMP
 )
 ```
 
-#### Tabla `pedidos`
+#### `pedidos`
 ```sql
 CREATE TABLE pedidos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -258,7 +234,7 @@ CREATE TABLE pedidos (
 )
 ```
 
-#### Tabla `pedido_items`
+#### `pedido_items`
 ```sql
 CREATE TABLE pedido_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -271,18 +247,31 @@ CREATE TABLE pedido_items (
 )
 ```
 
-### Datos de Ejemplo (Seed)
+#### `usuarios`
+```sql
+CREATE TABLE usuarios (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL UNIQUE,
+  password TEXT NOT NULL,        -- bcrypt hash
+  email TEXT,
+  role TEXT DEFAULT 'standard' CHECK(role IN ('admin', 'standard')),
+  avatar TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)
+```
 
-Al iniciar la aplicación, se insertan 8 productos de ejemplo si la base de datos está vacía:
+### Seed inicial
 
-1. Laptop Pro 15" - Electrónica
-2. Smartphone Ultra - Electrónica
-3. Auriculares Bluetooth - Audio
-4. Smartwatch Sport - Wearables
-5. Cámara Digital 4K - Cámaras
-6. Tablet 10" - Electrónica
-7. Consola de Juegos - Gaming
-8. Altavoz Inteligente - Audio
+- **15 ordenadores** de ejemplo (Portátiles, Gaming, Sobremesa)
+- **3 pedidos** de ejemplo
+- **2 usuarios** con contraseñas hasheadas con bcrypt:
+
+| Username | Password | Rol |
+|----------|----------|-----|
+| admin | admin123 | admin |
+| user | user123 | standard |
+
+> Las contraseñas en la BD se almacenan como hashes bcrypt (`$2b$10$...`), nunca en texto plano.
 
 ---
 
@@ -290,208 +279,149 @@ Al iniciar la aplicación, se insertan 8 productos de ejemplo si la base de dato
 
 ### Endpoints de Productos
 
-#### `GET /api/productos`
-Obtiene todos los productos con filtros opcionales.
-
-**Parámetros de Query**:
-- `busqueda`: Texto para buscar en nombre, descripción o categoría
-- `categoria`: Filtrar por categoría específica
-- `orden`: `'asc'` o `'desc'` para ordenar por precio
-
-**Ejemplo**:
-```
-GET /api/productos?busqueda=laptop&categoria=Electrónica&orden=asc
-```
-
-#### `GET /api/productos/:id`
-Obtiene un producto específico por ID.
-
-#### `POST /api/productos`
-Crea un nuevo producto.
-
-**Body**:
-```json
-{
-  "nombre": "Producto Nuevo",
-  "descripcion": "Descripción del producto",
-  "precio": 99.99,
-  "imagen": "https://example.com/image.jpg",
-  "categoria": "Categoría"
-}
-```
-
-#### `PUT /api/productos/:id`
-Actualiza un producto existente.
-
-#### `DELETE /api/productos/:id`
-Elimina un producto.
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/productos` | Listar productos (filtros: busqueda, categoria, desde, hasta, fechaDesde, fechaHasta, orden) |
+| GET | `/api/productos/:id` | Obtener producto por ID |
+| POST | `/api/productos` | Crear producto |
+| PUT | `/api/productos/:id` | Actualizar producto |
+| DELETE | `/api/productos/:id` | Eliminar producto |
 
 ### Endpoints de Pedidos
 
-#### `GET /api/pedidos`
-Obtiene todos los pedidos (ordenados por fecha descendente).
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/pedidos` | Listar todos los pedidos |
+| GET | `/api/pedidos/:id` | Obtener pedido con items |
+| POST | `/api/pedidos` | Crear nuevo pedido (checkout) |
 
-#### `GET /api/pedidos/:id`
-Obtiene un pedido específico con sus items.
+### Endpoints de Autenticación
 
-**Respuesta**:
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| POST | `/api/login` | No | Autenticar (rate limited: 5 intentos/15min) |
+| POST | `/api/logout` | Token | Cerrar sesión |
+| GET | `/api/usuario` | Token | Datos del usuario autenticado |
+| POST | `/api/usuario/avatar` | Token | Subir avatar (max 2MB) |
+
+### Endpoints de Admin
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| GET | `/api/admin/pedidos` | Token + Admin | Listar pedidos |
+| DELETE | `/api/admin/pedidos/:id` | Token + Admin | Eliminar pedido |
+
+### Ejemplo: Login
+
+**Request**:
+```json
+POST /api/login
+{ "username": "admin", "password": "admin123" }
+```
+
+**Response OK**:
 ```json
 {
-  "id": 1,
-  "cliente": "Juan Pérez",
-  "email": "juan@example.com",
-  "direccion": "Calle 123",
-  "total": 1299.99,
-  "fecha": "2024-01-15 10:30:00",
-  "items": [
-    {
-      "id": 1,
-      "pedido_id": 1,
-      "producto_id": 1,
-      "cantidad": 1,
-      "precio": 1299.99,
-      "nombre": "Laptop Pro 15\"",
-      "imagen": "https://picsum.photos/seed/laptop/400/300"
-    }
-  ]
+  "success": true,
+  "token": "token_1234567890_abc123",
+  "user": { "id": 1, "username": "admin", "role": "admin", "avatar": null },
+  "message": "Inicio de sesión correcto"
 }
 ```
 
-#### `POST /api/pedidos`
-Crea un nuevo pedido (checkout).
-
-**Body**:
+**Response bloqueado (429)**:
 ```json
-{
-  "cliente": "Juan Pérez",
-  "email": "juan@example.com",
-  "direccion": "Calle 123",
-  "items": [
-    {
-      "id": 1,
-      "cantidad": 2,
-      "precio": 1299.99
-    }
-  ]
-}
+{ "error": "Demasiados intentos fallidos. Intenta de nuevo en 847 segundos." }
 ```
-
-### Seguridad API
-
-- **Prepared Statements**: Prevención de SQL injection
-- **Validación de Datos**: Verificación de campos requeridos
-- **CORS**: Control de acceso cross-origin
-- **Sanitización**: Limpieza de datos en frontend
 
 ---
 
 ## 🔐 Autenticación y Seguridad
 
-### Panel Administrativo
+### RBAC (Role-Based Access Control)
 
-**Acceso**: Ruta `/admin` protegida por contraseña simple.
+Dos roles con distintos permisos:
 
-**Credenciales**:
-- **Contraseña**: `admin123`
-- **Sesión**: Temporal (se pierde al cerrar navegador)
+| Acción | standard | admin |
+|--------|----------|-------|
+| Ver productos | ✅ | ✅ |
+| Hacer pedidos | ✅ | ✅ |
+| Ver perfil | ✅ | ✅ |
+| Panel admin | ❌ | ✅ |
+| Eliminar pedidos | ❌ | ✅ |
 
-**Implementación**:
-```typescript
-const [autenticado, setAutenticado] = useState(false)
-const [password, setPassword] = useState('')
+### Flujo de autenticación
 
-const verificarPassword = () => {
-  if (password === 'admin123') {
-    setAutenticado(true)
-    localStorage.setItem('admin_auth', 'true')
-  }
-}
-```
+1. `POST /api/login` → devuelve token de sesión
+2. Incluir `Authorization: <token>` en peticiones protegidas
+3. `POST /api/logout` → invalida el token
 
-### Medidas de Seguridad
+### Correcciones de seguridad aplicadas
 
-1. **XSS Protection**: Función `sanitize()` en frontend
-2. **SQL Injection**: Prepared statements en backend
-3. **Input Validation**: Validación de formularios
-4. **CORS**: Restricción de orígenes permitidos
+| ID | Descripción | Estado |
+|----|-------------|--------|
+| ID-001 | Credenciales hardcodeadas | ✅ Corregido |
+| ID-002 | Broken Access Control | ✅ Corregido |
+| ID-003 | SQL Injection | ✅ Corregido |
+| ID-004 | Sin rate limiting en login | ✅ Corregido |
+| ID-005 | Logging insuficiente | ✅ Corregido |
+| ID-006 | Validación de uploads | ✅ Corregido |
+| ID-007 | Contraseñas sin hash | ✅ Corregido |
+| ID-008 | Falta de HTTPS | ✅ Corregido |
 
 ---
 
 ## 🐳 Despliegue y Docker
 
-### Docker Compose
+### Servicios (`docker-compose.yml`)
 
-**Archivo `docker-compose.yml`**:
 ```yaml
-version: '3.8'
-
 services:
-  backend:
-    build: ./backend
-    ports:
-      - "3001:3001"
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-
-  frontend:
-    build: ./frontend
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    depends_on:
-      - backend
-    environment:
-      - VITE_API_URL=http://localhost:3001
+  backend:   # Express API en puerto 3001
+  frontend:  # Vite dev server en puerto 3000
+  nginx:     # Reverse proxy HTTPS en puertos 80 y 443
 ```
 
-### Dockerfiles
+### URLs de acceso
 
-#### Backend Dockerfile
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-EXPOSE 3001
-CMD ["npm", "start"]
-```
+| Acceso | URL |
+|--------|-----|
+| **Web HTTPS** (recomendado) | https://localhost |
+| HTTP → redirige a HTTPS | http://localhost |
+| Frontend directo | http://localhost:3000 |
+| Backend API directo | http://localhost:3001 |
 
-#### Frontend Dockerfile
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-EXPOSE 5173
-CMD ["npm", "run", "dev"]
-```
+> El certificado SSL es autofirmado (dev). En producción usar Let's Encrypt u otro CA válido.
 
-### Ejecución
+### nginx (`nginx/nginx.conf`)
 
-**Con Docker**:
+- Puerto 80: redirección 301 → HTTPS
+- Puerto 443: TLS con TLSv1.2 y TLSv1.3
+- `/api/*` → backend:3001
+- `/` → frontend:3000
+
+### Comandos
+
 ```bash
-docker-compose up --build
+# Levantar todo
+docker compose up --build -d
+
+# Ver estado
+docker compose ps
+
+# Ver logs
+docker compose logs -f backend
+
+# Parar
+docker compose down
 ```
 
-**Manual**:
-```bash
-# Backend
-cd backend && npm install && npm run dev
+### Volúmenes montados
 
-# Frontend
-cd frontend && npm install && npm run dev
-```
-
-**URLs de Acceso**:
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:3001
+- `./backend/src` → `/app/src` (hot reload backend)
+- `./backend/tienda.db` → `/app/tienda.db` (persistencia BD)
+- `./frontend/src` → `/app/src` (hot reload frontend)
+- `./nginx/nginx.conf` y `./nginx/certs/` → nginx (solo lectura)
 
 ---
 
@@ -499,99 +429,57 @@ cd frontend && npm install && npm run dev
 
 ### Prerrequisitos
 
-- Node.js 18+
-- Docker (opcional)
+- Node.js 20+
+- Docker + Docker Compose
 - Git
 
-### Instalación
+### Instalación y ejecución
 
-1. **Clonar repositorio**:
-   ```bash
-   git clone <url-del-repo>
-   cd proyecto
-   ```
+```bash
+# Clonar
+git clone https://github.com/ddelbarriojuan-code/Proyecto_web
+cd Proyecto_web
 
-2. **Instalar dependencias**:
-   ```bash
-   # Backend
-   cd backend && npm install
+# Con Docker (recomendado)
+docker compose up --build -d
 
-   # Frontend
-   cd frontend && npm install
-   ```
+# Manual
+cd backend && npm install && npm start &
+cd frontend && npm install && npm run dev
+```
 
-3. **Ejecutar aplicación**:
-   ```bash
-   # Opción 1: Docker
-   docker-compose up --build
-
-   # Opción 2: Manual
-   cd backend && npm run dev &
-   cd frontend && npm run dev
-   ```
-
-### Scripts Disponibles
+### Scripts
 
 **Frontend**:
-- `npm run dev`: Inicia servidor de desarrollo
-- `npm run build`: Construye para producción
-- `npm run preview`: Vista previa de build
+- `npm run dev`: Servidor de desarrollo (puerto 3000)
+- `npm run build`: Build de producción
+- `npm test`: Tests con Vitest
 
 **Backend**:
-- `npm start`: Inicia servidor
-- `npm run dev`: Inicia servidor en modo desarrollo
-
-### Estructura de Desarrollo
-
-- **Frontend**: Hot reload con Vite
-- **Backend**: Reinicio automático con nodemon
-- **Base de Datos**: SQLite persistente en archivo local
-
-### Testing
-
-La aplicación incluye validación automática:
-- Verificación de builds exitosos
-- Tests de API endpoints
-- Validación de formularios
+- `npm start`: Inicia servidor (puerto 3001)
 
 ---
 
-## 📊 Estadísticas del Proyecto
+## 📊 Estado actual del proyecto
 
-- **Líneas de Código**: ~800+ líneas
-- **Componentes React**: 2 principales (Tienda, Admin)
-- **Endpoints API**: 7 rutas REST
-- **Tablas DB**: 3 tablas relacionales
-- **Productos de Ejemplo**: 8 items
-- **Tiempo de Desarrollo**: Estimado 2-3 semanas
+- **Productos de ejemplo**: 15 ordenadores (Portátiles, Gaming, Sobremesa)
+- **Endpoints API**: 14 rutas REST
+- **Tablas DB**: 4 (productos, pedidos, pedido_items, usuarios)
+- **Correcciones de seguridad**: 8 vulnerabilidades corregidas
+- **Versión**: 1.1.0
 
 ---
 
 ## 🔄 Flujo de la Aplicación
 
-1. **Usuario visita tienda** → Carga productos desde API
-2. **Búsqueda/Filtros** → API devuelve productos filtrados
-3. **Agregar al carrito** → Estado local se actualiza
-4. **Checkout** → Validación y envío a API
-5. **Pedido creado** → Base de datos actualizada
-6. **Admin revisa** → Panel muestra estadísticas y pedidos
+1. Usuario accede a **https://localhost** → nginx sirve el frontend
+2. Frontend carga productos desde `/api/productos`
+3. Usuario filtra/busca → nueva llamada a la API con parámetros
+4. Usuario añade al carrito → estado local React
+5. Checkout → `POST /api/pedidos`
+6. Admin hace login → `POST /api/login` → token de sesión
+7. Admin gestiona productos/pedidos desde `/admin` usando endpoints protegidos
 
 ---
 
-## 🚀 Próximas Mejoras
-
-- [ ] Autenticación JWT para admin
-- [ ] Paginación de productos
-- [ ] Sistema de reseñas
-- [ ] Integración con pasarelas de pago
-- [ ] Notificaciones por email
-- [ ] API de inventario
-- [ ] Tests unitarios y E2E
-- [ ] CI/CD pipeline
-- [ ] Despliegue en cloud
-
----
-
-*Documentación generada el: $(date)*
-*Versión de la aplicación: 1.0.0*</content>
-<parameter name="filePath">/home/dario/proyecto/DOCUMENTACION_COMPLETA.md
+*Última actualización: 19/03/2026 — v1.1.0*
