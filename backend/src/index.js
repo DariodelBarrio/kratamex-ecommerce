@@ -42,7 +42,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png|gif|webp/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
@@ -56,6 +56,18 @@ const upload = multer({
 });
 
 // =================================================================
+// CONFIGURACIÓN DEL LOGGER
+// =================================================================
+const LOG_FILE = path.join(__dirname, 'access.log');
+
+function logRequest(req, res, next) {
+  const timestamp = new Date().toISOString();
+  const logEntry = `[${timestamp}] ${req.ip} - ${req.method} ${req.url}\n`;
+  fs.appendFile(LOG_FILE, logEntry, (err) => { if (err) console.error('Error writing to log:', err); });
+  next();
+}
+
+// =================================================================
 // CONFIGURACIÓN DEL SERVIDOR
 // =================================================================
 const app = express();
@@ -63,6 +75,7 @@ const PORT = 3001;
 
 app.use(cors());
 app.use(express.json());
+app.use(logRequest);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // =================================================================
