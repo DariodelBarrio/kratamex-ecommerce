@@ -130,7 +130,7 @@ import DOMPurify from 'dompurify';
 ```
 
 ### 6. Commits relacionados
-- `pendiente` - fix: remove sanitize from onChange handlers (double encoding bug)
+- `319624a` - fix: remove sanitize from onChange handlers + add SQLi/XSS security demo
 
 ---
 
