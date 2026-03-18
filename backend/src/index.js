@@ -16,24 +16,54 @@ Funcionalidades:
 // =================================================================
 // IMPORTACIONES
 // =================================================================
-// Express: framework web para crear el servidor
-// Cors: permite que el frontend acceda a la API
-// Better-sqlite3: base de datos SQLite (archivo local, sin instalar MySQL)
 const express = require('express');
 const cors = require('cors');
 const Database = require('better-sqlite3');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+
+// =================================================================
+// CONFIGURACIÓN DE MULTER (SUBIDA DE IMÁGENES)
+// =================================================================
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir);
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (extname && mimetype) {
+      return cb(null, true);
+    }
+    cb(new Error('Solo se permiten imágenes (jpeg, jpg, png, gif, webp)'));
+  }
+});
 
 // =================================================================
 // CONFIGURACIÓN DEL SERVIDOR
 // =================================================================
 const app = express();
-const PORT = 3001;  // Puerto donde correrá el servidor
+const PORT = 3001;
 
-// Middlewares (funciones que se ejecutan antes de las rutas)
-// Cors: permite solicitudes desde otros dominios (necesario para el frontend)
 app.use(cors());
-// Express.json: permite recibir datos en formato JSON en las peticiones
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // =================================================================
 // BASE DE DATOS
