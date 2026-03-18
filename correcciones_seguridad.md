@@ -85,7 +85,7 @@ El endpoint `/api/login` no tenía limitación de intentos, permitiendo ataques 
 - El contador se resetea al hacer login correcto
 
 ### 4. Commits relacionados
-- `pendiente` - fix: add login rate limiting to prevent brute force attacks
+- `0abda08` - fix: add login rate limiting to prevent brute force attacks
 
 ---
 
