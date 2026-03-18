@@ -1,0 +1,421 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { Lock, Eye, EyeOff, Package, TrendingUp } from 'lucide-react';
+import styles from './Admin.module.css';
+import { Producto } from '../../interfaces';
+import { sanitize } from '../../utils';
+
+// =================================================================
+// COMPONENTE: ADMIN (PANEL DE ADMINISTRACIÓN)
+// =================================================================
+function Admin() {
+  const [autenticado, setAutenticado] = useState(false);
+  const [password, setPassword] = useState('');
+  const [mostrarPassword, setMostrarPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [pedidos, setPedidos] = useState<any[]>([]);
+  const [vista, setVista] = useState<'productos' | 'pedidos'>('productos');
+  const [editando, setEditando] = useState<Producto | null>(null);
+  const [formProducto, setFormProducto] = useState({
+    nombre: '',
+    descripcion: '',
+    precio: '',
+    imagen: '',
+    categoria: '',
+  });
+
+  const verificarPassword = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password }),
+      });
+
+      if (response.ok) {
+        setAutenticado(true);
+        setError('');
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Contraseña incorrecta');
+      }
+    } catch (error) {
+      console.error('Error al iniciar sesión:', error);
+      setError('Error al conectar con el servidor');
+    }
+  };
+
+  if (!autenticado) {
+    return (
+      <div className={styles['login-container']}>
+        <div className={styles['login-box']}>
+          <Lock size={48} className={styles['login-icon']} />
+          <h2>Acceso Administrador</h2>
+          <p>Ingresa la contraseña para continuar</p>
+          <div className={styles['login-form']}>
+            <div className={styles['password-input-wrapper']}>
+              <input
+                type={mostrarPassword ? 'text' : 'password'}
+                placeholder="Contraseña"
+                className={styles['form-input']}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && verificarPassword()}
+              />
+              <button
+                type="button"
+                className={styles['toggle-password']}
+                onClick={() => setMostrarPassword(!mostrarPassword)}
+              >
+                {mostrarPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            {error && <p className={styles['login-error']}>{error}</p>}
+            <button className={styles['login-btn']} onClick={verificarPassword}>
+              Ingresar
+            </button>
+          </div>
+          <Link to="/" className={styles['back-link']}>
+            ← Volver a la tienda
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  useEffect(() => {
+    cargarDatos();
+  }, []);
+
+  const cargarDatos = () => {
+    fetch('http://localhost:3001/api/productos')
+      .then((res) => res.json())
+      .then((data) => setProductos(data))
+      .catch((err) => console.error('Error:', err));
+
+    fetch('http://localhost:3001/api/pedidos')
+      .then((res) => res.json())
+      .then((data) => setPedidos(data))
+      .catch((err) => console.error('Error:', err));
+  };
+
+  const guardarProducto = async () => {
+    if (!formProducto.nombre || !formProducto.precio) {
+      alert('Nombre y precio son requeridos');
+      return;
+    }
+
+    const data = {
+      ...formProducto,
+      precio: parseFloat(formProducto.precio),
+    };
+
+    try {
+      if (editando) {
+        await fetch(`http://localhost:3001/api/productos/${editando.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+      } else {
+        await fetch('http://localhost:3001/api/productos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+      }
+      setFormProducto({
+        nombre: '',
+        descripcion: '',
+        precio: '',
+        imagen: '',
+        categoria: '',
+      });
+      setEditando(null);
+      cargarDatos();
+    } catch (err) {
+      alert('Error al guardar producto');
+    }
+  };
+
+  const eliminarProducto = async (id: number) => {
+    if (!confirm('¿Eliminar producto?')) return;
+    try {
+      await fetch(`http://localhost:3001/api/productos/${id}`, {
+        method: 'DELETE',
+      });
+      cargarDatos();
+    } catch (err) {
+      alert('Error al eliminar');
+    }
+  };
+
+  const editarProducto = (producto: Producto) => {
+    setEditando(producto);
+    setFormProducto({
+      nombre: producto.nombre,
+      descripcion: producto.descripcion,
+      precio: producto.precio.toString(),
+      imagen: producto.imagen,
+      categoria: producto.categoria,
+    });
+  };
+
+  const totalVentas = pedidos.reduce((sum, p) => sum + p.total, 0);
+
+  return (
+    <div className={styles['admin-container']}>
+      <header className={styles['admin-header']}>
+        <div
+          className="container"
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+            <h1 style={{ color: '#fff' }}>Panel de Administración</h1>
+            <Link
+              to="/"
+              style={{
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <Package size={18} /> Ver Tienda
+            </Link>
+          </div>
+          <button
+            className={styles['logout-btn']}
+            onClick={() => {
+              setAutenticado(false);
+              setPassword('');
+            }}
+          >
+            <Lock size={18} /> Cerrar Sesión
+          </button>
+        </div>
+      </header>
+
+      <div className="container" style={{ padding: '24px 20px' }}>
+        <div className={styles['admin-stats']}>
+          <div className={styles['stat-card']}>
+            <Package size={24} />
+            <div>
+              <div className={styles['stat-value']}>{productos.length}</div>
+              <div className={styles['stat-label']}>Productos</div>
+            </div>
+          </div>
+          <div className={styles['stat-card']}>
+            <TrendingUp size={24} />
+            <div>
+              <div className={styles['stat-value']}>{pedidos.length}</div>
+              <div className={styles['stat-label']}>Pedidos</div>
+            </div>
+          </div>
+          <div className={styles['stat-card']}>
+            <span style={{ fontSize: '1.5rem', fontWeight: 700 }}>
+              ${totalVentas.toFixed(2)}
+            </span>
+            <div>
+              <div className={styles['stat-label']}>Total Ventas</div>
+            </div>
+          </div>
+        </div>
+
+        <div className={styles['admin-tabs']}>
+          <button
+            className={`${styles['tab-btn']} ${
+              vista === 'productos' ? styles.active : ''
+            }`}
+            onClick={() => setVista('productos')}
+          >
+            <Package size={18} /> Productos
+          </button>
+          <button
+            className={`${styles['tab-btn']} ${
+              vista === 'pedidos' ? styles.active : ''
+            }`}
+            onClick={() => setVista('pedidos')}
+          >
+            <TrendingUp size={18} /> Pedidos
+          </button>
+        </div>
+
+        {vista === 'productos' && (
+          <div className={styles['admin-section']}>
+            <div className={styles['admin-form']}>
+              <h3>{editando ? 'Editar Producto' : 'Nuevo Producto'}</h3>
+              <div className={styles['form-grid']}>
+                <input
+                  type="text"
+                  placeholder="Nombre"
+                  className={styles['form-input']}
+                  value={formProducto.nombre}
+                  onChange={(e) =>
+                    setFormProducto({
+                      ...formProducto,
+                      nombre: sanitize(e.target.value),
+                    })
+                  }
+                />
+                <input
+                  type="text"
+                  placeholder="Descripción"
+                  className={styles['form-input']}
+                  value={formProducto.descripcion}
+                  onChange={(e) =>
+                    setFormProducto({
+                      ...formProducto,
+                      descripcion: sanitize(e.target.value),
+                    })
+                  }
+                />
+                <input
+                  type="number"
+                  placeholder="Precio"
+                  className={styles['form-input']}
+                  value={formProducto.precio}
+                  onChange={(e) =>
+                    setFormProducto({ ...formProducto, precio: e.target.value })
+                  }
+                />
+                <input
+                  type="text"
+                  placeholder="URL Imagen"
+                  className={styles['form-input']}
+                  value={formProducto.imagen}
+                  onChange={(e) =>
+                    setFormProducto({
+                      ...formProducto,
+                      imagen: sanitize(e.target.value),
+                    })
+                  }
+                />
+                <input
+                  type="text"
+                  placeholder="Categoría"
+                  className={styles['form-input']}
+                  value={formProducto.categoria}
+                  onChange={(e) =>
+                    setFormProducto({
+                      ...formProducto,
+                      categoria: sanitize(e.target.value),
+                    })
+                  }
+                />
+              </div>
+              <div className={styles['form-actions']}>
+                <button
+                  className={styles['btn-primary']}
+                  onClick={guardarProducto}
+                >
+                  {editando ? 'Actualizar' : 'Crear'}
+                </button>
+                {editando && (
+                  <button
+                    className={styles['btn-secondary']}
+                    onClick={() => {
+                      setEditando(null);
+                      setFormProducto({
+                        nombre: '',
+                        descripcion: '',
+                        precio: '',
+                        imagen: '',
+                        categoria: '',
+                      });
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className={styles['admin-table']}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Categoría</th>
+                    <th>Precio</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productos.map((p) => (
+                    <tr key={p.id}>
+                      <td>{p.id}</td>
+                      <td>{sanitize(p.nombre)}</td>
+                      <td>{sanitize(p.categoria)}</td>
+                      <td>${p.precio.toFixed(2)}</td>
+                      <td>
+                        <button
+                          className={styles['btn-edit']}
+                          onClick={() => editarProducto(p)}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          className={styles['btn-delete']}
+                          onClick={() => eliminarProducto(p.id)}
+                        >
+                          Eliminar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {vista === 'pedidos' && (
+          <div className={styles['admin-section']}>
+            <div className={styles['admin-table']}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Cliente</th>
+                    <th>Email</th>
+                    <th>Dirección</th>
+                    <th>Total</th>
+                    <th>Fecha</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pedidos.map((p) => (
+                    <tr key={p.id}>
+                      <td>{p.id}</td>
+                      <td>{sanitize(p.cliente)}</td>
+                      <td>{sanitize(p.email)}</td>
+                      <td>{sanitize(p.direccion)}</td>
+                      <td>${p.total.toFixed(2)}</td>
+                      <td>{new Date(p.fecha).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {pedidos.length === 0 && (
+                <p style={{ padding: '20px', textAlign: 'center' }}>
+                  No hay pedidos
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default Admin;
