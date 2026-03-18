@@ -389,21 +389,21 @@ function Tienda() {
                       placeholder="Nombre completo"
                       className="form-input"
                       value={formulario.cliente}
-                      onChange={e => setFormulario({ ...formulario, cliente: sanitize(e.target.value) })}
+                      onChange={e => setFormulario({ ...formulario, cliente: e.target.value })}
                     />
                     <input
                       type="email"
                       placeholder="Correo electrónico"
                       className="form-input"
                       value={formulario.email}
-                      onChange={e => setFormulario({ ...formulario, email: sanitize(e.target.value) })}
+                      onChange={e => setFormulario({ ...formulario, email: e.target.value })}
                     />
                     <input
                       type="text"
                       placeholder="Dirección de envío"
                       className="form-input"
                       value={formulario.direccion}
-                      onChange={e => setFormulario({ ...formulario, direccion: sanitize(e.target.value) })}
+                      onChange={e => setFormulario({ ...formulario, direccion: e.target.value })}
                     />
                     <button className="checkout-btn" onClick={handleCheckout}>
                       Realizar Pedido

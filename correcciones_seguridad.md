@@ -46,22 +46,91 @@ El panel de administración (`/admin`) solo verificaba la contraseña sin valida
 ---
 
 ## [ID-003] Inyección SQL en Búsqueda de Productos
-**Fecha:** 18/03/2026
+**Fecha:** 19/03/2026
 **Nivel de Riesgo:** 🟡 Medio
 
 ### 1. Descripción del fallo
-El endpoint `/api/productos` permite filtros de búsqueda que podrían ser vulnerables a inyección SQL si no se usan prepared statements correctamente.
+Cualquier endpoint que construya queries SQL concatenando input del usuario es vulnerable a SQL Injection. Un atacante puede manipular la query para extraer datos de otras tablas, modificar registros o destruir la base de datos.
 
 ### 2. Impacto
-- Posibilidad de extraer datos sensibles de la base de datos
-- Manipulación de consultas SQL
+- Extracción de credenciales de la tabla `usuarios` mediante UNION attack
+- Bypass de autenticación con `1 OR 1=1`
+- Destrucción de datos con `DROP TABLE`
 
-### 3. Solución (Parche)
-- Uso de prepared statements con parámetros binds
-- Validación de tipos (parseFloat para precios)
+### 3. Prueba de Concepto (PoC)
 
-### 4. Commits relacionados
+**Función vulnerable (concatenación directa):**
+```javascript
+// ❌ NUNCA hacer esto
+const sql = `SELECT * FROM productos WHERE id = ${req.params.id}`;
+```
+
+**Ataques simulados y resultado:**
+
+| Payload del atacante | Función vulnerable | Función segura |
+|---------------------|-------------------|----------------|
+| `1` (legítimo) | MacBook Pro ✅ | MacBook Pro ✅ |
+| `1 OR 1=1` | Devuelve 1er registro 🚨 | Sin resultado ✅ |
+| `0 UNION SELECT id,username,password FROM usuarios LIMIT 1--` | Expone credenciales 🚨 | Sin resultado ✅ |
+| `1; DROP TABLE productos--` | Destruye tabla 🚨 | Sin resultado ✅ |
+
+**Demo ejecutable:** `node backend/src/security-demo.js`
+
+### 4. Solución (Parche)
+```javascript
+// ✅ Prepared statement: el payload NUNCA se interpreta como SQL
+const stmt = db.prepare('SELECT * FROM productos WHERE id = ?');
+const result = stmt.get(req.params.id); // "1 OR 1=1" → dato literal
+```
+- Todos los endpoints usan `db.prepare('...').get/all(...params)` con `better-sqlite3`
+- Parámetros de precio validados con `parseFloat()`
+- Demo completo de ataques neutralizados en `backend/src/security-demo.js`
+
+### 5. Commits relacionados
 - `d86a27e` - Merge branch 'feature/search-filters'
+- `05a8508` - security-demo.js añadido con PoC completo
+
+---
+
+## [ID-009] XSS: Doble Encoding por sanitize() en onChange
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟢 Bajo (UX) / 🟡 Medio (por falsa sensación de seguridad)
+
+### 1. Descripción del fallo
+La función `sanitize()` se llamaba en los handlers `onChange` de los inputs (formulario de checkout y panel admin). Esto causa **doble encoding**: el usuario escribe `O'Brien` y el campo muestra `O&#039;Brien`. Además, es un antipatrón: la sanitización en input no aporta seguridad real porque React ya escapa el output en JSX por defecto.
+
+### 2. Impacto
+- UX degradada: caracteres especiales (`'`, `"`, `<`) se muestran como entidades HTML en los campos
+- Datos almacenados incorrectamente en BD (con entidades en vez de caracteres reales)
+
+### 3. Prueba de Concepto XSS (PoC)
+
+**¿Por qué React es seguro contra Stored XSS por defecto?**
+
+Cuando React renderiza `{producto.nombre}` en JSX, el valor se inyecta como **nodo de texto** en el DOM, nunca como HTML. Esto hace que cualquier payload XSS quede inerte:
+
+| Payload almacenado en BD | Renderizado por React | ¿Se ejecuta? |
+|--------------------------|----------------------|--------------|
+| `<script>alert(1)</script>` | Texto literal visible | ❌ No |
+| `<img src=x onerror=alert(1)>` | Texto literal visible | ❌ No |
+| `<ScRiPt>alert(document.cookie)</ScRiPt>` | Texto literal visible | ❌ No |
+
+**El único vector real de XSS en React sería `dangerouslySetInnerHTML`** — no presente en este proyecto.
+
+### 4. Solución (Parche)
+- Eliminado `sanitize(e.target.value)` de todos los `onChange` → reemplazado por `e.target.value`
+- Mantenido `sanitize()` en el render como defensa en profundidad
+- Añadida aclaración: **no se necesita DOMPurify** porque no se usa `dangerouslySetInnerHTML`
+
+### 5. Cuándo SÍ usar DOMPurify
+Solo si el proyecto necesita renderizar HTML real del servidor (e.g., descripciones con formato). En ese caso:
+```tsx
+import DOMPurify from 'dompurify';
+<div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlContent) }} />
+```
+
+### 6. Commits relacionados
+- `pendiente` - fix: remove sanitize from onChange handlers (double encoding bug)
 
 ---
 
