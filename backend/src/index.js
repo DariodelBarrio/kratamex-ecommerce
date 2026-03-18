@@ -16,6 +16,7 @@ Funcionalidades:
 // =================================================================
 // IMPORTACIONES
 // =================================================================
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const Database = require('better-sqlite3');
@@ -193,8 +194,13 @@ const productos = [
 // Seed de usuarios (admin y standard)
 const usuariosExistentes = db.prepare('SELECT COUNT(*) as count FROM usuarios').get();
 if (usuariosExistentes.count === 0) {
-  db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run('admin', 'admin123', 'admin@kratamex.com', 'admin');
-  db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run('user', 'user123', 'user@kratamex.com', 'standard');
+  const adminUser = process.env.ADMIN_USER || 'admin';
+  const adminPass = process.env.ADMIN_PASS || 'admin123';
+  const stdUser = process.env.USER_STANDARD || 'user';
+  const stdPass = process.env.USER_PASS || 'user123';
+  
+  db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run(adminUser, adminPass, 'admin@kratamex.com', 'admin');
+  db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run(stdUser, stdPass, 'user@kratamex.com', 'standard');
   console.log('Usuarios de ejemplo insertados');
 }
 
