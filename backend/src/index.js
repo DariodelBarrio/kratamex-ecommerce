@@ -16,24 +16,33 @@ Funcionalidades:
 // =================================================================
 // IMPORTACIONES
 // =================================================================
-// Express: framework web para crear el servidor
-// Cors: permite que el frontend acceda a la API
-// Better-sqlite3: base de datos SQLite (archivo local, sin instalar MySQL)
 const express = require('express');
 const cors = require('cors');
 const Database = require('better-sqlite3');
+const fs = require('fs');
+const path = require('path');
+
+// =================================================================
+// CONFIGURACIÓN DEL LOGGER
+// =================================================================
+const LOG_FILE = path.join(__dirname, 'access.log');
+
+function logRequest(req, res, next) {
+  const timestamp = new Date().toISOString();
+  const logEntry = `[${timestamp}] ${req.ip} - ${req.method} ${req.url}\n`;
+  fs.appendFile(LOG_FILE, logEntry, (err) => { if (err) console.error('Error writing to log:', err); });
+  next();
+}
 
 // =================================================================
 // CONFIGURACIÓN DEL SERVIDOR
 // =================================================================
 const app = express();
-const PORT = 3001;  // Puerto donde correrá el servidor
+const PORT = 3001;
 
-// Middlewares (funciones que se ejecutan antes de las rutas)
-// Cors: permite solicitudes desde otros dominios (necesario para el frontend)
 app.use(cors());
-// Express.json: permite recibir datos en formato JSON en las peticiones
 app.use(express.json());
+app.use(logRequest);
 
 // =================================================================
 // BASE DE DATOS
