@@ -291,7 +291,7 @@ function Admin() {
                   onChange={(e) =>
                     setFormProducto({
                       ...formProducto,
-                      nombre: sanitize(e.target.value),
+                      nombre: e.target.value,
                     })
                   }
                 />
@@ -303,7 +303,7 @@ function Admin() {
                   onChange={(e) =>
                     setFormProducto({
                       ...formProducto,
-                      descripcion: sanitize(e.target.value),
+                      descripcion: e.target.value,
                     })
                   }
                 />
@@ -324,7 +324,7 @@ function Admin() {
                   onChange={(e) =>
                     setFormProducto({
                       ...formProducto,
-                      imagen: sanitize(e.target.value),
+                      imagen: e.target.value,
                     })
                   }
                 />
@@ -336,7 +336,7 @@ function Admin() {
                   onChange={(e) =>
                     setFormProducto({
                       ...formProducto,
-                      categoria: sanitize(e.target.value),
+                      categoria: e.target.value,
                     })
                   }
                 />
