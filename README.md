@@ -39,16 +39,17 @@ proyecto/
 ### Componentes
 
 #### Tienda (/)
-Página principal con catálogo de productos, búsqueda y filtros.
+Página principal con catálogo de ordenadores, búsqueda y filtros.
 
 **Funcionalidades:**
-- Listado de productos desde API
+- Listado de ordenadores desde API
 - **Búsqueda** por nombre, descripción o categoría
-- **Filtro** por categoría
+- **Filtro** por categoría (Portátiles, Gaming, Sobremesa)
+- **Filtro** por rango de precio
 - **Ordenamiento** por precio (asc/desc)
 - Carrito de compras (agregar, quitar, modificar cantidad)
 - Checkout con formulario de cliente
-- **Panel de administración** (/admin) - Requiere contraseña
+- **Panel de administración** (/admin) - Requiere usuario y contraseña
 - Loading state mientras cargan los productos
 
 #### Admin (/admin)
@@ -77,7 +78,7 @@ Los estilos globales se encuentran en `index.css`. El componente `Admin` ha sido
 - `pedido_items` - Ítems de cada pedido
 - `usuarios` - Usuarios del sistema (RBAC)
 
-**Seed:** Se insertan 8 productos de ejemplo y 2 usuarios (admin/user) al iniciar.
+**Seed:** Se insertan 15 ordenadores de ejemplo, 3 pedidos de ejemplo y 2 usuarios (admin/user) al iniciar.
 
 ### Endpoints API
 
