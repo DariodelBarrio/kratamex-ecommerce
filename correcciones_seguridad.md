@@ -145,7 +145,7 @@ Las contraseñas se almacenaban en texto plano en la base de datos. Un volcado d
 - Migración automática al arrancar: si existen contraseñas en texto plano en la BD, se hashean automáticamente
 
 ### 4. Commits relacionados
-- `pendiente` - fix: hash passwords with bcrypt and add HTTPS via nginx
+- `0385f5c` - fix: hash passwords with bcrypt and add HTTPS via nginx
 
 ---
 
@@ -168,6 +168,6 @@ La aplicación funcionaba solo sobre HTTP sin cifrado TLS/SSL, exponiendo creden
 - nginx enruta `/api/` al backend y `/` al frontend internamente
 
 ### 4. Commits relacionados
-- `pendiente` - fix: hash passwords with bcrypt and add HTTPS via nginx
+- `0385f5c` - fix: hash passwords with bcrypt and add HTTPS via nginx
 
 ---
