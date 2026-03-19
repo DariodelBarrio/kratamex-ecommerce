@@ -92,48 +92,6 @@ const result = stmt.get(req.params.id); // "1 OR 1=1" → dato literal
 
 ---
 
-## [ID-009] XSS: Doble Encoding por sanitize() en onChange
-**Fecha:** 19/03/2026
-**Nivel de Riesgo:** 🟢 Bajo (UX) / 🟡 Medio (por falsa sensación de seguridad)
-
-### 1. Descripción del fallo
-La función `sanitize()` se llamaba en los handlers `onChange` de los inputs (formulario de checkout y panel admin). Esto causa **doble encoding**: el usuario escribe `O'Brien` y el campo muestra `O&#039;Brien`. Además, es un antipatrón: la sanitización en input no aporta seguridad real porque React ya escapa el output en JSX por defecto.
-
-### 2. Impacto
-- UX degradada: caracteres especiales (`'`, `"`, `<`) se muestran como entidades HTML en los campos
-- Datos almacenados incorrectamente en BD (con entidades en vez de caracteres reales)
-
-### 3. Prueba de Concepto XSS (PoC)
-
-**¿Por qué React es seguro contra Stored XSS por defecto?**
-
-Cuando React renderiza `{producto.nombre}` en JSX, el valor se inyecta como **nodo de texto** en el DOM, nunca como HTML. Esto hace que cualquier payload XSS quede inerte:
-
-| Payload almacenado en BD | Renderizado por React | ¿Se ejecuta? |
-|--------------------------|----------------------|--------------|
-| `<script>alert(1)</script>` | Texto literal visible | ❌ No |
-| `<img src=x onerror=alert(1)>` | Texto literal visible | ❌ No |
-| `<ScRiPt>alert(document.cookie)</ScRiPt>` | Texto literal visible | ❌ No |
-
-**El único vector real de XSS en React sería `dangerouslySetInnerHTML`** — no presente en este proyecto.
-
-### 4. Solución (Parche)
-- Eliminado `sanitize(e.target.value)` de todos los `onChange` → reemplazado por `e.target.value`
-- Mantenido `sanitize()` en el render como defensa en profundidad
-- Añadida aclaración: **no se necesita DOMPurify** porque no se usa `dangerouslySetInnerHTML`
-
-### 5. Cuándo SÍ usar DOMPurify
-Solo si el proyecto necesita renderizar HTML real del servidor (e.g., descripciones con formato). En ese caso:
-```tsx
-import DOMPurify from 'dompurify';
-<div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlContent) }} />
-```
-
-### 6. Commits relacionados
-- `319624a` - fix: remove sanitize from onChange handlers + add SQLi/XSS security demo
-
----
-
 ## [ID-004] Sin Limitación de Rate en Login
 **Fecha:** 19/03/2026
 **Nivel de Riesgo:** 🟡 Medio
@@ -238,5 +196,47 @@ La aplicación funcionaba solo sobre HTTP sin cifrado TLS/SSL, exponiendo creden
 
 ### 4. Commits relacionados
 - `0385f5c` - fix: hash passwords with bcrypt and add HTTPS via nginx
+
+---
+
+## [ID-009] XSS: Doble Encoding por sanitize() en onChange
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟡 Medio
+
+### 1. Descripción del fallo
+La función `sanitize()` se llamaba en los handlers `onChange` de los inputs (formulario de checkout y panel admin). Esto causa **doble encoding**: el usuario escribe `O'Brien` y el campo muestra `O&#039;Brien`. Además, es un antipatrón: la sanitización en input no aporta seguridad real porque React ya escapa el output en JSX por defecto.
+
+### 2. Impacto
+- UX degradada: caracteres especiales (`'`, `"`, `<`) se muestran como entidades HTML en los campos
+- Datos almacenados incorrectamente en BD (con entidades en vez de caracteres reales)
+
+### 3. Prueba de Concepto XSS (PoC)
+
+**¿Por qué React es seguro contra Stored XSS por defecto?**
+
+Cuando React renderiza `{producto.nombre}` en JSX, el valor se inyecta como **nodo de texto** en el DOM, nunca como HTML. Esto hace que cualquier payload XSS quede inerte:
+
+| Payload almacenado en BD | Renderizado por React | ¿Se ejecuta? |
+|--------------------------|----------------------|--------------|
+| `<script>alert(1)</script>` | Texto literal visible | ❌ No |
+| `<img src=x onerror=alert(1)>` | Texto literal visible | ❌ No |
+| `<ScRiPt>alert(document.cookie)</ScRiPt>` | Texto literal visible | ❌ No |
+
+**El único vector real de XSS en React sería `dangerouslySetInnerHTML`** — no presente en este proyecto.
+
+### 4. Solución (Parche)
+- Eliminado `sanitize(e.target.value)` de todos los `onChange` → reemplazado por `e.target.value`
+- Mantenido `sanitize()` en el render como defensa en profundidad
+- No se necesita DOMPurify porque no se usa `dangerouslySetInnerHTML`
+
+### 5. Cuándo SÍ usar DOMPurify
+Solo si el proyecto necesita renderizar HTML real del servidor:
+```tsx
+import DOMPurify from 'dompurify';
+<div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlContent) }} />
+```
+
+### 6. Commits relacionados
+- `319624a` - fix: remove sanitize from onChange handlers + add SQLi/XSS security demo
 
 ---
