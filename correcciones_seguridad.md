@@ -458,4 +458,128 @@ return res.status(400).json({ error: 'Uno o más artículos no están disponible
 ```
 
 ### 5. Commits relacionados
+- `20173bb` - fix: IDOR on /api/pedidos, weak token entropy, open CORS, product ID enumeration
+
+---
+
+## [ID-018] URLs Hardcodeadas en Frontend Bypassan HTTPS
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🔴 Crítico
+
+### 1. Descripción del fallo
+`App.tsx` usaba `http://localhost:3001/api/...` para obtener productos y procesar checkout. Esto bypasea completamente el proxy nginx con TLS, enviando datos sensibles (nombre, email, dirección, carrito) en texto plano. En producción, `localhost:3001` resolvería a la máquina del usuario final, rompiendo la tienda por completo.
+
+### 2. Impacto
+- Datos de checkout (PII) transmitidos sin cifrar pese a tener HTTPS configurado
+- Tienda completamente inoperativa en cualquier entorno de producción
+- HTTPS efectivamente inutilizado para el flujo principal de la aplicación
+
+### 3. PoC del ataque
+```bash
+# Capturar tráfico de red mientras se hace un pedido:
+tcpdump -i lo port 3001 -A 2>/dev/null | grep -i "cliente\|email\|direccion"
+# → Datos del cliente visibles en texto plano ❌
+```
+
+### 4. Solución (Parche)
+```javascript
+// ❌ Antes (bypasea nginx/HTTPS):
+fetch('http://localhost:3001/api/productos?...')
+fetch('http://localhost:3001/api/pedidos', ...)
+
+// ✅ Después (pasa por nginx → HTTPS):
+fetch('/api/productos?...')
+fetch('/api/pedidos', ...)
+```
+
+### 5. Commits relacionados
+- `pendiente`
+
+---
+
+## [ID-019] Sin Rate Limiting en Checkout — Order Flood / DoS
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟠 Alto
+
+### 1. Descripción del fallo
+`POST /api/pedidos` no tenía ningún límite de peticiones. Cualquier persona podía generar miles de pedidos falsos sin autenticación, saturando la base de datos SQLite y el disco del servidor.
+
+### 2. Impacto
+- Llenado de disco con registros falsos
+- SQLite bloqueado por escrituras masivas concurrentes
+- Denegación de servicio para clientes legítimos
+
+### 3. PoC del ataque
+```bash
+for i in $(seq 1 10000); do
+  curl -s -X POST http://localhost:3001/api/pedidos \
+    -d '{"cliente":"bot","email":"x@x.com","direccion":"x","items":[{"id":1,"cantidad":1}]}' &
+done
+```
+
+### 4. Solución (Parche)
+Rate limiter de ventana deslizante: máximo 10 pedidos por IP cada 60 segundos.
+```javascript
+app.post('/api/pedidos', checkoutRateLimiter, ...)
+// → HTTP 429 al superar el límite
+```
+
+### 5. Commits relacionados
+- `pendiente`
+
+---
+
+## [ID-020] nginx Sin Headers de Seguridad (Clickjacking, MIME Sniffing, Sin HSTS)
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟠 Alto
+
+### 1. Descripción del fallo
+La configuración nginx no emitía ningún header de seguridad estándar, dejando la aplicación expuesta a múltiples vectores:
+
+| Header ausente | Vulnerabilidad |
+|---|---|
+| `Strict-Transport-Security` | Downgrade HTTP sin HSTS |
+| `X-Frame-Options` | Clickjacking vía iframe |
+| `X-Content-Type-Options` | MIME sniffing |
+| `Content-Security-Policy` | Sin defensa en profundidad XSS |
+| `Referrer-Policy` | Fuga de URL completa |
+
+### 2. Solución (Parche)
+Añadidos los 5 headers en cada `location` block de nginx (deben repetirse por limitación de herencia de `add_header` en nginx):
+```nginx
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+add_header X-Frame-Options "DENY" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Content-Security-Policy "default-src 'self'; ..." always;
+```
+
+### 3. Commits relacionados
+- `pendiente`
+
+---
+
+## [ID-021] sanitize() Aplicado a URLs Rompe Links y No Filtra javascript:
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟡 Medio
+
+### 1. Descripción del fallo
+`sanitize()` se aplicaba a URLs de imágenes de productos (`sanitize(producto.imagen)`). La función codifica `&` → `&amp;`, rompiendo cualquier URL con parámetros. Adicionalmente, no filtra el protocolo `javascript:`, que es el vector real de XSS en atributos `src`/`href`.
+
+### 2. Impacto
+- URLs con parámetros rotas (imágenes no cargan)
+- Falsa sensación de seguridad: `javascript:alert(1)` pasa sin modificar
+- React ya escapa atributos de forma segura, haciendo la sanitización redundante e incorrecta
+
+### 3. Solución (Parche)
+```tsx
+// ❌ Antes: rompe URLs, no filtra javascript:
+<OptimizedImage src={sanitize(producto.imagen)} ...>
+
+// ✅ Después: React gestiona el atributo src de forma segura
+<OptimizedImage src={producto.imagen} ...>
+```
+`sanitize()` solo debe usarse en **contenido de texto** renderizado, nunca en URLs.
+
+### 4. Commits relacionados
 - `pendiente`

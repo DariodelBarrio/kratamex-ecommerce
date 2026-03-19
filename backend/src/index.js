@@ -245,7 +245,7 @@ if (pedidosExistentes.count === 0) {
 }
 
 // =================================================================
-// RATE LIMITING EN LOGIN (protección fuerza bruta)
+// RATE LIMITING GENÉRICO (fuerza bruta y flood)
 // =================================================================
 const loginAttempts = {}; // { ip: { count, blockedUntil } }
 const MAX_ATTEMPTS = 12;
@@ -265,6 +265,27 @@ function loginRateLimiter(req, res, next) {
     });
   }
 
+  next();
+}
+
+// Rate limiter para checkout: máx 10 pedidos/IP cada 60s (anti-flood/DoS)
+const checkoutAttempts = {}; // { ip: { count, windowStart } }
+const MAX_CHECKOUT_PER_WINDOW = 10;
+const CHECKOUT_WINDOW_MS = 60 * 1000;
+
+function checkoutRateLimiter(req, res, next) {
+  const ip = req.ip;
+  const now = Date.now();
+  if (!checkoutAttempts[ip] || now - checkoutAttempts[ip].windowStart > CHECKOUT_WINDOW_MS) {
+    checkoutAttempts[ip] = { count: 1, windowStart: now };
+    return next();
+  }
+  checkoutAttempts[ip].count += 1;
+  if (checkoutAttempts[ip].count > MAX_CHECKOUT_PER_WINDOW) {
+    const logEntry = `[${new Date().toISOString()}] CHECKOUT_FLOOD ip=${ip} intentos=${checkoutAttempts[ip].count}\n`;
+    fs.appendFile(LOG_FILE, logEntry, () => {});
+    return res.status(429).json({ error: 'Demasiadas solicitudes. Intenta de nuevo en un momento.' });
+  }
   next();
 }
 
@@ -396,8 +417,9 @@ app.get('/api/productos/:id', (req, res) => {
 // POST /api/pedidos
 // Crear un nuevo pedido (checkout)
 // FIX IDOR: precio validado desde la BD, no del cliente (price manipulation)
+// FIX DoS: rate limiter de checkout (máx 10/IP/min)
 // --------------------------------------------------------------------------
-app.post('/api/pedidos', (req, res) => {
+app.post('/api/pedidos', checkoutRateLimiter, (req, res) => {
   const { cliente, email, direccion, items } = req.body;
 
   if (!cliente || !email || !direccion || !items || items.length === 0) {

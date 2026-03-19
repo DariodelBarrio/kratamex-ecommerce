@@ -76,7 +76,7 @@ function Tienda() {
     if (ordenPrecio) params.append('orden', ordenPrecio)      // Agregar orden
     
     // Llamar al backend para obtener productos filtrados
-    fetch(`http://localhost:3001/api/productos?${params}`)
+    fetch(`/api/productos?${params}`)
       .then(res => res.json())  // Convertir respuesta a JSON
       .then(data => {
         setProductos(data)      // Guardar productos полученные del backend
@@ -172,7 +172,7 @@ function Tienda() {
 
     try {
       // Enviar pedido al backend
-      await fetch('http://localhost:3001/api/pedidos', {
+      await fetch('/api/pedidos', {
         method: 'POST',  // Método HTTP para crear datos
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -300,7 +300,7 @@ function Tienda() {
               <div key={producto.id} className="product-card">
                 {/* Imagen del producto */}
                 <OptimizedImage
-                  src={sanitize(producto.imagen)}
+                  src={producto.imagen}
                   alt={sanitize(producto.nombre)}
                   className="product-image"
                 />
@@ -353,7 +353,7 @@ function Tienda() {
                 <div className="cart-items">
                   {carrito.map(item => (
                     <div key={item.id} className="cart-item">
-                      <OptimizedImage src={sanitize(item.imagen)} alt={sanitize(item.nombre)} className="cart-item-image" />
+                      <OptimizedImage src={item.imagen} alt={sanitize(item.nombre)} className="cart-item-image" />
                       <div className="cart-item-info">
                         <div className="cart-item-name">{sanitize(item.nombre)}</div>
                         <div className="cart-item-price">${item.precio.toFixed(2)}</div>
