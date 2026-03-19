@@ -10,6 +10,7 @@ export default defineConfig({
     compression({ algorithm: 'gzip' }),
     VitePWA({
       registerType: 'autoUpdate',
+      devOptions: { enabled: false },
       includeAssets: ['favicon.png', 'icon-192.png', 'icon-512.png', 'og-image.png'],
       manifest: {
         name: 'Kratamex',
