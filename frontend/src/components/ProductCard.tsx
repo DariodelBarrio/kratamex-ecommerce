@@ -1,44 +1,75 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Check, Cpu } from 'lucide-react';
+import { ShoppingCart, Check } from 'lucide-react';
 import { Producto } from '../interfaces';
 
 // =================================================================
-// BRAND DETECTION & CONFIG
+// LAPTOP BLUEPRINT SVG — Technical outline drawing
 // =================================================================
-const BRAND_CONFIG: Record<string, { color: string; label: string }> = {
-  apple:   { color: '#e8e8ed', label: 'apple' },
-  dell:    { color: '#007db8', label: 'DELL' },
-  hp:      { color: '#0096d6', label: 'hp' },
-  lenovo:  { color: '#e2231a', label: 'Lenovo' },
-  asus:    { color: '#00aaff', label: 'ASUS' },
-  default: { color: '#475569', label: '' },
-};
+function LaptopBlueprint({ size = 80 }: { size?: number }) {
+  return (
+    <svg
+      viewBox="0 0 140 100"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ width: size, height: size * 0.714 }}
+      aria-label="Laptop"
+    >
+      {/* Screen lid */}
+      <rect x="25" y="8" width="90" height="55" rx="4" stroke="#475569" strokeWidth="1.2" />
+      {/* Screen display */}
+      <rect x="30" y="13" width="80" height="45" rx="2" stroke="#334155" strokeWidth="0.8" />
+      {/* Camera dot */}
+      <circle cx="70" cy="10" r="1" fill="#334155" />
+      {/* Hinge line */}
+      <line x1="18" y1="63" x2="122" y2="63" stroke="#475569" strokeWidth="1.2" />
+      {/* Base / keyboard body */}
+      <path
+        d="M18 63 L14 78 Q13 81 16 81 L124 81 Q127 81 126 78 L122 63"
+        stroke="#475569"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      {/* Keyboard rows */}
+      <line x1="28" y1="68" x2="112" y2="68" stroke="#1e293b" strokeWidth="0.5" />
+      <line x1="26" y1="72" x2="114" y2="72" stroke="#1e293b" strokeWidth="0.5" />
+      {/* Trackpad */}
+      <rect x="53" y="74" width="34" height="4" rx="1" stroke="#334155" strokeWidth="0.6" />
+    </svg>
+  );
+}
 
-function detectBrand(name: string): string {
-  const l = name.toLowerCase();
-  if (l.includes('macbook') || l.includes('imac') || l.includes('apple') || l.includes('mac mini') || l.includes('mac pro')) return 'apple';
-  if (l.includes('dell') || l.includes('xps') || l.includes('inspiron') || l.includes('latitude')) return 'dell';
-  if (l.startsWith('hp ') || l.includes(' hp ') || l.includes('elitebook') || l.includes('spectre') || l.includes('pavilion') || l.includes('envy')) return 'hp';
-  if (l.includes('lenovo') || l.includes('thinkpad') || l.includes('ideapad') || l.includes('yoga') || l.includes('legion')) return 'lenovo';
-  if (l.includes('asus') || l.includes('rog') || l.includes('zenbook') || l.includes('vivobook') || l.includes('zephyrus')) return 'asus';
-  return 'default';
+function LaptopBlueprintSmall() {
+  return (
+    <svg
+      viewBox="0 0 140 100"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ width: 32, height: 23 }}
+      aria-label="Laptop"
+    >
+      <rect x="25" y="8" width="90" height="55" rx="4" stroke="#475569" strokeWidth="2" />
+      <rect x="30" y="13" width="80" height="45" rx="2" stroke="#334155" strokeWidth="1.2" />
+      <line x1="18" y1="63" x2="122" y2="63" stroke="#475569" strokeWidth="2" />
+      <path
+        d="M18 63 L14 78 Q13 81 16 81 L124 81 Q127 81 126 78 L122 63"
+        stroke="#475569" strokeWidth="2" strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 // =================================================================
-// PRODUCT CARD COMPONENT
+// PRODUCT CARD
 // =================================================================
 interface ProductCardProps {
   producto: Producto;
-  featured?: boolean;
   onAddToCart: (producto: Producto) => void;
   index: number;
 }
 
-export function ProductCard({ producto, featured = false, onAddToCart, index }: ProductCardProps) {
+export function ProductCard({ producto, onAddToCart, index }: ProductCardProps) {
   const [added, setAdded] = useState(false);
-  const brand = detectBrand(producto.nombre);
-  const { color, label } = BRAND_CONFIG[brand] ?? BRAND_CONFIG['default'];
 
   const handleAdd = () => {
     if (added) return;
@@ -49,38 +80,18 @@ export function ProductCard({ producto, featured = false, onAddToCart, index }: 
 
   return (
     <motion.div
-      className={`product-card glass-card ${featured ? 'product-card--featured' : ''}`}
-      initial={{ opacity: 0, y: 30 }}
+      className="product-card glass-card"
+      initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: index * 0.06, ease: 'easeOut' }}
-      whileHover={{ y: -8 }}
+      transition={{ duration: 0.35, delay: index * 0.05, ease: 'easeOut' }}
+      whileHover={{ y: -6 }}
       layout
     >
       <div className="gradient-border" />
 
-      {/* Brand Logo Area */}
-      <div className={`product-image-area ${featured ? 'product-image-area--featured' : ''}`}>
-        <div className="brand-logo-container">
-          {brand !== 'default' ? (
-            <svg
-              viewBox="0 0 220 56"
-              xmlns="http://www.w3.org/2000/svg"
-              style={{ width: featured ? 140 : 100, height: featured ? 36 : 26 }}
-              aria-label={label}
-            >
-              <text
-                x="110" y="42" textAnchor="middle" fill={color}
-                fontFamily="'Inter', system-ui, sans-serif"
-                fontSize={featured ? 42 : 36} fontWeight="700"
-                letterSpacing={brand === 'apple' ? -1 : 3}
-              >
-                {label}
-              </text>
-            </svg>
-          ) : (
-            <Cpu size={featured ? 48 : 36} style={{ color: '#475569' }} />
-          )}
-        </div>
+      {/* Blueprint Image Area */}
+      <div className="product-image-area">
+        <LaptopBlueprint size={76} />
       </div>
 
       {/* Product Info */}
@@ -92,7 +103,7 @@ export function ProductCard({ producto, featured = false, onAddToCart, index }: 
         <div className="product-price-row">
           <motion.span
             className="product-price"
-            whileHover={{ textShadow: '0 0 16px rgba(52, 211, 153, 0.5)' }}
+            whileHover={{ textShadow: '0 0 20px rgba(52, 211, 153, 0.6)' }}
           >
             ${producto.precio.toFixed(2)}
           </motion.span>
@@ -101,7 +112,7 @@ export function ProductCard({ producto, featured = false, onAddToCart, index }: 
         <motion.button
           className={`add-to-cart ${added ? 'add-to-cart--success' : ''}`}
           onClick={handleAdd}
-          whileTap={{ scale: 0.95 }}
+          whileTap={{ scale: 0.96 }}
         >
           <AnimatePresence mode="wait">
             {added ? (
@@ -135,33 +146,12 @@ export function ProductCard({ producto, featured = false, onAddToCart, index }: 
 }
 
 // =================================================================
-// SMALL BRAND LOGO (for cart items)
+// SMALL BRAND LOGO (cart items)
 // =================================================================
-export function BrandLogoSmall({ name }: { name: string }) {
-  const brand = detectBrand(name);
-  const { color, label } = BRAND_CONFIG[brand] ?? BRAND_CONFIG['default'];
-
+export function BrandLogoSmall() {
   return (
     <div className="brand-logo-sm">
-      {brand !== 'default' ? (
-        <svg
-          viewBox="0 0 220 56"
-          xmlns="http://www.w3.org/2000/svg"
-          style={{ width: 36, height: 14 }}
-          aria-label={label}
-        >
-          <text
-            x="110" y="42" textAnchor="middle" fill={color}
-            fontFamily="'Inter', system-ui, sans-serif"
-            fontSize="28" fontWeight="700"
-            letterSpacing={brand === 'apple' ? -1 : 2}
-          >
-            {label}
-          </text>
-        </svg>
-      ) : (
-        <Cpu size={18} style={{ color: '#475569' }} />
-      )}
+      <LaptopBlueprintSmall />
     </div>
   );
 }

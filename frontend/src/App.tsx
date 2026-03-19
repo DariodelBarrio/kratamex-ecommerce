@@ -285,7 +285,7 @@ function Tienda() {
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                       >
-                        <BrandLogoSmall name={item.nombre} />
+                        <BrandLogoSmall />
                         <div className="cart-item-info">
                           <div className="cart-item-name">{item.nombre}</div>
                           <div className="cart-item-price">${item.precio.toFixed(2)}</div>
