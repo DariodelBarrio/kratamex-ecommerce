@@ -1,63 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Check } from 'lucide-react';
+import { ShoppingCart, Check, Monitor } from 'lucide-react';
 import { Producto } from '../interfaces';
-
-// =================================================================
-// LAPTOP BLUEPRINT SVG — Technical outline drawing
-// =================================================================
-function LaptopBlueprint({ size = 80 }: { size?: number }) {
-  return (
-    <svg
-      viewBox="0 0 140 100"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      style={{ width: size, height: size * 0.714 }}
-      aria-label="Laptop"
-    >
-      {/* Screen lid */}
-      <rect x="25" y="8" width="90" height="55" rx="4" stroke="#475569" strokeWidth="1.2" />
-      {/* Screen display */}
-      <rect x="30" y="13" width="80" height="45" rx="2" stroke="#334155" strokeWidth="0.8" />
-      {/* Camera dot */}
-      <circle cx="70" cy="10" r="1" fill="#334155" />
-      {/* Hinge line */}
-      <line x1="18" y1="63" x2="122" y2="63" stroke="#475569" strokeWidth="1.2" />
-      {/* Base / keyboard body */}
-      <path
-        d="M18 63 L14 78 Q13 81 16 81 L124 81 Q127 81 126 78 L122 63"
-        stroke="#475569"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-      {/* Keyboard rows */}
-      <line x1="28" y1="68" x2="112" y2="68" stroke="#1e293b" strokeWidth="0.5" />
-      <line x1="26" y1="72" x2="114" y2="72" stroke="#1e293b" strokeWidth="0.5" />
-      {/* Trackpad */}
-      <rect x="53" y="74" width="34" height="4" rx="1" stroke="#334155" strokeWidth="0.6" />
-    </svg>
-  );
-}
-
-function LaptopBlueprintSmall() {
-  return (
-    <svg
-      viewBox="0 0 140 100"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      style={{ width: 32, height: 23 }}
-      aria-label="Laptop"
-    >
-      <rect x="25" y="8" width="90" height="55" rx="4" stroke="#475569" strokeWidth="2" />
-      <rect x="30" y="13" width="80" height="45" rx="2" stroke="#334155" strokeWidth="1.2" />
-      <line x1="18" y1="63" x2="122" y2="63" stroke="#475569" strokeWidth="2" />
-      <path
-        d="M18 63 L14 78 Q13 81 16 81 L124 81 Q127 81 126 78 L122 63"
-        stroke="#475569" strokeWidth="2" strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 // =================================================================
 // PRODUCT CARD
@@ -89,9 +33,23 @@ export function ProductCard({ producto, onAddToCart, index }: ProductCardProps) 
     >
       <div className="gradient-border" />
 
-      {/* Blueprint Image Area */}
+      {/* Product Image */}
       <div className="product-image-area">
-        <LaptopBlueprint size={76} />
+        {producto.imagen ? (
+          <img
+            src={producto.imagen}
+            alt={producto.nombre}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              borderRadius: '8px',
+            }}
+            loading="lazy"
+          />
+        ) : (
+          <Monitor size={48} stroke="#475569" />
+        )}
       </div>
 
       {/* Product Info */}
@@ -148,10 +106,18 @@ export function ProductCard({ producto, onAddToCart, index }: ProductCardProps) 
 // =================================================================
 // SMALL BRAND LOGO (cart items)
 // =================================================================
-export function BrandLogoSmall() {
+export function BrandLogoSmall({ imagen, nombre }: { imagen?: string; nombre?: string }) {
   return (
     <div className="brand-logo-sm">
-      <LaptopBlueprintSmall />
+      {imagen ? (
+        <img
+          src={imagen}
+          alt={nombre || 'Producto'}
+          style={{ width: 32, height: 23, objectFit: 'cover', borderRadius: 4 }}
+        />
+      ) : (
+        <Monitor size={20} stroke="#475569" />
+      )}
     </div>
   );
 }

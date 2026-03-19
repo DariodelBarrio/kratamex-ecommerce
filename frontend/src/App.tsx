@@ -106,6 +106,15 @@ function Tienda() {
       alert('Por favor completa todos los campos')
       return
     }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(formulario.email)) {
+      alert('Por favor ingresa un email válido')
+      return
+    }
+    if (formulario.cliente.length > 200 || formulario.direccion.length > 500) {
+      alert('Los datos ingresados son demasiado largos')
+      return
+    }
     try {
       await fetch('/api/pedidos', {
         method: 'POST',
@@ -285,7 +294,7 @@ function Tienda() {
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                       >
-                        <BrandLogoSmall />
+                        <BrandLogoSmall imagen={item.imagen} nombre={item.nombre} />
                         <div className="cart-item-info">
                           <div className="cart-item-name">{item.nombre}</div>
                           <div className="cart-item-price">${item.precio.toFixed(2)}</div>
@@ -316,6 +325,7 @@ function Tienda() {
                         type="text"
                         placeholder="Nombre completo"
                         className="form-input"
+                        maxLength={200}
                         value={formulario.cliente}
                         onChange={e => setFormulario({ ...formulario, cliente: e.target.value })}
                       />
@@ -323,6 +333,7 @@ function Tienda() {
                         type="email"
                         placeholder="Correo electrónico"
                         className="form-input"
+                        maxLength={254}
                         value={formulario.email}
                         onChange={e => setFormulario({ ...formulario, email: e.target.value })}
                       />
@@ -330,6 +341,7 @@ function Tienda() {
                         type="text"
                         placeholder="Dirección de envío"
                         className="form-input"
+                        maxLength={500}
                         value={formulario.direccion}
                         onChange={e => setFormulario({ ...formulario, direccion: e.target.value })}
                       />

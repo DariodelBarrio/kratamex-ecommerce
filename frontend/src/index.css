@@ -213,7 +213,7 @@ header {
   border-color: var(--border-hover);
 }
 
-/* Brand Logo Image Area */
+/* Product Image Area */
 .product-image-area {
   width: 100%;
   height: 180px;
@@ -221,8 +221,9 @@ header {
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #0f172a, #020617);
-  padding: 24px;
   position: relative;
+  overflow: hidden;
+  border-radius: 12px 12px 0 0;
 }
 
 
