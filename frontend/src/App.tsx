@@ -148,14 +148,14 @@ function Tienda() {
     <>
       {/* ═══════ HEADER ═══════ */}
       <header>
-        <div className="container header-content">
+        <div className="container header-main">
           <div className="header-left">
             <Link to="/" className="logo">Kratamex</Link>
             <SecurityBadge />
           </div>
 
           <div className="search-bar">
-            <Search size={18} className="search-icon" />
+            <Search size={16} className="search-icon" />
             <input
               type="text"
               placeholder="Buscar productos..."
@@ -166,7 +166,7 @@ function Tienda() {
           </div>
 
           <button className="cart-btn" onClick={() => setCarritoAbierto(true)}>
-            <ShoppingCart size={20} />
+            <ShoppingCart size={18} />
             Carrito
             {cantidadItems > 0 && (
               <span className="cart-badge">{cantidadItems}</span>
@@ -177,7 +177,7 @@ function Tienda() {
         {/* Filters */}
         <div className="container filters-bar">
           <div className="filters">
-            <SlidersHorizontal size={16} />
+            <SlidersHorizontal size={14} />
             <select
               value={categoriaFiltro}
               onChange={e => setCategoriaFiltro(e.target.value)}
@@ -193,21 +193,68 @@ function Tienda() {
               onChange={e => setOrdenPrecio(e.target.value as 'asc' | 'desc' | '')}
               className="filter-select"
             >
-              <option value="">Ordenar por...</option>
-              <option value="asc">Precio: Menor a Mayor</option>
-              <option value="desc">Precio: Mayor a Menor</option>
+              <option value="">Ordenar por precio</option>
+              <option value="asc">Menor a Mayor</option>
+              <option value="desc">Mayor a Menor</option>
             </select>
           </div>
-          <span className="results-count">
-            {productosFiltrados.length} producto{productosFiltrados.length !== 1 ? 's' : ''}
-          </span>
+          {!loading && (
+            <span className="results-count">
+              {productosFiltrados.length} producto{productosFiltrados.length !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
       </header>
 
-      {/* ═══════ MAIN — BENTO GRID ═══════ */}
-      <main className="container">
+      {/* ═══════ HERO ═══════ */}
+      <div className="container">
+        <motion.div
+          className="hero"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="hero-eyebrow">
+            ✦ Tecnología de primer nivel
+          </div>
+          <h1 className="hero-title">
+            Equipos para<br />
+            <span className="highlight">profesionales</span>
+          </h1>
+          <p className="hero-subtitle">
+            Laptops y accesorios de alta gama para quienes exigen rendimiento sin compromisos.
+          </p>
+          <div className="hero-stats">
+            <div className="hero-stat">
+              <div className="hero-stat-value">+200</div>
+              <div className="hero-stat-label">Productos</div>
+            </div>
+            <div className="hero-stat">
+              <div className="hero-stat-value">24h</div>
+              <div className="hero-stat-label">Envío express</div>
+            </div>
+            <div className="hero-stat">
+              <div className="hero-stat-value">100%</div>
+              <div className="hero-stat-label">Garantía oficial</div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* ═══════ MAIN ═══════ */}
+      <main className="container products-section">
+        {!loading && (
+          <div className="section-header">
+            <h2 className="section-title">
+              Catálogo
+              {!busqueda && !categoriaFiltro && (
+                <span>{productosFiltrados.length} productos</span>
+              )}
+            </h2>
+          </div>
+        )}
+
         {loading ? (
-          /* Skeleton Loading State */
           <div className="products-grid">
             {Array.from({ length: 8 }).map((_, i) => (
               <SkeletonCard key={i} />
@@ -215,8 +262,9 @@ function Tienda() {
           </div>
         ) : productosFiltrados.length === 0 ? (
           <div className="no-results">
-            <Search size={48} style={{ opacity: 0.3, marginBottom: 16 }} />
-            <p>No se encontraron productos</p>
+            <Search size={48} style={{ opacity: 0.2, marginBottom: 16 }} />
+            <p style={{ fontWeight: 600, marginBottom: 6 }}>Sin resultados</p>
+            <p style={{ fontSize: '0.875rem' }}>Intenta con otros términos de búsqueda</p>
             {(busqueda || categoriaFiltro) && (
               <button
                 className="btn-secondary"
@@ -227,7 +275,6 @@ function Tienda() {
             )}
           </div>
         ) : (
-          /* Product Grid */
           <div className="products-grid">
             {productosFiltrados.map((producto, index) => (
               <ProductCard
@@ -240,6 +287,14 @@ function Tienda() {
           </div>
         )}
       </main>
+
+      {/* ═══════ FOOTER ═══════ */}
+      <footer className="store-footer">
+        <div className="container footer-inner">
+          <span className="footer-brand">Kratamex</span>
+          <span className="footer-copy">© {new Date().getFullYear()} · Todos los derechos reservados</span>
+        </div>
+      </footer>
 
       {/* ═══════ CART OVERLAY ═══════ */}
       <AnimatePresence>
@@ -317,9 +372,10 @@ function Tienda() {
 
                   <div className="cart-footer">
                     <div className="cart-total">
-                      <span>Total:</span>
-                      <span>${totalCarrito.toFixed(2)}</span>
+                      <span>Total</span>
+                      <span className="cart-total-value">${totalCarrito.toFixed(2)}</span>
                     </div>
+                    <p className="checkout-form-title">Datos de envío</p>
                     <div className="checkout-form">
                       <input
                         type="text"
