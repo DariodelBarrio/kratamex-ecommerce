@@ -166,13 +166,16 @@ Las contraseñas se almacenaban en texto plano en la base de datos. Un volcado d
 - Violación de principios de seguridad (OWASP A02)
 
 ### 3. Solución (Parche)
-- Instalada librería `bcryptjs` (pure JS, compatible con Alpine/Docker)
-- Contraseñas hasheadas con bcrypt (10 rondas) en el seed de usuarios
-- Login actualizado para usar `bcrypt.compareSync` en vez de comparación directa
-- Migración automática al arrancar: si existen contraseñas en texto plano en la BD, se hashean automáticamente
+- Instalada librería `argon2` (argon2id, ganador del PHC — Password Hashing Competition)
+- Contraseñas hasheadas con argon2id (async) en el seed de usuarios
+- Login actualizado para usar `argon2.verify()` en vez de comparación directa
+- Migración automática al arrancar: si existen contraseñas sin prefijo `$argon2`, se re-hashean
+
+> **Nota**: El proyecto inicialmente usó `bcryptjs` y posteriormente migró a `argon2id` por ser el estándar recomendado actual (OWASP 2025).
 
 ### 4. Commits relacionados
 - `0385f5c` - fix: hash passwords with bcrypt and add HTTPS via nginx
+- `0623527` - fix: replace bcryptjs with argon2id for password hashing
 
 ---
 
