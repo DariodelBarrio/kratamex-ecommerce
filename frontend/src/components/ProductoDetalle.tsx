@@ -3,11 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, ShoppingCart, Check, Monitor, Package,
-  MessageSquare, Send, User, Tag, ChevronDown
+  MessageSquare, Send, User, Tag, ChevronDown, Share2
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { Producto, Comentario } from '../interfaces'
+import type { Producto, Comentario } from '../interfaces'
 
 interface Props {
   onAddToCart: (producto: Producto) => void
@@ -195,6 +195,80 @@ function SeccionComentarios({ productoId }: { productoId: number }) {
 }
 
 // =================================================================
+// PRODUCTOS RELACIONADOS
+// =================================================================
+function SeccionRelacionados({
+  categoriaActual,
+  idActual,
+  onAddToCart,
+}: {
+  categoriaActual: string
+  idActual: number
+  onAddToCart: (p: Producto) => void
+}) {
+  const navigate = useNavigate()
+  const [addedId, setAddedId] = useState<number | null>(null)
+
+  const { data: todos = [] } = useQuery<Producto[]>({
+    queryKey: ['productos-relacionados', categoriaActual],
+    queryFn:  () => fetch(`/api/productos?categoria=${encodeURIComponent(categoriaActual)}`).then(r => r.json()),
+  })
+
+  const relacionados = todos.filter(p => p.id !== idActual).slice(0, 3)
+  if (relacionados.length === 0) return null
+
+  const handleAdd = (e: React.MouseEvent, producto: Producto) => {
+    e.stopPropagation()
+    onAddToCart(producto)
+    setAddedId(producto.id)
+    setTimeout(() => setAddedId(null), 1600)
+  }
+
+  return (
+    <section className="relacionados">
+      <h3 className="relacionados-title">También te puede interesar</h3>
+      <div className="relacionados-grid">
+        {relacionados.map((p, i) => (
+          <motion.div
+            key={p.id}
+            className="relacionado-card"
+            onClick={() => navigate(`/producto/${p.id}`)}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.07 }}
+            whileHover={{ y: -4 }}
+          >
+            <div className="relacionado-img">
+              {p.imagen ? (
+                <img src={p.imagen} alt={p.nombre} loading="lazy" />
+              ) : (
+                <Monitor size={32} stroke="#475569" />
+              )}
+            </div>
+            <div className="relacionado-info">
+              <p className="relacionado-nombre">{p.nombre}</p>
+              <div className="relacionado-footer">
+                <span className="relacionado-precio">${p.precio.toFixed(2)}</span>
+                <motion.button
+                  className={`add-to-cart ${addedId === p.id ? 'add-to-cart--success' : ''}`}
+                  style={{ width: 'auto', padding: '7px 14px', fontSize: '0.8rem' }}
+                  onClick={e => handleAdd(e, p)}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <span className="add-to-cart-content">
+                    {addedId === p.id ? <><Check size={13} /> Agregado</> : <><ShoppingCart size={13} /> Agregar</>}
+                  </span>
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// =================================================================
 // PRODUCT DETAIL PAGE
 // =================================================================
 export default function ProductoDetalle({ onAddToCart, carritoCount, onOpenCart }: Props) {
@@ -202,6 +276,14 @@ export default function ProductoDetalle({ onAddToCart, carritoCount, onOpenCart 
   const navigate = useNavigate()
   const [added, setAdded] = useState(false)
   const [imageError, setImageError] = useState(false)
+  const [shared, setShared] = useState(false)
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setShared(true)
+      setTimeout(() => setShared(false), 2000)
+    })
+  }
 
   // TanStack Query — carga del producto con caché
   const { data: producto, isLoading: loading, isError } = useQuery<Producto>({
@@ -275,11 +357,33 @@ export default function ProductoDetalle({ onAddToCart, carritoCount, onOpenCart 
           <button className="detalle-back-btn" onClick={() => navigate(-1)}>
             <ArrowLeft size={16} /> Volver
           </button>
-          <button className="cart-btn" onClick={onOpenCart} style={{ fontSize: '0.875rem', padding: '8px 16px' }}>
-            <ShoppingCart size={16} />
-            Carrito
-            {carritoCount > 0 && <span className="cart-badge">{carritoCount}</span>}
-          </button>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <motion.button
+              className={`detalle-share-btn ${shared ? 'detalle-share-btn--ok' : ''}`}
+              onClick={handleShare}
+              title="Copiar enlace"
+              whileTap={{ scale: 0.95 }}
+            >
+              <AnimatePresence mode="wait">
+                {shared ? (
+                  <motion.span key="ok" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    <Check size={14} /> Copiado
+                  </motion.span>
+                ) : (
+                  <motion.span key="share" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    <Share2 size={14} /> Compartir
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.button>
+            <button className="cart-btn" onClick={onOpenCart} style={{ fontSize: '0.875rem', padding: '8px 16px' }}>
+              <ShoppingCart size={16} />
+              Carrito
+              {carritoCount > 0 && <span className="cart-badge">{carritoCount}</span>}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -396,6 +500,15 @@ export default function ProductoDetalle({ onAddToCart, carritoCount, onOpenCart 
             </motion.button>
           </div>
         </div>
+
+        {/* Productos relacionados */}
+        {producto.categoria && (
+          <SeccionRelacionados
+            categoriaActual={producto.categoria}
+            idActual={producto.id}
+            onAddToCart={onAddToCart}
+          />
+        )}
 
         {/* Comments */}
         <SeccionComentarios productoId={producto.id} />

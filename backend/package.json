@@ -4,31 +4,31 @@
   "description": "Backend de tienda online — Kratamex (Hono + Drizzle + Zod)",
   "main": "src/index.ts",
   "scripts": {
-    "start":        "node dist/index.js",
-    "dev":          "tsx watch src/index.ts",
-    "build":        "tsc",
-    "db:generate":  "drizzle-kit generate",
-    "db:migrate":   "drizzle-kit migrate",
-    "db:studio":    "drizzle-kit studio",
-    "db:push":      "drizzle-kit push"
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
-    "@hono/node-server":    "^1.13.7",
-    "@hono/zod-validator":  "^0.4.3",
-    "argon2":               "^0.44.0",
-    "cloudinary":           "^2.5.1",
-    "dotenv":               "^17.3.1",
-    "drizzle-orm":          "^0.44.1",
-    "hono":                 "^4.7.11",
-    "pg":                   "^8.13.0",
-    "zod":                  "^3.24.2"
+    "@hono/node-server": "^1.19.11",
+    "@hono/zod-validator": "^0.7.6",
+    "argon2": "^0.44.0",
+    "cloudinary": "^2.5.1",
+    "dotenv": "^17.3.1",
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.12.8",
+    "pg": "^8.13.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/node":          "^22.15.29",
-    "@types/pg":            "^8.11.10",
-    "drizzle-kit":          "^0.31.1",
-    "nodemon":              "^3.1.0",
-    "tsx":                  "^4.19.4",
-    "typescript":           "^5.8.3"
+    "@types/node": "^22.15.29",
+    "@types/pg": "^8.11.10",
+    "drizzle-kit": "^0.31.10",
+    "nodemon": "^3.1.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.3"
   }
 }

@@ -6,9 +6,9 @@ React 19 + TypeScript + Framer Motion
 =================================================================
 */
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { Routes, Route, Link, useSearchParams } from 'react-router-dom'
-import { ShoppingCart, X, Plus, Minus, Check, Search, Package, Truck, Shield, ArrowDown, Trash2 } from 'lucide-react'
+import { ShoppingCart, X, Plus, Minus, Check, Search, Package, Truck, Shield, ArrowDown, Trash2, ArrowUp, Heart, LayoutGrid, List } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { z } from 'zod'
@@ -17,7 +17,7 @@ import { ProductCard, BrandLogoSmall } from './components/ProductCard'
 import { SkeletonCard } from './components/SkeletonCard'
 import { SecurityBadge } from './components/SecurityBadge'
 import ProductoDetalle from './components/ProductoDetalle'
-import { Producto, CarritoItem } from './interfaces'
+import type { Producto, CarritoItem } from './interfaces'
 
 // =================================================================
 // ZOD — Validación de formulario de checkout
@@ -29,6 +29,33 @@ const CheckoutSchema = z.object({
 })
 
 // =================================================================
+// TOAST
+// =================================================================
+interface Toast { id: number; nombre: string }
+
+function ToastContainer({ toasts }: { toasts: Toast[] }) {
+  return (
+    <div className="toast-container">
+      <AnimatePresence>
+        {toasts.map(t => (
+          <motion.div
+            key={t.id}
+            className="toast"
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          >
+            <div className="toast-icon"><Check size={13} /></div>
+            <span><strong>{t.nombre}</strong> agregado al carrito</span>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// =================================================================
 // TIENDA
 // =================================================================
 interface TiendaProps {
@@ -36,27 +63,54 @@ interface TiendaProps {
   setCarritoExterno: React.Dispatch<React.SetStateAction<CarritoItem[]>>
   carritoAbiertoExterno: boolean
   setCarritoAbiertoExterno: (v: boolean) => void
+  wishlistExterno: number[]
+  onToggleWishlistExterno: (id: number) => void
 }
 
-function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setCarritoAbiertoExterno }: TiendaProps) {
+function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setCarritoAbiertoExterno, wishlistExterno, onToggleWishlistExterno }: TiendaProps) {
   const carrito = carritoExterno
   const setCarrito = setCarritoExterno
   const carritoAbierto = carritoAbiertoExterno
   const setCarritoAbierto = setCarritoAbiertoExterno
+
   const [checkoutExitoso, setCheckoutExitoso] = useState(false)
   const [busqueda, setBusqueda] = useState('')
   const [categoriaFiltro, setCategoriaFiltro] = useState('')
   const [ordenPrecio, setOrdenPrecio] = useState<'asc' | 'desc' | ''>('')
   const [formulario, setFormulario] = useState({ cliente: '', email: '', direccion: '' })
   const [formError, setFormError] = useState('')
+  const [vistaLista, setVistaLista] = useState(false)
+  const [filtrarFavoritos, setFiltrarFavoritos] = useState(false)
+  const [precioMin, setPrecioMin] = useState('')
+  const [precioMax, setPrecioMax] = useState('')
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const [showBackTop, setShowBackTop] = useState(false)
 
   const productosRef = useRef<HTMLElement>(null)
   const [searchParams] = useSearchParams()
-
-  // Sincronizar categoría desde URL (?categoria=...)
   const categoriaURL = searchParams.get('categoria') || ''
 
-  // TanStack Query — carga de productos con caché automático
+  useEffect(() => {
+    const handleScroll = () => setShowBackTop(window.scrollY > 420)
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // Escape cierra el carrito
+  useEffect(() => {
+    if (!carritoAbierto) return
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') cerrarCarrito() }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [carritoAbierto])
+
+  const addToast = (nombre: string) => {
+    const id = Date.now()
+    setToasts(prev => [...prev, { id, nombre }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 2600)
+  }
+
+  // TanStack Query — carga de productos
   const params = new URLSearchParams()
   if (busqueda) params.append('busqueda', busqueda)
   if (categoriaFiltro || categoriaURL) params.append('categoria', categoriaFiltro || categoriaURL)
@@ -76,17 +130,23 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
     return Object.entries(counts).sort((a, b) => b[1] - a[1])
   }, [productos])
 
-  const productosFiltrados = productos
+  // Filtros cliente (favoritos + rango de precio)
+  const productosFiltrados = useMemo(() => {
+    let result = productos
+    if (filtrarFavoritos) result = result.filter(p => wishlistExterno.includes(p.id))
+    if (precioMin !== '') result = result.filter(p => p.precio >= Number(precioMin))
+    if (precioMax !== '') result = result.filter(p => p.precio <= Number(precioMax))
+    return result
+  }, [productos, filtrarFavoritos, wishlistExterno, precioMin, precioMax])
 
   // Carrito
   const agregarAlCarrito = (producto: Producto) => {
     setCarrito(prev => {
       const existente = prev.find(item => item.id === producto.id)
-      if (existente) {
-        return prev.map(item => item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item)
-      }
+      if (existente) return prev.map(item => item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item)
       return [...prev, { ...producto, cantidad: 1 }]
     })
+    addToast(producto.nombre)
   }
 
   const actualizarCantidad = (id: number, delta: number) => {
@@ -144,9 +204,16 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
     productosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  const limpiarFiltros = () => { setBusqueda(''); setCategoriaFiltro(''); setOrdenPrecio('') }
+  const limpiarFiltros = () => {
+    setBusqueda('')
+    setCategoriaFiltro('')
+    setOrdenPrecio('')
+    setFiltrarFavoritos(false)
+    setPrecioMin('')
+    setPrecioMax('')
+  }
 
-  const hayFiltrosActivos = busqueda || categoriaFiltro || ordenPrecio
+  const hayFiltrosActivos = busqueda || categoriaFiltro || ordenPrecio || filtrarFavoritos || precioMin || precioMax
 
   return (
     <>
@@ -177,16 +244,29 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
           <button className="cart-btn" onClick={() => setCarritoAbierto(true)}>
             <ShoppingCart size={17} />
             Carrito
-            {cantidadItems > 0 && <span className="cart-badge">{cantidadItems}</span>}
+            <AnimatePresence mode="wait">
+              {cantidadItems > 0 && (
+                <motion.span
+                  key={cantidadItems}
+                  className="cart-badge"
+                  initial={{ scale: 0.4, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.4, opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+                >
+                  {cantidadItems}
+                </motion.span>
+              )}
+            </AnimatePresence>
           </button>
         </div>
 
-        {/* Category pills + sort */}
+        {/* Category pills + filters */}
         <div className="container">
           <div className="category-nav">
             <button
-              className={`category-pill ${!categoriaFiltro ? 'active' : ''}`}
-              onClick={() => setCategoriaFiltro('')}
+              className={`category-pill ${!categoriaFiltro && !filtrarFavoritos ? 'active' : ''}`}
+              onClick={() => { setCategoriaFiltro(''); setFiltrarFavoritos(false) }}
             >
               Todos
               {!loading && <span className="category-pill-count">{productos.length}</span>}
@@ -196,14 +276,45 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
               <button
                 key={cat}
                 className={`category-pill ${categoriaFiltro === cat ? 'active' : ''}`}
-                onClick={() => setCategoriaFiltro(prev => prev === cat ? '' : cat)}
+                onClick={() => { setCategoriaFiltro(prev => prev === cat ? '' : cat); setFiltrarFavoritos(false) }}
               >
                 {cat}
                 <span className="category-pill-count">{count}</span>
               </button>
             ))}
 
+            <button
+              className={`category-pill category-pill--heart ${filtrarFavoritos ? 'active' : ''}`}
+              onClick={() => { setFiltrarFavoritos(p => !p); setCategoriaFiltro('') }}
+            >
+              <Heart size={12} fill={filtrarFavoritos ? 'currentColor' : 'none'} />
+              Favoritos
+              {wishlistExterno.length > 0 && (
+                <span className="category-pill-count">{wishlistExterno.length}</span>
+              )}
+            </button>
+
             <div className="filters-right">
+              <div className="price-range">
+                <input
+                  type="number"
+                  placeholder="Min $"
+                  className="price-input"
+                  value={precioMin}
+                  onChange={e => setPrecioMin(e.target.value)}
+                  min={0}
+                />
+                <span className="price-range-sep">–</span>
+                <input
+                  type="number"
+                  placeholder="Max $"
+                  className="price-input"
+                  value={precioMax}
+                  onChange={e => setPrecioMax(e.target.value)}
+                  min={0}
+                />
+              </div>
+
               <select
                 value={ordenPrecio}
                 onChange={e => setOrdenPrecio(e.target.value as 'asc' | 'desc' | '')}
@@ -213,6 +324,23 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
                 <option value="asc">Menor a Mayor</option>
                 <option value="desc">Mayor a Menor</option>
               </select>
+
+              <div className="view-toggle">
+                <button
+                  className={`view-toggle-btn ${!vistaLista ? 'active' : ''}`}
+                  onClick={() => setVistaLista(false)}
+                  title="Vista cuadrícula"
+                >
+                  <LayoutGrid size={14} />
+                </button>
+                <button
+                  className={`view-toggle-btn ${vistaLista ? 'active' : ''}`}
+                  onClick={() => setVistaLista(true)}
+                  title="Vista lista"
+                >
+                  <List size={14} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -298,32 +426,53 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
                     {ordenPrecio === 'asc' ? 'Precio ↑' : 'Precio ↓'} ×
                   </button>
                 )}
+                {filtrarFavoritos && (
+                  <button className="active-filter-tag" onClick={() => setFiltrarFavoritos(false)}>
+                    Favoritos ×
+                  </button>
+                )}
+                {(precioMin || precioMax) && (
+                  <button className="active-filter-tag" onClick={() => { setPrecioMin(''); setPrecioMax('') }}>
+                    {precioMin ? `$${precioMin}` : ''}
+                    {precioMin && precioMax ? ' – ' : ''}
+                    {precioMax ? `$${precioMax}` : ''} ×
+                  </button>
+                )}
               </div>
             )}
           </div>
         )}
 
         {loading ? (
-          <div className="products-grid">
+          <div className={vistaLista ? 'products-list' : 'products-grid'}>
             {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
         ) : productosFiltrados.length === 0 ? (
           <div className="no-results">
-            <div className="no-results-icon"><Search size={52} /></div>
-            <h3>Sin resultados</h3>
-            <p>No hay productos para "{busqueda || categoriaFiltro}"</p>
+            <div className="no-results-icon">
+              {filtrarFavoritos ? <Heart size={52} /> : <Search size={52} />}
+            </div>
+            <h3>{filtrarFavoritos ? 'Sin favoritos aún' : 'Sin resultados'}</h3>
+            <p>
+              {filtrarFavoritos
+                ? 'Guarda productos con el corazón para verlos aquí'
+                : `No hay productos para "${busqueda || categoriaFiltro}"`}
+            </p>
             <button className="btn-secondary" onClick={limpiarFiltros}>
               Limpiar filtros
             </button>
           </div>
         ) : (
-          <div className="products-grid">
+          <div className={vistaLista ? 'products-list' : 'products-grid'}>
             {productosFiltrados.map((producto, index) => (
               <ProductCard
                 key={producto.id}
                 producto={producto}
                 onAddToCart={agregarAlCarrito}
                 index={index}
+                isWishlisted={wishlistExterno.includes(producto.id)}
+                onToggleWishlist={onToggleWishlistExterno}
+                vistaLista={vistaLista}
               />
             ))}
           </div>
@@ -360,7 +509,6 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 320 }}
             >
-              {/* Cart header */}
               <div className="cart-header">
                 <div className="cart-header-left">
                   <h2>Tu Carrito</h2>
@@ -490,6 +638,26 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ═══════ BACK TO TOP ═══════ */}
+      <AnimatePresence>
+        {showBackTop && (
+          <motion.button
+            className="back-to-top"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            title="Volver arriba"
+            initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.85 }}
+            transition={{ duration: 0.2 }}
+          >
+            <ArrowUp size={18} />
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* ═══════ TOASTS ═══════ */}
+      <ToastContainer toasts={toasts} />
     </>
   )
 }
@@ -498,8 +666,31 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
 // APP — carrito compartido entre páginas
 // =================================================================
 function App() {
-  const [carrito, setCarrito] = useState<CarritoItem[]>([])
+  const [carrito, setCarrito] = useState<CarritoItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('kratamex_cart')
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
   const [carritoAbierto, setCarritoAbierto] = useState(false)
+  const [wishlist, setWishlist] = useState<number[]>(() => {
+    try {
+      const saved = localStorage.getItem('kratamex_wishlist')
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
+
+  useEffect(() => {
+    localStorage.setItem('kratamex_cart', JSON.stringify(carrito))
+  }, [carrito])
+
+  useEffect(() => {
+    localStorage.setItem('kratamex_wishlist', JSON.stringify(wishlist))
+  }, [wishlist])
+
+  const toggleWishlist = (id: number) => {
+    setWishlist(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
 
   const agregarAlCarrito = (producto: Producto) => {
     setCarrito(prev => {
@@ -519,6 +710,8 @@ function App() {
           setCarritoExterno={setCarrito}
           carritoAbiertoExterno={carritoAbierto}
           setCarritoAbiertoExterno={setCarritoAbierto}
+          wishlistExterno={wishlist}
+          onToggleWishlistExterno={toggleWishlist}
         />
       } />
       <Route path="/producto/:id" element={

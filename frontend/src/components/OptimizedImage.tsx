@@ -1,4 +1,5 @@
-import { useState, ImgHTMLAttributes } from 'react';
+import { useState } from 'react';
+import type { ImgHTMLAttributes } from 'react';
 
 interface OptimizedImageProps extends ImgHTMLAttributes<HTMLImageElement> {
   placeholder?: string;
