@@ -240,8 +240,8 @@ if (pedidosExistentes.count === 0) {
 // RATE LIMITING EN LOGIN (protección fuerza bruta)
 // =================================================================
 const loginAttempts = {}; // { ip: { count, blockedUntil } }
-const MAX_ATTEMPTS = 5;
-const BLOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutos
+const MAX_ATTEMPTS = 12;
+const BLOCK_DURATION_MS = 60 * 1000; // 60 segundos
 
 function loginRateLimiter(req, res, next) {
   const ip = req.ip;
@@ -268,7 +268,7 @@ function recordFailedLogin(ip) {
   loginAttempts[ip].count += 1;
   if (loginAttempts[ip].count >= MAX_ATTEMPTS) {
     loginAttempts[ip].blockedUntil = now + BLOCK_DURATION_MS;
-    const logEntry = `[${new Date().toISOString()}] RATE_LIMIT ip=${ip} bloqueada por ${BLOCK_DURATION_MS / 60000} minutos tras ${MAX_ATTEMPTS} intentos fallidos\n`;
+    const logEntry = `[${new Date().toISOString()}] RATE_LIMIT ip=${ip} bloqueada por ${BLOCK_DURATION_MS / 1000} segundos tras ${MAX_ATTEMPTS} intentos fallidos\n`;
     fs.appendFile(LOG_FILE, logEntry, () => {});
   }
 }
