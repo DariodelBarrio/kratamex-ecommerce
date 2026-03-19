@@ -824,3 +824,60 @@ Nginx ya envía `X-Real-IP` y `X-Forwarded-For` correctamente.
 app.use('/uploads', express.static(..., { dotfiles: 'deny' }));
 app.use('/avatars', express.static(..., { dotfiles: 'deny' }));
 ```
+
+---
+
+## [ID-034] Validaciones Manuales Inconsistentes — Reemplazadas por Zod
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟡 Medio
+
+### 1. Descripción del fallo
+Las validaciones de input en el backend (Express) y el frontend eran manuales, inconsistentes y propensas a errores de omisión. Ejemplos:
+- `POST /api/pedidos` validaba email con regex custom pero no validaba tipos de `items[]`
+- `POST /api/productos` no validaba que `precio` fuera un número positivo antes de `parseFloat()`
+- El frontend enviaba peticiones sin validar el formulario con reglas consistentes
+- Errores de validación devolvían mensajes diferentes según la ruta (inconsistencia de API)
+
+### 2. Impacto
+- Payloads inesperados podían llegar a la base de datos o causar errores 500
+- Un `precio` de tipo string `"abc"` resultaba en `NaN` siendo almacenado en PostgreSQL
+- Sin esquema formal, cualquier campo nuevo añadido al body pasaba sin validar
+
+### 3. Solución (Parche)
+Migración a **Zod** + `@hono/zod-validator` en el backend y Zod en el frontend:
+
+**Backend** (`backend/src/schemas.ts`):
+```typescript
+export const PedidoSchema = z.object({
+  cliente:   z.string().min(1).max(200),
+  email:     z.string().email().max(254),      // RFC 5321 + formato correcto
+  direccion: z.string().min(1).max(500),
+  items: z.array(z.object({
+    id:       z.number().int().positive(),      // debe ser entero positivo
+    cantidad: z.number().int().min(1).max(999), // rango seguro
+  })).min(1).max(50),
+});
+
+// Aplicado por ruta — Hono devuelve HTTP 400 automáticamente si falla
+app.post('/api/pedidos', zValidator('json', PedidoSchema), async (c) => {
+  const data = c.req.valid('json'); // tipado completo garantizado
+});
+```
+
+**Frontend** (`src/App.tsx`, `src/components/ProductoDetalle.tsx`):
+```typescript
+const result = CheckoutSchema.safeParse(formulario);
+if (!result.success) {
+  setFormError(result.error.issues[0].message);
+  return; // nunca llega al servidor con datos inválidos
+}
+checkoutMutation.mutate(result.data);
+```
+
+Beneficios de seguridad adicionales:
+- Imposible almacenar `NaN` o `Infinity` en precio (Zod rechaza con tipo error claro)
+- `items` siempre es un array con entre 1 y 50 elementos, nunca `undefined` o `null`
+- Mensajes de error uniformes en toda la API
+
+### 4. Commits relacionados
+- `d1bed9c` - feat: migrate to Hono + Drizzle ORM + TanStack Query + Zod
