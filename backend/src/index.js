@@ -295,6 +295,73 @@ app.get('/api/productos/:id', async (req, res) => {
   }
 });
 
+// =================================================================
+// RUTAS — COMENTARIOS
+// =================================================================
+
+// Rate limiter para comentarios (10 por IP por minuto)
+const comentariosAttempts = {};
+function comentariosRateLimiter(req, res, next) {
+  const ip  = req.ip;
+  const now = Date.now();
+  if (!comentariosAttempts[ip] || now - comentariosAttempts[ip].windowStart > 60000) {
+    comentariosAttempts[ip] = { count: 1, windowStart: now };
+    return next();
+  }
+  if (++comentariosAttempts[ip].count > 10)
+    return res.status(429).json({ error: 'Demasiados comentarios. Espera un momento.' });
+  next();
+}
+
+// GET /api/productos/:id/comentarios
+app.get('/api/productos/:id/comentarios', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+    const { rows } = await pool.query(
+      'SELECT id, autor, contenido, fecha FROM comentarios WHERE producto_id = $1 ORDER BY fecha DESC LIMIT 50',
+      [id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// POST /api/productos/:id/comentarios
+app.post('/api/productos/:id/comentarios', comentariosRateLimiter, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+
+    const { autor, contenido } = req.body;
+    if (!autor || !contenido)
+      return res.status(400).json({ error: 'Nombre y comentario son requeridos' });
+
+    const autorClean    = sanitizeText(String(autor).trim().slice(0, 100));
+    const contenidoClean = sanitizeText(String(contenido).trim().slice(0, 1000));
+
+    if (autorClean.length < 2)
+      return res.status(400).json({ error: 'El nombre debe tener al menos 2 caracteres' });
+    if (contenidoClean.length < 5)
+      return res.status(400).json({ error: 'El comentario debe tener al menos 5 caracteres' });
+
+    // Verificar que el producto existe
+    const { rows: prod } = await pool.query('SELECT id FROM productos WHERE id = $1', [id]);
+    if (!prod.length) return res.status(404).json({ error: 'Producto no encontrado' });
+
+    const { rows } = await pool.query(
+      'INSERT INTO comentarios (producto_id, autor, contenido) VALUES ($1, $2, $3) RETURNING id, autor, contenido, fecha',
+      [id, autorClean, contenidoClean]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 // POST /api/productos  (admin)
 app.post('/api/productos', authenticate, requireAdmin, async (req, res) => {
   try {
@@ -582,6 +649,14 @@ async function initDB() {
       role       TEXT DEFAULT 'standard' CHECK(role IN ('admin','standard')),
       avatar     TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS comentarios (
+      id          SERIAL PRIMARY KEY,
+      producto_id INTEGER NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
+      autor       TEXT    NOT NULL,
+      contenido   TEXT    NOT NULL,
+      fecha       TIMESTAMPTZ DEFAULT NOW()
     );
   `);
   console.log('PostgreSQL: tablas verificadas');

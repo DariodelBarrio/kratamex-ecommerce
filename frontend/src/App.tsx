@@ -8,7 +8,7 @@ React 19 + TypeScript + Framer Motion
 
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { Routes, Route, Link, useSearchParams } from 'react-router-dom'
-import { ShoppingCart, X, Plus, Minus, Check, Search, Package, Truck, Shield, ArrowDown, Trash2, ArrowUp, Heart, LayoutGrid, List } from 'lucide-react'
+import { ShoppingCart, X, Plus, Minus, Check, Search, Package, Truck, Shield, ArrowDown, Trash2, ArrowUp, Heart, LayoutGrid, List, Sun, Moon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { z } from 'zod'
@@ -17,6 +17,8 @@ import { ProductCard, BrandLogoSmall } from './components/ProductCard'
 import { SkeletonCard } from './components/SkeletonCard'
 import { SecurityBadge } from './components/SecurityBadge'
 import ProductoDetalle from './components/ProductoDetalle'
+import { SplashScreen } from './components/SplashScreen'
+import { ParticleCanvas } from './components/ParticleCanvas'
 import type { Producto, CarritoItem } from './interfaces'
 
 // =================================================================
@@ -65,9 +67,11 @@ interface TiendaProps {
   setCarritoAbiertoExterno: (v: boolean) => void
   wishlistExterno: number[]
   onToggleWishlistExterno: (id: number) => void
+  tema: 'dark' | 'light'
+  onToggleTema: () => void
 }
 
-function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setCarritoAbiertoExterno, wishlistExterno, onToggleWishlistExterno }: TiendaProps) {
+function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setCarritoAbiertoExterno, wishlistExterno, onToggleWishlistExterno, tema, onToggleTema }: TiendaProps) {
   const carrito = carritoExterno
   const setCarrito = setCarritoExterno
   const carritoAbierto = carritoAbiertoExterno
@@ -241,6 +245,10 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
             )}
           </div>
 
+          <button className="theme-toggle-btn" onClick={onToggleTema} title={tema === 'dark' ? 'Modo claro' : 'Modo oscuro'}>
+            {tema === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+
           <button className="cart-btn" onClick={() => setCarritoAbierto(true)}>
             <ShoppingCart size={17} />
             Carrito
@@ -350,10 +358,13 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
       <div className="container">
         <motion.div
           className="hero"
+          style={{ position: 'relative' }}
+
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, ease: 'easeOut' }}
         >
+          <ParticleCanvas />
           <div className="hero-eyebrow">
             <span className="hero-eyebrow-dot" />
             Tecnología de primer nivel
@@ -666,6 +677,18 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
 // APP — carrito compartido entre páginas
 // =================================================================
 function App() {
+  const [showSplash, setShowSplash] = useState(true)
+  const [tema, setTema] = useState<'dark' | 'light'>(() =>
+    (localStorage.getItem('kratamex_tema') as 'dark' | 'light') || 'dark'
+  )
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-tema', tema)
+    localStorage.setItem('kratamex_tema', tema)
+  }, [tema])
+
+  const toggleTema = () => setTema(t => t === 'dark' ? 'light' : 'dark')
+
   const [carrito, setCarrito] = useState<CarritoItem[]>(() => {
     try {
       const saved = localStorage.getItem('kratamex_cart')
@@ -703,6 +726,11 @@ function App() {
   const cantidadItems = carrito.reduce((sum, item) => sum + item.cantidad, 0)
 
   return (
+    <>
+      <AnimatePresence>
+        {showSplash && <SplashScreen key="splash" onDone={() => setShowSplash(false)} />}
+      </AnimatePresence>
+
     <Routes>
       <Route path="/" element={
         <Tienda
@@ -712,6 +740,8 @@ function App() {
           setCarritoAbiertoExterno={setCarritoAbierto}
           wishlistExterno={wishlist}
           onToggleWishlistExterno={toggleWishlist}
+          tema={tema}
+          onToggleTema={toggleTema}
         />
       } />
       <Route path="/producto/:id" element={
@@ -723,6 +753,7 @@ function App() {
       } />
       <Route path="/admin" element={<Admin />} />
     </Routes>
+    </>
   )
 }
 
