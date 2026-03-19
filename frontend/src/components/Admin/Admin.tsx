@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Lock, Eye, EyeOff, Package, TrendingUp, LayoutDashboard, Trash2, ShoppingBag, DollarSign, Users } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import styles from './Admin.module.css';
 import { Producto } from '../../interfaces';
 import { sanitize } from '../../utils';
@@ -221,13 +221,19 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
                   <div className={styles['chart-card']}>
                     <h4 className={styles['chart-title']}>Ingresos por día (€)</h4>
                     <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                      <AreaChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                        <defs>
+                          <linearGradient id="gradIngresos" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey="fecha" tick={{ fontSize: 12 }} />
                         <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `$${v}`} />
                         <Tooltip formatter={(v: any) => [`$${Number(v).toFixed(2)}`, 'Ingresos']} />
-                        <Bar dataKey="ingresos" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                      </BarChart>
+                        <Area type="natural" dataKey="ingresos" stroke="#2563eb" strokeWidth={2} fill="url(#gradIngresos)" dot={{ r: 4, fill: '#2563eb' }} activeDot={{ r: 6 }} />
+                      </AreaChart>
                     </ResponsiveContainer>
                   </div>
                   <div className={styles['chart-card']}>
@@ -238,8 +244,7 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
                         <XAxis dataKey="fecha" tick={{ fontSize: 12 }} />
                         <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
                         <Tooltip formatter={(v: any) => [v, 'Pedidos']} />
-                        <Legend />
-                        <Line type="monotone" dataKey="pedidos" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                        <Line type="natural" dataKey="pedidos" stroke="#10b981" strokeWidth={2} dot={{ r: 4, fill: '#10b981' }} activeDot={{ r: 6 }} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
