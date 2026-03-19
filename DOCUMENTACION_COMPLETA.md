@@ -5,7 +5,7 @@
 1. [Vision General](#vision-general)
 2. [Arquitectura del Sistema](#arquitectura-del-sistema)
 3. [Frontend - React + TypeScript](#frontend---react--typescript)
-4. [Backend - Node.js + Express](#backend---nodejs--express)
+4. [Backend - Node.js + Hono](#backend---nodejs--hono)
 5. [Base de Datos - PostgreSQL](#base-de-datos---postgresql)
 6. [API REST](#api-rest)
 7. [Autenticacion y Seguridad](#autenticacion-y-seguridad)
@@ -16,34 +16,40 @@
 
 ## Vision General
 
-KRATAMEX es una **tienda online completa** de ordenadores construida con React 19 + Node.js + PostgreSQL. Permite navegar el catalogo, agregar al carrito, realizar pedidos y gestionar inventario desde un panel administrativo protegido por RBAC.
+KRATAMEX es una **tienda online completa** de ordenadores construida con React 19 + Hono + PostgreSQL. Permite navegar el catálogo, agregar al carrito, realizar pedidos y gestionar inventario desde un panel administrativo protegido por RBAC.
 
-### Caracteristicas Principales
+### Características Principales
 
-- **Catalogo de Productos**: Busqueda, filtros por categoria y ordenamiento por precio
+- **Catálogo de Productos**: Búsqueda, filtros por categoría y ordenamiento por precio
+- **Detalle de Producto**: Página con especificaciones técnicas, precio e IVA, sección de comentarios de clientes
 - **Carrito de Compras**: Agregar, modificar cantidad y eliminar productos
-- **Checkout**: Formulario de compra con validacion server-side de precios
-- **Panel Administrativo**: CRUD de productos, gestion de pedidos y dashboard con graficas (solo admin)
-- **Autenticacion RBAC**: Roles `admin` y `standard`, tokens de sesion criptograficos
-- **Seguridad**: argon2id, rate limiting, HTTPS, prepared statements, validacion de uploads, CORS restringido
+- **Checkout**: Formulario validado por Zod + validación server-side de precios
+- **Panel Administrativo**: CRUD de productos, gestión de pedidos y dashboard con gráficas (solo admin)
+- **Autenticación RBAC**: Roles `admin` y `standard`, tokens de sesión criptográficos (TTL 8h)
+- **Seguridad**: argon2id, rate limiting, HTTPS, Drizzle ORM (queries parametrizadas), Zod validation, CORS restringido
 - **UI Moderna**: Glassmorphism, Framer Motion, skeleton loading, brand logos SVG
 - **Docker**: 4 servicios (frontend, backend, postgres, nginx) con hot-reload
 
-### Tecnologias Utilizadas
+### Tecnologías Utilizadas
 
-| Componente | Tecnologia | Version |
+| Componente | Tecnología | Versión |
 |------------|------------|---------|
 | **Frontend** | React + TypeScript | 19.2.4 |
+| **Server State** | TanStack Query | 5.x |
+| **Validación cliente** | Zod | 3.x |
 | **Animaciones** | Framer Motion | latest |
 | **Build Tool** | Vite | 5.1.6 |
 | **Iconos** | Lucide React | 0.577.0 |
-| **Graficas** | Recharts | 3.8.0 |
+| **Gráficas** | Recharts | 3.8.0 |
 | **Routing** | React Router | 6.22.3 |
-| **Backend** | Node.js + Express | 4.18.2 |
+| **Backend** | Node.js + Hono | 4.x |
+| **ORM** | Drizzle ORM | 0.44.x |
+| **Validación servidor** | Zod + @hono/zod-validator | 3.x |
 | **Base de Datos** | PostgreSQL | 16-alpine |
 | **Driver DB** | pg (node-postgres) | 8.13.0 |
 | **Hashing** | argon2 (argon2id) | 0.44.0 |
-| **Uploads** | multer | 1.4.5-lts |
+| **Imágenes** | Cloudinary (fallback local) | 2.x |
+| **Runtime TS** | tsx | 4.x |
 | **Reverse Proxy** | nginx:alpine | latest |
 | **Container** | Docker + Docker Compose | - |
 
@@ -62,7 +68,7 @@ KRATAMEX es una **tienda online completa** de ordenadores construida con React 1
                    v                               v
          +-----------------+             +-----------------+
          |    Frontend     |             |    Backend      |
-         |  (React+Vite)   |             |   (Express)     |
+         |  (React+Vite)   |             |    (Hono)       |
          |  Puerto: 3000   |             |  Puerto: 3001   |
          +-----------------+             +--------+--------+
                                                   |
@@ -113,14 +119,22 @@ frontend/
 #### Tienda (`/`)
 Pagina principal con catalogo, busqueda, filtros y carrito.
 
-**Estados principales**:
+**Estados principales** (TanStack Query gestiona carga, caché y error):
 ```typescript
-const [productos, setProductos] = useState<Producto[]>([])
+// Server state con TanStack Query (caché 30s, retry 1, refetch on focus off)
+const { data: productos = [], isLoading } = useQuery<Producto[]>({
+  queryKey: ['productos', busqueda, categoriaFiltro, ordenPrecio],
+  queryFn:  () => fetch(`/api/productos?${params}`).then(r => r.json()),
+});
+
+// Mutación de checkout con Zod antes de enviar
+const checkoutMutation = useMutation({
+  mutationFn: (data) => fetch('/api/pedidos', { method: 'POST', body: JSON.stringify(data) }).then(r => r.json()),
+  onSuccess:  () => { setCarrito([]); setCheckoutExitoso(true); },
+});
+
+// Estado local para carrito (no server state)
 const [carrito, setCarrito] = useState<CarritoItem[]>([])
-const [busqueda, setBusqueda] = useState('')
-const [categoriaFiltro, setCategoriaFiltro] = useState('')
-const [ordenPrecio, setOrdenPrecio] = useState<'asc' | 'desc' | ''>('')
-const [loading, setLoading] = useState(true)
 ```
 
 **Filtros disponibles**:
@@ -218,62 +232,110 @@ interface CarritoItem extends Producto {
 
 ---
 
-## Backend - Node.js + Express
+## Backend - Node.js + Hono
 
 ### Estructura de Archivos
 
 ```
 backend/
 ├── src/
-│   ├── index.js           # Servidor principal (rutas, middlewares, seed)
-│   ├── db.js              # Pool de conexion PostgreSQL
-│   ├── uploads/           # Imagenes de productos (runtime)
-│   ├── avatars/           # Avatares de usuarios (runtime)
+│   ├── index.ts           # Servidor Hono (rutas, middlewares, seed) — TypeScript
+│   ├── schemas.ts         # Esquemas Zod compartidos entre rutas
+│   ├── db/
+│   │   ├── schema.ts      # Definición de tablas Drizzle ORM con tipos inferidos
+│   │   └── index.ts       # Conexión Drizzle + Pool pg
+│   ├── uploads/           # Imágenes de productos (fallback local)
+│   ├── avatars/           # Avatares de usuarios (fallback local)
 │   └── access.log         # Log de peticiones
+├── drizzle.config.ts      # Configuración Drizzle Kit
+├── tsconfig.json          # Configuración TypeScript
 ├── package.json
 ├── .env.example
 ├── .dockerignore
 └── Dockerfile
 ```
 
-### Conexion a Base de Datos
+### Drizzle ORM — Schema y Queries
 
-```javascript
-// db.js — Pool de conexion PostgreSQL
-const { Pool } = require('pg');
-const pool = new Pool({
-  host:     process.env.DB_HOST     || 'localhost',
-  port:     parseInt(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME     || 'kratamex',
-  user:     process.env.DB_USER     || 'kratamex',
-  password: process.env.DB_PASSWORD || 'kratamex_dev',
+```typescript
+// src/db/schema.ts — Tablas con tipos TypeScript inferidos
+export const productos = pgTable('productos', {
+  id:          serial('id').primaryKey(),
+  nombre:      text('nombre').notNull(),
+  precio:      real('precio').notNull(),
+  // ...
+});
+
+// Tipos inferidos automáticamente
+export type Producto = typeof productos.$inferSelect;
+```
+
+```typescript
+// Queries type-safe con Drizzle
+import { eq, and, ilike, gte, desc } from 'drizzle-orm';
+
+// SELECT con filtros dinámicos
+const rows = await db.select().from(productos)
+  .where(and(ilike(productos.nombre, '%macbook%'), gte(productos.precio, 1000)))
+  .orderBy(desc(productos.precio));
+
+// INSERT con RETURNING
+const [row] = await db.insert(productos)
+  .values({ nombre, precio })
+  .returning({ id: productos.id });
+
+// Transacciones
+const pedidoId = await db.transaction(async (tx) => {
+  const [p] = await tx.insert(pedidos).values({...}).returning({ id: pedidos.id });
+  await tx.insert(pedidoItems).values({...});
+  return p.id;
 });
 ```
 
-### Patron de queries (async)
+### Validación con Zod + @hono/zod-validator
 
-```javascript
-// SELECT
-const { rows } = await pool.query('SELECT * FROM productos WHERE id = $1', [id]);
+```typescript
+// src/schemas.ts
+export const PedidoSchema = z.object({
+  cliente:   z.string().min(1).max(200),
+  email:     z.string().email().max(254),
+  direccion: z.string().min(1).max(500),
+  items:     z.array(z.object({ id: z.number().int().positive(), cantidad: z.number().int().min(1).max(999) })).min(1).max(50),
+});
 
-// INSERT con RETURNING
-const { rows } = await pool.query(
-  'INSERT INTO productos (nombre, precio) VALUES ($1, $2) RETURNING id',
-  [nombre, precio]
+// Aplicado por ruta — Hono devuelve 400 automáticamente si falla
+app.post('/api/pedidos', checkoutRateLimiter, zValidator('json', PedidoSchema), async (c) => {
+  const { cliente, email, direccion, items } = c.req.valid('json'); // tipado automático
+  // ...
+});
+```
+
+### Hono — Patrones principales
+
+```typescript
+// Middleware con contexto tipado
+type Variables = { user: SessionData };
+const app = new Hono<{ Variables: Variables }>();
+
+// Middleware de autenticación
+const authenticate: MiddlewareHandler<{ Variables: Variables }> = async (c, next) => {
+  const token = c.req.header('authorization');
+  c.set('user', sessions[token]);
+  await next();
+};
+
+// Route handler
+app.get('/api/productos/:id', async (c) => {
+  const id = parseInt(c.req.param('id'));
+  const [producto] = await db.select().from(productos).where(eq(productos.id, id));
+  if (!producto) return c.json({ error: 'Producto no encontrado' }, 404);
+  return c.json(producto);
+});
+
+// Arranque con @hono/node-server
+serve({ fetch: app.fetch, port: 3001 }, () =>
+  console.log('Backend Hono corriendo en http://localhost:3001')
 );
-
-// Transacciones
-const client = await pool.connect();
-try {
-  await client.query('BEGIN');
-  // ... operaciones ...
-  await client.query('COMMIT');
-} catch (err) {
-  await client.query('ROLLBACK');
-  throw err;
-} finally {
-  client.release();
-}
 ```
 
 ### Startup con reintentos
@@ -468,6 +530,19 @@ POST /api/login
 | ID-019 | Sin rate limiting en checkout | Alto | Corregido |
 | ID-020 | nginx sin headers de seguridad | Alto | Corregido |
 | ID-021 | sanitize() en URLs | Medio | Corregido |
+| ID-022 | Security headers ausentes en backend Express | Alto | Corregido |
+| ID-023 | Sesiones sin expiración | Crítico | Corregido |
+| ID-024 | Stored XSS via descripción de producto | Alto | Corregido |
+| ID-025 | Sin límite de body size | Medio | Corregido |
+| ID-026 | Validación de email ausente en checkout | Medio | Corregido |
+| ID-027 | Rate limiting memory leak | Medio | Corregido |
+| ID-028 | File upload — nombres predecibles | Alto | Corregido |
+| ID-029 | Containers Docker corriendo como root | Alto | Corregido |
+| ID-030 | nginx — ciphers débiles y sin rate limiting | Alto | Corregido |
+| ID-031 | Archivos de base de datos en git | Crítico | Corregido |
+| ID-032 | IP spoofing en rate limiting | Medio | Corregido |
+| ID-033 | Static files sin protección dotfiles | Medio | Corregido |
+| ID-034 | Validaciones manuales inconsistentes | Medio | Corregido |
 
 Ver detalle completo en `correcciones_seguridad.md`.
 

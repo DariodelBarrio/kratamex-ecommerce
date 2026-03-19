@@ -26,12 +26,12 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------
-  # Backend — Node.js + Express + PostgreSQL
-  # Hot-reload: nodemon con polling (funciona en WSL + Docker)
+  # Backend — Node.js + Hono + Drizzle + PostgreSQL
+  # Hot-reload: tsx watch (reemplaza nodemon para TypeScript)
   # ---------------------------------------------------------------
   backend:
     build: ./backend
-    command: npx nodemon --legacy-watch --watch src src/index.js
+    command: npx tsx watch src/index.ts
     ports:
       - "3001:3001"
     volumes:
