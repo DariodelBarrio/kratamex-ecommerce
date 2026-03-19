@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Lock, Eye, EyeOff, Package, TrendingUp, LayoutDashboard, Trash2, ShoppingBag, DollarSign, Users } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import styles from './Admin.module.css';
-import { Producto } from '../../interfaces';
+import type { Producto } from '../../interfaces';
 import { sanitize } from '../../utils';
 import { PasswordStrength } from '../PasswordStrength';
 

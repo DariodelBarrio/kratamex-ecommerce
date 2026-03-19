@@ -19,3 +19,12 @@ export interface Producto {
 export interface CarritoItem extends Producto {
   cantidad: number; // Cuántos de este producto hay en el carrito
 }
+
+// Interface para comentarios de producto
+export interface Comentario {
+  id: number;
+  producto_id?: number;
+  autor: string;
+  contenido: string;
+  fecha: string;
+}
