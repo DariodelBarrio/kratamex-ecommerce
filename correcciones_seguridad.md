@@ -372,7 +372,7 @@ app.get('/api/pedidos/:id', authenticate, requireAdmin, ...)
 ```
 
 ### 5. Commits relacionados
-- `pendiente`
+- `20173bb` - fix: IDOR on /api/pedidos, weak token entropy, open CORS, product ID enumeration
 
 ---
 
@@ -400,7 +400,7 @@ const token = crypto.randomBytes(32).toString('hex');
 ```
 
 ### 5. Commits relacionados
-- `pendiente`
+- `20173bb` - fix: IDOR on /api/pedidos, weak token entropy, open CORS, product ID enumeration
 
 ---
 
@@ -426,7 +426,7 @@ app.use(cors({
 - `CORS_ORIGIN` configurado en `.env` (por defecto `https://localhost`)
 
 ### 4. Commits relacionados
-- `pendiente`
+- `20173bb` - fix: IDOR on /api/pedidos, weak token entropy, open CORS, product ID enumeration
 
 ---
 
