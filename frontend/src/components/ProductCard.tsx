@@ -18,7 +18,17 @@ interface ProductCardProps {
 
 export function ProductCard({ producto, onAddToCart, index, isWishlisted = false, onToggleWishlist, vistaLista = false }: ProductCardProps) {
   const [added, setAdded] = useState(false);
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const navigate = useNavigate();
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    setTilt({ x: x * 10, y: -y * 10 });
+  };
+
+  const handleMouseLeave = () => setTilt({ x: 0, y: 0 });
 
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -121,7 +131,9 @@ export function ProductCard({ producto, onAddToCart, index, isWishlisted = false
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: Math.min(index * 0.04, 0.4), ease: 'easeOut' }}
-      whileHover={{ y: -5 }}
+      style={{ rotateX: tilt.y, rotateY: tilt.x, transformPerspective: 1000, z: 0 }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
       layout
     >
       {/* Image */}

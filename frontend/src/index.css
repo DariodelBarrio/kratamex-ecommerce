@@ -1780,6 +1780,213 @@ header::before {
 }
 
 /* =================================================================
+   SPLASH SCREEN
+   ================================================================= */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #020617;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.splash-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 50%, rgba(5,150,105,0.18), transparent 70%);
+  pointer-events: none;
+}
+
+.splash-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.splash-logo {
+  font-size: clamp(2.8rem, 8vw, 5rem);
+  font-weight: 900;
+  letter-spacing: -3px;
+  background: linear-gradient(135deg, #34d399 0%, #059669 50%, #6366f1 100%) no-repeat left;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.splash-sub {
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.splash-bar-track {
+  width: 180px;
+  height: 2px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.splash-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #059669, #34d399);
+  border-radius: 2px;
+}
+
+/* =================================================================
+   PARTICLE CANVAS
+   ================================================================= */
+.hero-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hero > *:not(.hero-particles) {
+  position: relative;
+  z-index: 1;
+}
+
+/* =================================================================
+   THEME TOGGLE BUTTON
+   ================================================================= */
+.theme-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.theme-toggle-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+/* =================================================================
+   LIGHT MODE
+   ================================================================= */
+[data-tema="light"] {
+  --primary: #059669;
+  --primary-dark: #047857;
+  --primary-light: #059669;
+  --primary-glow: rgba(5, 150, 105, 0.2);
+  --accent: #6366f1;
+  --background: #f0faf6;
+  --surface: rgba(255, 255, 255, 0.85);
+  --surface-solid: #ffffff;
+  --surface-raised: #e8f5f0;
+  --text: #0f172a;
+  --text-muted: #334155;
+  --text-subtle: #64748b;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.14);
+  --price: #047857;
+}
+
+[data-tema="light"] body {
+  background: var(--background);
+  color: var(--text);
+}
+
+[data-tema="light"] body::before {
+  background:
+    radial-gradient(ellipse 100% 55% at 50% -5%, rgba(5,150,105,0.1), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 85% 95%, rgba(99,102,241,0.05), transparent 50%);
+}
+
+[data-tema="light"] body::after {
+  background-image: radial-gradient(rgba(0,0,0,0.045) 1px, transparent 1px);
+}
+
+[data-tema="light"] header {
+  background: rgba(240, 250, 246, 0.92);
+  border-color: var(--border);
+}
+
+[data-tema="light"] .product-card {
+  background: rgba(255,255,255,0.9);
+  border-color: rgba(0,0,0,0.07);
+}
+
+[data-tema="light"] .product-card:hover {
+  box-shadow: 0 20px 60px rgba(0,0,0,0.12), 0 0 0 1px rgba(5,150,105,0.15);
+  border-color: rgba(5,150,105,0.2);
+}
+
+[data-tema="light"] .product-name { color: #0f172a; }
+[data-tema="light"] .product-description { color: #475569; }
+
+[data-tema="light"] .search-bar {
+  background: rgba(255,255,255,0.9);
+  border-color: rgba(0,0,0,0.1);
+}
+
+[data-tema="light"] .search-input { color: #0f172a; }
+
+[data-tema="light"] .cart-panel { background: #f8fffe; }
+
+[data-tema="light"] .product-image-area {
+  background: linear-gradient(160deg, #e8f5f0 0%, #ddf0e8 100%);
+}
+
+[data-tema="light"] .store-footer {
+  background: rgba(240,250,246,0.8);
+  border-color: var(--border);
+}
+
+[data-tema="light"] .filter-select,
+[data-tema="light"] .price-input {
+  background: rgba(255,255,255,0.8);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+[data-tema="light"] .category-pill {
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+[data-tema="light"] .category-pill:hover {
+  background: rgba(5,150,105,0.06);
+}
+
+[data-tema="light"] .hero-subtitle { color: #475569; }
+
+[data-tema="light"] .back-to-top {
+  background: #ffffff;
+  border-color: var(--border);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+}
+
+[data-tema="light"] .toast {
+  background: rgba(255,255,255,0.97);
+  border-color: rgba(5,150,105,0.2);
+  color: #0f172a;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+
+/* =================================================================
    TOAST NOTIFICATIONS
    ================================================================= */
 .toast-container {
