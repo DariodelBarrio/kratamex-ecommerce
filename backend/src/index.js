@@ -24,8 +24,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
-const bcrypt = require('bcryptjs');
-const BCRYPT_ROUNDS = 10;
+const argon2 = require('argon2');
 
 // =================================================================
 // CONFIGURACIÓN DE MULTER (SUBIDA DE IMÁGENES)
@@ -201,28 +200,36 @@ const productos = [
   console.log('Productos de ejemplo insertados');
 }
 
-// Seed de usuarios (admin y standard) con contraseñas hasheadas
-const usuariosExistentes = db.prepare('SELECT COUNT(*) as count FROM usuarios').get();
-if (usuariosExistentes.count === 0) {
+// Seed de usuarios y migración de contraseñas — async porque argon2 es asíncrono
+async function initUsuarios() {
+  const usuariosExistentes = db.prepare('SELECT COUNT(*) as count FROM usuarios').get();
   const adminUser = process.env.ADMIN_USER || 'admin';
   const adminPass = process.env.ADMIN_PASS || 'admin123';
-  const stdUser = process.env.USER_STANDARD || 'user';
-  const stdPass = process.env.USER_PASS || 'user123';
+  const stdUser   = process.env.USER_STANDARD || 'user';
+  const stdPass   = process.env.USER_PASS || 'user123';
 
-  const adminHash = bcrypt.hashSync(adminPass, BCRYPT_ROUNDS);
-  const stdHash = bcrypt.hashSync(stdPass, BCRYPT_ROUNDS);
-
-  db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run(adminUser, adminHash, 'admin@kratamex.com', 'admin');
-  db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run(stdUser, stdHash, 'user@kratamex.com', 'standard');
-  console.log('Usuarios de ejemplo insertados con contraseñas hasheadas');
-} else {
-  // Migrar contraseñas en texto plano si las hay (las hasheadas empiezan con $2)
-  const usuarios = db.prepare('SELECT id, password FROM usuarios').all();
-  const updateStmt = db.prepare('UPDATE usuarios SET password = ? WHERE id = ?');
-  for (const u of usuarios) {
-    if (!u.password.startsWith('$2')) {
-      const hash = bcrypt.hashSync(u.password, BCRYPT_ROUNDS);
-      updateStmt.run(hash, u.id);
+  if (usuariosExistentes.count === 0) {
+    const adminHash = await argon2.hash(adminPass);
+    const stdHash   = await argon2.hash(stdPass);
+    db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run(adminUser, adminHash, 'admin@kratamex.com', 'admin');
+    db.prepare('INSERT INTO usuarios (username, password, email, role) VALUES (?, ?, ?, ?)').run(stdUser,   stdHash,   'user@kratamex.com',  'standard');
+    console.log('Usuarios creados con argon2id');
+  } else {
+    // Migrar hashes que no sean argon2 ($2b$ = bcrypt, sin prefijo = texto plano)
+    const knownPasswords = {
+      [adminUser]: adminPass,
+      [stdUser]:   stdPass,
+    };
+    const usuarios = db.prepare('SELECT id, username, password FROM usuarios').all();
+    const update   = db.prepare('UPDATE usuarios SET password = ? WHERE id = ?');
+    for (const u of usuarios) {
+      if (!u.password.startsWith('$argon2')) {
+        const plain = knownPasswords[u.username];
+        if (plain) {
+          update.run(await argon2.hash(plain), u.id);
+          console.log(`Contraseña de ${u.username} migrada a argon2id`);
+        }
+      }
     }
   }
 }
@@ -542,7 +549,7 @@ app.delete('/api/productos/:id', authenticate, requireAdmin, (req, res) => {
 // POST /api/login
 // Autenticar usuario (devuelve token de sesión)
 // --------------------------------------------------------------------------
-app.post('/api/login', loginRateLimiter, (req, res) => {
+app.post('/api/login', loginRateLimiter, async (req, res) => {
   const { username, password } = req.body;
   const ip = req.ip;
 
@@ -551,7 +558,16 @@ app.post('/api/login', loginRateLimiter, (req, res) => {
   }
 
   const user = db.prepare('SELECT * FROM usuarios WHERE username = ?').get(username);
-  const passwordValida = user && bcrypt.compareSync(password, user.password);
+
+  let passwordValida = false;
+  if (user) {
+    try {
+      passwordValida = await argon2.verify(user.password, password);
+    } catch {
+      // Hash no reconocido (formato antiguo no migrado) → login inválido
+      passwordValida = false;
+    }
+  }
 
   if (!user || !passwordValida) {
     recordFailedLogin(ip);
@@ -660,9 +676,11 @@ app.delete('/api/admin/pedidos/:id', authenticate, requireAdmin, (req, res) => {
 });
 
 // =================================================================
-// INICIAR SERVIDOR
+// INICIAR SERVIDOR (async: espera a que argon2 hashee los seeds)
 // =================================================================
-// Escuchar en el puerto configurado
-app.listen(PORT, () => {
-  console.log(`Backend corriendo en http://localhost:${PORT}`);
-});
+(async () => {
+  await initUsuarios();
+  app.listen(PORT, () => {
+    console.log(`Backend corriendo en http://localhost:${PORT}`);
+  });
+})();

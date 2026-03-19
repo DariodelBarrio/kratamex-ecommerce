@@ -493,7 +493,7 @@ fetch('/api/pedidos', ...)
 ```
 
 ### 5. Commits relacionados
-- `pendiente`
+- `c80d987` - fix: hardcoded HTTP URLs, checkout flood, nginx security headers, sanitize on URLs
 
 ---
 
@@ -525,7 +525,7 @@ app.post('/api/pedidos', checkoutRateLimiter, ...)
 ```
 
 ### 5. Commits relacionados
-- `pendiente`
+- `c80d987` - fix: hardcoded HTTP URLs, checkout flood, nginx security headers, sanitize on URLs
 
 ---
 
@@ -555,7 +555,7 @@ add_header Content-Security-Policy "default-src 'self'; ..." always;
 ```
 
 ### 3. Commits relacionados
-- `pendiente`
+- `c80d987` - fix: hardcoded HTTP URLs, checkout flood, nginx security headers, sanitize on URLs
 
 ---
 
@@ -582,4 +582,4 @@ add_header Content-Security-Policy "default-src 'self'; ..." always;
 `sanitize()` solo debe usarse en **contenido de texto** renderizado, nunca en URLs.
 
 ### 4. Commits relacionados
-- `pendiente`
+- `c80d987` - fix: hardcoded HTTP URLs, checkout flood, nginx security headers, sanitize on URLs
