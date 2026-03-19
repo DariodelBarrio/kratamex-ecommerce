@@ -199,6 +199,109 @@ La aplicación funcionaba solo sobre HTTP sin cifrado TLS/SSL, exponiendo creden
 
 ---
 
+## [ID-010] Broken Access Control en CRUD de Productos
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🔴 Crítico
+
+### 1. Descripción del fallo
+Los endpoints `POST`, `PUT` y `DELETE /api/productos` no requerían autenticación. Cualquier persona anónima podía crear, modificar o eliminar productos del catálogo sin necesidad de token.
+
+### 2. Impacto
+- Destrucción del catálogo completo desde un script
+- Inyección de productos maliciosos con URLs de imagen peligrosas
+- Modificación de precios por usuarios no autorizados
+
+### 3. PoC del ataque
+```bash
+# Sin token, borramos el producto 1
+curl -X DELETE http://localhost:3001/api/productos/1   # → 200 OK ❌ (antes del fix)
+curl -X DELETE http://localhost:3001/api/productos/1   # → 401 ✅ (después)
+```
+
+### 4. Solución (Parche)
+Añadidos middlewares `authenticate` + `requireAdmin` a los tres endpoints.
+
+### 5. Commits relacionados
+- `pendiente`
+
+---
+
+## [ID-011] IDOR en Endpoints de Pedidos
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🔴 Crítico
+
+### 1. Descripción del fallo
+`GET /api/pedidos` y `GET /api/pedidos/:id` eran públicos. Cualquier usuario podía enumerar todos los pedidos y obtener nombre, email y dirección de todos los clientes.
+
+### 2. Impacto
+- Extracción masiva de PII (datos personales) de clientes
+- Enumeración de pedidos con IDs secuenciales (`/api/pedidos/1`, `/api/pedidos/2`...)
+
+### 3. PoC del ataque
+```bash
+curl http://localhost:3001/api/pedidos/1
+# → {"id":1,"cliente":"Ana García","email":"ana@gmail.com","direccion":"..."} ❌
+```
+
+### 4. Solución (Parche)
+Añadido middleware `authenticate` a ambos endpoints. Solo usuarios autenticados pueden acceder.
+
+### 5. Commits relacionados
+- `pendiente`
+
+---
+
+## [ID-012] IDOR + Price Manipulation en Checkout
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🔴 Crítico
+
+### 1. Descripción del fallo
+`POST /api/pedidos` aceptaba el precio enviado por el cliente en el body. Un atacante podía modificar el precio de cualquier producto antes de enviarlo, comprando artículos de 2.000€ por 0.01€.
+
+### 2. Impacto
+- Compra de cualquier producto al precio que el atacante decida
+- Pérdidas económicas directas para la tienda
+
+### 3. PoC del ataque
+```bash
+curl -X POST http://localhost:3001/api/pedidos \
+  -H "Content-Type: application/json" \
+  -d '{"cliente":"Hacker","email":"h@x.com","direccion":"Evil St",
+       "items":[{"id":1,"cantidad":1,"precio":0.01}]}'
+# → Pedido creado con total: 0.01€ en vez de 2249€ ❌
+```
+
+### 4. Solución (Parche)
+El backend ahora obtiene el precio real de cada producto directamente desde la BD, ignorando completamente el precio enviado por el cliente.
+```javascript
+const producto = db.prepare('SELECT id, precio FROM productos WHERE id = ?').get(item.id);
+total += producto.precio * cantidad; // precio real, no el del cliente
+```
+
+### 5. Commits relacionados
+- `pendiente`
+
+---
+
+## [ID-013] Information Exposure en Login (intentos_restantes)
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟡 Medio
+
+### 1. Descripción del fallo
+La respuesta de login fallido incluía el campo `intentos_restantes`, informando al atacante exactamente cuántos intentos de fuerza bruta le quedaban antes del bloqueo.
+
+### 2. Impacto
+- El atacante puede gestionar su ataque para no activar el bloqueo
+- Confirma implícitamente que el sistema tiene rate limiting y cómo funciona
+
+### 3. Solución (Parche)
+Eliminado el campo `intentos_restantes` de la respuesta. Solo se devuelve `{ error: 'Credenciales incorrectas' }`.
+
+### 4. Commits relacionados
+- `pendiente`
+
+---
+
 ## [ID-009] XSS: Doble Encoding por sanitize() en onChange
 **Fecha:** 19/03/2026
 **Nivel de Riesgo:** 🟡 Medio

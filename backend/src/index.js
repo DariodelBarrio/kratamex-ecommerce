@@ -387,79 +387,77 @@ app.get('/api/productos/:id', (req, res) => {
 // --------------------------------------------------------------------------
 // POST /api/pedidos
 // Crear un nuevo pedido (checkout)
-// Body (JSON):
-//   - cliente: nombre del cliente
-//   - email: correo del cliente
-//   - direccion: dirección de envío
-//   - items: array de productos [{id, cantidad, precio}, ...]
+// FIX IDOR: precio validado desde la BD, no del cliente (price manipulation)
 // --------------------------------------------------------------------------
 app.post('/api/pedidos', (req, res) => {
-  // Extraer datos del body de la petición
   const { cliente, email, direccion, items } = req.body;
-  
-  // Validar que estén todos los datos requeridos
+
   if (!cliente || !email || !direccion || !items || items.length === 0) {
     return res.status(400).json({ error: 'Faltan datos requeridos' });
   }
 
-  // Calcular el total de la compra
-  const total = items.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
-
-  // Insertar el pedido en la tabla de pedidos
-  const insertPedido = db.prepare('INSERT INTO pedidos (cliente, email, direccion, total) VALUES (?, ?, ?, ?)');
-  const result = insertPedido.run(cliente, email, direccion, total);
-  const pedidoId = result.lastInsertRowid;  // Obtener el ID del pedido creado
-
-  // Insertar cada producto del pedido
-  const insertItem = db.prepare('INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio) VALUES (?, ?, ?, ?)');
-  
+  // FIX: obtener precios reales de la BD — ignorar el precio enviado por el cliente
+  let total = 0;
+  const itemsValidados = [];
   for (const item of items) {
+    const producto = db.prepare('SELECT id, precio FROM productos WHERE id = ?').get(item.id);
+    if (!producto) {
+      return res.status(400).json({ error: `Producto ${item.id} no encontrado` });
+    }
+    const cantidad = parseInt(item.cantidad);
+    if (!cantidad || cantidad < 1) {
+      return res.status(400).json({ error: 'Cantidad inválida' });
+    }
+    total += producto.precio * cantidad;
+    itemsValidados.push({ id: producto.id, precio: producto.precio, cantidad });
+  }
+
+  const result = db.prepare('INSERT INTO pedidos (cliente, email, direccion, total) VALUES (?, ?, ?, ?)').run(cliente, email, direccion, total);
+  const pedidoId = result.lastInsertRowid;
+
+  const insertItem = db.prepare('INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio) VALUES (?, ?, ?, ?)');
+  for (const item of itemsValidados) {
     insertItem.run(pedidoId, item.id, item.cantidad, item.precio);
   }
 
-  // Responder con éxito
   res.json({ id: pedidoId, mensaje: 'Pedido creado correctamente' });
 });
 
 // --------------------------------------------------------------------------
 // GET /api/pedidos
-// Obtener todos los pedidos (para el admin)
+// FIX Broken Access Control + IDOR: requiere autenticación
 // --------------------------------------------------------------------------
-app.get('/api/pedidos', (req, res) => {
-  // Obtener todos los pedidos ordenados por fecha (más recientes primero)
+app.get('/api/pedidos', authenticate, (req, res) => {
   const pedidos = db.prepare('SELECT * FROM pedidos ORDER BY fecha DESC').all();
   res.json(pedidos);
 });
 
 // --------------------------------------------------------------------------
 // GET /api/pedidos/:id
-// Obtener un pedido específico con sus items
+// FIX IDOR: requiere autenticación. Admin ve cualquier pedido.
 // --------------------------------------------------------------------------
-app.get('/api/pedidos/:id', (req, res) => {
-  // Buscar el pedido
+app.get('/api/pedidos/:id', authenticate, (req, res) => {
   const pedido = db.prepare('SELECT * FROM pedidos WHERE id = ?').get(req.params.id);
-  
+
   if (!pedido) {
     return res.status(404).json({ error: 'Pedido no encontrado' });
   }
-  
-  // Obtener los items del pedido (uniendo con la tabla de productos)
+
   const items = db.prepare(`
-    SELECT pi.*, p.nombre, p.imagen 
-    FROM pedido_items pi 
-    JOIN productos p ON pi.producto_id = p.id 
+    SELECT pi.*, p.nombre, p.imagen
+    FROM pedido_items pi
+    JOIN productos p ON pi.producto_id = p.id
     WHERE pi.pedido_id = ?
   `).all(req.params.id);
-  
-  // Responder con el pedido y sus items
+
   res.json({ ...pedido, items });
 });
 
 // --------------------------------------------------------------------------
 // POST /api/productos
-// Crear un nuevo producto
+// FIX Broken Access Control: requiere autenticación y rol admin
 // --------------------------------------------------------------------------
-app.post('/api/productos', (req, res) => {
+app.post('/api/productos', authenticate, requireAdmin, (req, res) => {
   // Extraer datos del body
   const { nombre, descripcion, precio, imagen, categoria } = req.body;
   
@@ -478,9 +476,9 @@ app.post('/api/productos', (req, res) => {
 
 // --------------------------------------------------------------------------
 // PUT /api/productos/:id
-// Actualizar un producto existente
+// FIX Broken Access Control: requiere autenticación y rol admin
 // --------------------------------------------------------------------------
-app.put('/api/productos/:id', (req, res) => {
+app.put('/api/productos/:id', authenticate, requireAdmin, (req, res) => {
   const { nombre, descripcion, precio, imagen, categoria } = req.body;
   
   // Actualizar el producto
@@ -497,9 +495,9 @@ app.put('/api/productos/:id', (req, res) => {
 
 // --------------------------------------------------------------------------
 // DELETE /api/productos/:id
-// Eliminar un producto
+// FIX Broken Access Control: requiere autenticación y rol admin
 // --------------------------------------------------------------------------
-app.delete('/api/productos/:id', (req, res) => {
+app.delete('/api/productos/:id', authenticate, requireAdmin, (req, res) => {
   const stmt = db.prepare('DELETE FROM productos WHERE id = ?');
   const result = stmt.run(req.params.id);
   
@@ -527,12 +525,8 @@ app.post('/api/login', loginRateLimiter, (req, res) => {
 
   if (!user || !passwordValida) {
     recordFailedLogin(ip);
-    const intentos = loginAttempts[ip]?.count || 1;
-    const restantes = MAX_ATTEMPTS - intentos;
-    return res.status(401).json({
-      error: 'Credenciales incorrectas',
-      intentos_restantes: restantes > 0 ? restantes : 0
-    });
+    // FIX Information Exposure: no revelar intentos restantes al atacante
+    return res.status(401).json({ error: 'Credenciales incorrectas' });
   }
 
   resetLoginAttempts(ip);

@@ -111,7 +111,7 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
     const data = { ...formProducto, precio: parseFloat(formProducto.precio) };
     const url = editando ? `/api/productos/${editando.id}` : '/api/productos';
     const method = editando ? 'PUT' : 'POST';
-    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+    await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': token }, body: JSON.stringify(data) });
     setFormProducto({ nombre: '', descripcion: '', precio: '', imagen: '', categoria: '' });
     setEditando(null);
     cargarDatos();
@@ -119,7 +119,7 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
 
   const eliminarProducto = async (id: number) => {
     if (!confirm('¿Eliminar producto?')) return;
-    await fetch(`/api/productos/${id}`, { method: 'DELETE' });
+    await fetch(`/api/productos/${id}`, { method: 'DELETE', headers: { 'Authorization': token } });
     cargarDatos();
   };
 
