@@ -222,7 +222,7 @@ curl -X DELETE http://localhost:3001/api/productos/1   # → 401 ✅ (después)
 Añadidos middlewares `authenticate` + `requireAdmin` a los tres endpoints.
 
 ### 5. Commits relacionados
-- `pendiente`
+- `35c837b` - fix: patch IDOR, broken access control, price manipulation and info exposure
 
 ---
 
@@ -247,7 +247,7 @@ curl http://localhost:3001/api/pedidos/1
 Añadido middleware `authenticate` a ambos endpoints. Solo usuarios autenticados pueden acceder.
 
 ### 5. Commits relacionados
-- `pendiente`
+- `35c837b` - fix: patch IDOR, broken access control, price manipulation and info exposure
 
 ---
 
@@ -279,7 +279,7 @@ total += producto.precio * cantidad; // precio real, no el del cliente
 ```
 
 ### 5. Commits relacionados
-- `pendiente`
+- `35c837b` - fix: patch IDOR, broken access control, price manipulation and info exposure
 
 ---
 
@@ -298,7 +298,7 @@ La respuesta de login fallido incluía el campo `intentos_restantes`, informando
 Eliminado el campo `intentos_restantes` de la respuesta. Solo se devuelve `{ error: 'Credenciales incorrectas' }`.
 
 ### 4. Commits relacionados
-- `pendiente`
+- `35c837b` - fix: patch IDOR, broken access control, price manipulation and info exposure
 
 ---
 
