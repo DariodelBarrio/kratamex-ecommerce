@@ -1,27 +1,82 @@
+name: kratamex
+
+# =================================================================
+# SERVICIOS
+# =================================================================
 services:
+
+  # ---------------------------------------------------------------
+  # PostgreSQL — base de datos persistente
+  # ---------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-kratamex}
+      POSTGRES_USER:     ${POSTGRES_USER:-kratamex}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kratamex_dev}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data   # datos persistentes
+    ports:
+      - "5432:5432"                              # acceso desde host para pgAdmin/DBeaver
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kratamex} -d ${POSTGRES_DB:-kratamex}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------
+  # Backend — Node.js + Express + PostgreSQL
+  # Hot-reload: nodemon con polling (funciona en WSL + Docker)
+  # ---------------------------------------------------------------
   backend:
     build: ./backend
+    command: npx nodemon --legacy-watch --watch src src/index.js
     ports:
       - "3001:3001"
     volumes:
-      - ./backend/src:/app/src
-      - ./backend/tienda.db:/app/tienda.db
+      - ./backend/src:/app/src             # hot-reload: cambios en src se reflejan al instante
+      - backend_modules:/app/node_modules  # named volume: preserva node_modules del contenedor
+    env_file:
+      - path: ./backend/.env
+        required: false                    # opcional; si no existe usa los defaults de abajo
     environment:
-      - NODE_ENV=development
+      NODE_ENV:      development
+      DB_HOST:       postgres
+      DB_PORT:       5432
+      DB_NAME:       ${POSTGRES_DB:-kratamex}
+      DB_USER:       ${POSTGRES_USER:-kratamex}
+      DB_PASSWORD:   ${POSTGRES_PASSWORD:-kratamex_dev}
+      CORS_ORIGIN:   https://localhost
+    depends_on:
+      postgres:
+        condition: service_healthy         # espera a que Postgres acepte conexiones
     restart: unless-stopped
 
+  # ---------------------------------------------------------------
+  # Frontend — React + Vite con HMR
+  # CHOKIDAR_USEPOLLING activa polling para WSL donde inotify falla
+  # ---------------------------------------------------------------
   frontend:
     build: ./frontend
+    command: npm run dev -- --host 0.0.0.0
     ports:
       - "3000:3000"
     volumes:
-      - ./frontend/src:/app/src
+      - ./frontend/src:/app/src            # hot-reload: HMR de Vite
+      - ./frontend/public:/app/public      # hot-reload: assets públicos
+      - frontend_modules:/app/node_modules # named volume: preserva node_modules
+    environment:
+      VITE_BACKEND_URL:    http://backend:3001
+      CHOKIDAR_USEPOLLING: "true"          # polling para Docker en WSL
+      WATCHPACK_POLLING:   "true"
     depends_on:
       - backend
-    environment:
-      - VITE_BACKEND_URL=http://backend:3001
     restart: unless-stopped
 
+  # ---------------------------------------------------------------
+  # nginx — reverse proxy HTTPS con TLS terminado aquí
+  # ---------------------------------------------------------------
   nginx:
     image: nginx:alpine
     ports:
@@ -34,3 +89,11 @@ services:
       - frontend
       - backend
     restart: unless-stopped
+
+# =================================================================
+# VOLÚMENES NOMBRADOS
+# =================================================================
+volumes:
+  postgres_data:       # datos de PostgreSQL persistentes entre reinicios
+  backend_modules:     # node_modules del backend (evita sobreescribir con directorio vacío del host)
+  frontend_modules:    # node_modules del frontend
