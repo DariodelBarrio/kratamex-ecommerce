@@ -84,10 +84,13 @@ function logRequest(req, res, next) {
 // =================================================================
 const app = express();
 
-const ALLOWED_ORIGIN = process.env.CORS_ORIGIN || 'https://localhost';
+const ALLOWED_ORIGINS = [
+  process.env.CORS_ORIGIN || 'https://localhost',
+  'http://localhost:3000',   // Vite dev server directo
+];
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin || origin === ALLOWED_ORIGIN) return cb(null, true);
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
     cb(new Error('Origen no permitido por CORS'));
   }
 }));
