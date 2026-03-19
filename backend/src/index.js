@@ -19,6 +19,7 @@ Funcionalidades:
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
@@ -76,7 +77,14 @@ function logRequest(req, res, next) {
 const app = express();
 const PORT = 3001;
 
-app.use(cors());
+const ALLOWED_ORIGIN = process.env.CORS_ORIGIN || 'https://localhost';
+app.use(cors({
+  origin: (origin, callback) => {
+    // Permitir peticiones sin origin (curl, Postman, mismo servidor)
+    if (!origin || origin === ALLOWED_ORIGIN) return callback(null, true);
+    callback(new Error('Origen no permitido por CORS'));
+  }
+}));
 app.use(express.json());
 app.use(logRequest);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -402,7 +410,7 @@ app.post('/api/pedidos', (req, res) => {
   for (const item of items) {
     const producto = db.prepare('SELECT id, precio FROM productos WHERE id = ?').get(item.id);
     if (!producto) {
-      return res.status(400).json({ error: `Producto ${item.id} no encontrado` });
+      return res.status(400).json({ error: 'Uno o más artículos no están disponibles' });
     }
     const cantidad = parseInt(item.cantidad);
     if (!cantidad || cantidad < 1) {
@@ -425,18 +433,18 @@ app.post('/api/pedidos', (req, res) => {
 
 // --------------------------------------------------------------------------
 // GET /api/pedidos
-// FIX Broken Access Control + IDOR: requiere autenticación
+// FIX Broken Access Control + IDOR: requiere autenticación Y rol admin
 // --------------------------------------------------------------------------
-app.get('/api/pedidos', authenticate, (req, res) => {
+app.get('/api/pedidos', authenticate, requireAdmin, (req, res) => {
   const pedidos = db.prepare('SELECT * FROM pedidos ORDER BY fecha DESC').all();
   res.json(pedidos);
 });
 
 // --------------------------------------------------------------------------
 // GET /api/pedidos/:id
-// FIX IDOR: requiere autenticación. Admin ve cualquier pedido.
+// FIX IDOR: requiere autenticación Y rol admin.
 // --------------------------------------------------------------------------
-app.get('/api/pedidos/:id', authenticate, (req, res) => {
+app.get('/api/pedidos/:id', authenticate, requireAdmin, (req, res) => {
   const pedido = db.prepare('SELECT * FROM pedidos WHERE id = ?').get(req.params.id);
 
   if (!pedido) {
@@ -530,7 +538,7 @@ app.post('/api/login', loginRateLimiter, (req, res) => {
   }
 
   resetLoginAttempts(ip);
-  const token = 'token_' + Date.now() + '_' + Math.random().toString(36).substr(2);
+  const token = crypto.randomBytes(32).toString('hex');
   sessions[token] = { id: user.id, username: user.username, role: user.role, avatar: user.avatar };
 
   res.json({

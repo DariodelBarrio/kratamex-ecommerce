@@ -343,3 +343,119 @@ import DOMPurify from 'dompurify';
 - `319624a` - fix: remove sanitize from onChange handlers + add SQLi/XSS security demo
 
 ---
+
+## [ID-014] IDOR Persistente en GET /api/pedidos (requireAdmin omitido)
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🔴 Crítico
+
+### 1. Descripción del fallo
+El fix ID-011 añadió `authenticate` a `GET /api/pedidos` y `GET /api/pedidos/:id` pero olvidó `requireAdmin`. Un usuario con rol `standard` con token válido podía enumerar todos los pedidos y ver PII (nombre, email, dirección) de todos los clientes.
+
+### 2. Impacto
+- Extracción masiva de datos personales de clientes por cualquier usuario registrado
+- Enumeración de pedidos por ID secuencial desde una cuenta `standard`
+
+### 3. PoC del ataque
+```bash
+TOKEN=$(curl -s -X POST http://localhost:3001/api/login \
+  -d '{"username":"user","password":"user123"}' | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+curl http://localhost:3001/api/pedidos -H "Authorization: $TOKEN"
+# → Lista completa de pedidos con PII ❌ (antes del fix)
+# → HTTP 403 ✅ (después del fix)
+```
+
+### 4. Solución (Parche)
+Añadido `requireAdmin` a ambos endpoints:
+```javascript
+app.get('/api/pedidos', authenticate, requireAdmin, ...)
+app.get('/api/pedidos/:id', authenticate, requireAdmin, ...)
+```
+
+### 5. Commits relacionados
+- `pendiente`
+
+---
+
+## [ID-015] Token de Sesión Criptográficamente Débil
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟠 Alto
+
+### 1. Descripción del fallo
+Los tokens de sesión se generaban con `Math.random()`, que no usa CSPRNG (Cryptographically Secure Pseudo-Random Number Generator). El timestamp del token era predecible desde la cabecera HTTP `Date:`, reduciendo el espacio de búsqueda.
+
+### 2. Impacto
+- Un atacante con conocimiento del timestamp aproximado puede reducir el espacio de tokens a ~2^32 valores
+- Token predecible = posible session hijacking sin credenciales
+
+### 3. PoC conceptual
+```javascript
+// Token viejo: "token_1710876123456_k3f9m2x"
+// Date: header revela el timestamp → brute-force de la parte random (~36^7 ≈ 78 billones reducibles)
+```
+
+### 4. Solución (Parche)
+```javascript
+// ✅ 256 bits de entropía criptográfica real
+const token = crypto.randomBytes(32).toString('hex');
+```
+
+### 5. Commits relacionados
+- `pendiente`
+
+---
+
+## [ID-016] CORS Completamente Abierto
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟠 Alto
+
+### 1. Descripción del fallo
+`app.use(cors())` sin configuración permite que cualquier dominio haga peticiones autenticadas a la API, facilitando ataques desde sitios maliciosos.
+
+### 2. Impacto
+- Un atacante puede alojar `evil.com` que robe datos usando el token de sesión de la víctima
+
+### 3. Solución (Parche)
+```javascript
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || origin === ALLOWED_ORIGIN) return callback(null, true);
+    callback(new Error('Origen no permitido por CORS'));
+  }
+}));
+```
+- `CORS_ORIGIN` configurado en `.env` (por defecto `https://localhost`)
+
+### 4. Commits relacionados
+- `pendiente`
+
+---
+
+## [ID-017] Information Exposure: Enumeración de IDs de Producto en Checkout
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟡 Medio
+
+### 1. Descripción del fallo
+`POST /api/pedidos` devolvía `"Producto 999 no encontrado"`, revelando si un ID concreto existe en la base de datos. Un atacante podía enumerar todo el catálogo interno sin autenticación.
+
+### 2. Impacto
+- Descubrimiento de IDs internos de productos (incluso eliminados o en borrador)
+- Facilita ataques IDOR sobre otros endpoints
+
+### 3. PoC del ataque
+```bash
+for i in $(seq 1 100); do
+  curl -s -X POST http://localhost:3001/api/pedidos \
+    -d "{\"cliente\":\"x\",\"email\":\"x@x.com\",\"direccion\":\"x\",\"items\":[{\"id\":$i,\"cantidad\":1}]}" \
+  | grep -q "no encontrado" && echo "ID $i: no existe"
+done
+```
+
+### 4. Solución (Parche)
+```javascript
+// ❌ Antes: return res.status(400).json({ error: `Producto ${item.id} no encontrado` });
+// ✅ Después:
+return res.status(400).json({ error: 'Uno o más artículos no están disponibles' });
+```
+
+### 5. Commits relacionados
+- `pendiente`
