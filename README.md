@@ -1,155 +1,162 @@
-# Tienda Online - Documentación
+# Kratamex - Tienda Online de Ordenadores
 
 ## Estructura del Proyecto
 
 ```
 proyecto/
-├── frontend/           # Aplicación React + TypeScript + Vite
+├── frontend/              # React 19 + TypeScript + Vite
 │   ├── src/
-│   │   ├── components/ # Componentes reutilizables
-│   │   │   └── Admin/
-│   │   │       ├── Admin.tsx
-│   │   │       └── Admin.module.css
-│   │   ├── App.tsx     # Componente principal y de la tienda
-│   │   ├── main.tsx    # Punto de entrada con React Router
-│   │   ├── index.css   # Estilos globales
-│   │   ├── interfaces.ts # Interfaces de TypeScript
-│   │   └── utils.ts      # Funciones de utilidad
+│   │   ├── components/
+│   │   │   ├── Admin/
+│   │   │   │   ├── Admin.tsx
+│   │   │   │   └── Admin.module.css
+│   │   │   ├── ProductCard.tsx       # Tarjeta de producto con Framer Motion
+│   │   │   ├── SkeletonCard.tsx      # Skeleton loading placeholder
+│   │   │   ├── SecurityBadge.tsx     # Indicador TLS en header
+│   │   │   ├── PasswordStrength.tsx  # Barra de fuerza de contraseña
+│   │   │   └── OptimizedImage.tsx    # Imagen con lazy loading
+│   │   ├── App.tsx        # Componente tienda principal
+│   │   ├── main.tsx       # Punto de entrada con React Router
+│   │   ├── index.css      # Estilos globales (Glassmorphism)
+│   │   ├── interfaces.ts  # Interfaces TypeScript
+│   │   └── utils.ts       # Funciones de utilidad
 │   ├── package.json
 │   ├── vite.config.ts
-│   └── index.html
-├── backend/            # API REST con Express + SQLite
+│   └── Dockerfile
+├── backend/               # API REST con Express + PostgreSQL
 │   ├── src/
-│   │   └── index.js    # Servidor, rutas y base de datos
+│   │   ├── index.js       # Servidor, rutas y lógica
+│   │   └── db.js          # Pool de conexión PostgreSQL
 │   ├── package.json
-│   ├── .dockerignore
 │   └── Dockerfile
-├── frontend/
-│   ├── ...
-│   ├── .dockerignore
-│   └── Dockerfile
-├── docker-compose.yml  # Orquestación de servicios
-└── README.md           # Este documento
+├── nginx/                 # Reverse proxy HTTPS
+│   ├── nginx.conf
+│   └── certs/
+├── docker-compose.yml     # Orquestación (4 servicios)
+├── .env.example           # Variables de entorno raíz
+├── correcciones_seguridad.md
+├── DOCUMENTACION_COMPLETA.md
+└── README.md
 ```
 
-## Frontend
+## Tecnologías
 
-### Tecnologías
-- **React 18** - Framework de UI
-- **TypeScript** - Tipado estático
-- **Vite** - Build tool rápido
-- **React Router** - Navegación
-- **Lucide React** - Iconos (actualizado a la última versión)
+### Frontend
+- **React 19** + **TypeScript** — Framework de UI
+- **Vite 5** — Build tool con HMR
+- **Framer Motion** — Micro-interacciones y animaciones
+- **Lucide React** — Iconos SVG
+- **Recharts** — Gráficas del dashboard admin
+- **Inter** (Google Fonts) — Tipografía
 
-### Componentes
+### Backend
+- **Express 4** — Framework web
+- **PostgreSQL 16** — Base de datos relacional (pg)
+- **argon2** — Hashing de contraseñas (argon2id, ganador PHC)
+- **multer** — Subida de archivos
+- **dotenv** — Variables de entorno
 
-#### Tienda (/)
-Página principal con catálogo de ordenadores, búsqueda y filtros.
+### Infraestructura
+- **Docker Compose** — Orquestación de 4 servicios
+- **nginx:alpine** — Reverse proxy con TLS
+- **postgres:16-alpine** — Base de datos
 
-**Funcionalidades:**
-- Listado de ordenadores desde API
-- **Búsqueda** por nombre, descripción o categoría
-- **Filtro** por categoría (Portátiles, Gaming, Sobremesa)
-- **Filtro** por rango de precio
-- **Ordenamiento** por precio (asc/desc)
-- Carrito de compras (agregar, quitar, modificar cantidad)
-- Checkout con formulario de cliente
-- **Panel de administración** (/admin) - Requiere usuario y contraseña
-- Loading state mientras cargan los productos
+## Frontend — Diseño UI
 
-#### Admin (/admin)
-Panel de administración para gestionar productos y pedidos.
+### Glassmorphism + Micro-interacciones
+- Tarjetas con `backdrop-blur` y bordes con degradado sutil
+- Entrada escalonada de productos con Framer Motion
+- Hover con elevación animada
+- Botón "Agregar al Carrito" con animación de check al agregar
+- Carrito lateral con slide-in/out (spring physics)
+- Skeleton loading screens con shimmer
 
-**Funcionalidades:**
-- Ver estadísticas (productos, pedidos, total ventas)
-- CRUD de productos (crear, editar, eliminar)
-- Listado de pedidos
+### Componentes Nuevos
+- **ProductCard** — Tarjeta de producto con detección de marca (Apple, Dell, HP, Lenovo, ASUS), logo SVG, animaciones
+- **SkeletonCard** — Placeholder de carga con shimmer
+- **SecurityBadge** — Indicador "Secure" con punto pulsante en el header
+- **PasswordStrength** — Barra de fuerza de contraseña en tiempo real (5 niveles)
 
-### Estilos
-Los estilos globales se encuentran en `index.css`. El componente `Admin` ha sido refactorizado para usar CSS Modules (`Admin.module.css`), mejorando la organización y evitando conflictos de estilos.
+## Backend — API REST
 
-## Backend
+### Endpoints
 
-### Tecnologías
-- **Express** - Framework web
-- **Better SQLite3** - Base de datos SQLite
-- **CORS** - Cross-origin resource sharing
+| Metodo | Ruta | Auth | Descripcion |
+|--------|------|------|-------------|
+| GET | /api/productos | No | Listar productos (filtros: busqueda, categoria, orden) |
+| GET | /api/productos/:id | No | Obtener producto por ID |
+| POST | /api/productos | Admin | Crear producto |
+| PUT | /api/productos/:id | Admin | Actualizar producto |
+| DELETE | /api/productos/:id | Admin | Eliminar producto |
+| POST | /api/pedidos | No | Crear pedido (rate limited) |
+| GET | /api/pedidos | Admin | Listar pedidos |
+| GET | /api/pedidos/:id | Admin | Obtener pedido con items |
+| POST | /api/login | No | Autenticar (rate limited: 5/15min) |
+| POST | /api/logout | Token | Cerrar sesion |
+| GET | /api/usuario | Token | Datos del usuario autenticado |
+| POST | /api/usuario/avatar | Token | Subir avatar |
+| GET | /api/admin/pedidos | Admin | Listar pedidos |
+| DELETE | /api/admin/pedidos/:id | Admin | Eliminar pedido |
 
-### Base de Datos
+### Base de Datos — PostgreSQL
 
-**Tablas:**
-- `productos` - Catálogo de productos
-- `pedidos` - Pedidos realizados
-- `pedido_items` - Ítems de cada pedido
-- `usuarios` - Usuarios del sistema (RBAC)
+Tablas: `productos`, `pedidos`, `pedido_items`, `usuarios`
 
-**Seed:** Se insertan 15 ordenadores de ejemplo, 3 pedidos de ejemplo y 2 usuarios (admin/user) al iniciar.
+Usuarios de ejemplo:
 
-### Endpoints API
+| Username | Password | Rol |
+|----------|----------|-----|
+| admin | admin123 | admin |
+| user | user123 | standard |
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET    | /api/productos   | Listar todos los productos (filtros: busqueda, categoria, desde, hasta, fechaDesde, fechaHasta, orden) |
-| GET    | /api/productos/:id | Obtener producto por ID   |
-| POST   | /api/productos   | Crear producto              |
-| PUT    | /api/productos/:id | Actualizar producto         |
-| DELETE | /api/productos/:id | Eliminar producto           |
-| GET    | /api/pedidos     | Listar pedidos              |
-| GET    | /api/pedidos/:id | Obtener pedido con items    |
-| POST   | /api/pedidos     | Crear nuevo pedido          |
-| POST   | /api/login       | Autenticar usuario (devuelve token)    |
-| POST   | /api/logout      | Cerrar sesión               |
-| GET    | /api/usuario     | Obtener datos del usuario autenticado |
-| POST   | /api/usuario/avatar | Subir imagen de perfil   |
-| GET    | /api/admin/pedidos | Listar pedidos (solo admin) |
-| DELETE | /api/admin/pedidos/:id | Eliminar pedido (solo admin) |
+> Las contrasenas se almacenan como hashes argon2id, nunca en texto plano.
 
-## Autenticación y RBAC
+## Autenticacion y RBAC
 
-El sistema implementa **RBAC (Role-Based Access Control)** con dos roles:
-- **admin**: Acceso total, incluyendo panel de administración y gestión de pedidos
-- **standard**: Usuario regular, puede ver productos y hacer pedidos
+| Accion | standard | admin |
+|--------|----------|-------|
+| Ver productos | Si | Si |
+| Hacer pedidos | Si | Si |
+| Panel admin | No | Si |
+| CRUD productos | No | Si |
+| Eliminar pedidos | No | Si |
 
-### Usuarios de ejemplo
-| Username | Password | Rol     |
-|----------|----------|---------|
-| admin    | admin123 | admin   |
-| user     | user123  | standard|
+Flujo: `POST /api/login` -> token -> `Authorization: <token>` -> `POST /api/logout`
 
-La autenticación funciona con tokens de sesión:
-1. `POST /api/login` - Enviar `{username, password}` → devuelve `{token, user}`
-2. Incluir `Authorization: <token>` en las peticiones protegidas
-3. `POST /api/logout` - Cerrar sesión
+## Seguridad
 
-### Rutas protegidas
-- `/api/usuario` - Datos del usuario autenticado
-- `/api/usuario/avatar` - Subir imagen de perfil
-- `/api/admin/pedidos` - Solo admin
-- `/api/admin/pedidos/:id` - Solo admin
+- **argon2id** — Hashing de contrasenas (PHC winner, async)
+- **Rate limiting** — Login (5 intentos/15min) + Checkout (10 pedidos/60s)
+- **HTTPS** — TLS terminado en nginx (TLSv1.2/1.3)
+- **CORS restringido** — Solo `CORS_ORIGIN` de `.env`
+- **Prepared statements** — Parametros `$1, $2...` (pg), prevencion SQL injection
+- **Tokens criptograficos** — `crypto.randomBytes(32)` (256 bits)
+- **Headers de seguridad** — HSTS, X-Frame-Options, CSP, X-Content-Type-Options, Referrer-Policy
+- **Validacion de uploads** — Solo imagenes, limites de tamano
+- **21 vulnerabilidades documentadas** — Ver `correcciones_seguridad.md`
 
-## Ejecución
+## Ejecucion
 
 ### Con Docker (recomendado)
 
 ```bash
-docker compose up --build
-```
+# Copiar variables de entorno
+cp .env.example .env
+cp backend/.env.example backend/.env
 
-En background:
-```bash
+# Levantar los 4 servicios
 docker compose up --build -d
 ```
 
 | Servicio | URL |
 |----------|-----|
 | Web (HTTPS) | https://localhost |
-| Web (HTTP → redirige) | http://localhost |
+| Web (HTTP -> redirige) | http://localhost |
 | Frontend directo | http://localhost:3000 |
 | Backend directo | http://localhost:3001 |
+| PostgreSQL | localhost:5432 |
 
-> El certificado SSL es autofirmado. El navegador mostrará una advertencia de seguridad — es esperado en entorno de desarrollo. En producción se debe usar un certificado válido (Let's Encrypt, etc.)
-
-nginx actúa como reverse proxy: termina TLS, redirige HTTP→HTTPS y enruta `/api/*` al backend y `/` al frontend.
+> El certificado SSL es autofirmado (desarrollo). En produccion usar Let's Encrypt.
 
 ### Manual
 
@@ -160,3 +167,9 @@ cd backend && npm install && npm start
 # Frontend
 cd frontend && npm install && npm run dev
 ```
+
+Requiere PostgreSQL corriendo en localhost:5432 con las credenciales de `backend/.env`.
+
+---
+
+*Ultima actualizacion: 19/03/2026*
