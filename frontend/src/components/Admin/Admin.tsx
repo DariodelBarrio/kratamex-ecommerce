@@ -5,6 +5,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import styles from './Admin.module.css';
 import { Producto } from '../../interfaces';
 import { sanitize } from '../../utils';
+import { PasswordStrength } from '../PasswordStrength';
 
 function Admin() {
   const [autenticado, setAutenticado] = useState(false);
@@ -69,6 +70,7 @@ function Admin() {
                   {mostrarPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
+              <PasswordStrength password={password} />
             </div>
             {error && <p className={styles['login-error']}>{error}</p>}
             <button className={styles['login-btn']} onClick={verificarPassword}>Iniciar Sesión</button>
