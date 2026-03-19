@@ -586,3 +586,241 @@ add_header Content-Security-Policy "default-src 'self'; ..." always;
 
 ### 4. Commits relacionados
 - `c80d987` - fix: hardcoded HTTP URLs, checkout flood, nginx security headers, sanitize on URLs
+
+---
+
+## [ID-022] Security Headers Ausentes en Backend Express
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟠 Alto
+
+### 1. Descripción del fallo
+El servidor Express no emitía ningún header de seguridad propio (`X-Content-Type-Options`, `X-Frame-Options`, `Permissions-Policy`). Además, exponía `X-Powered-By: Express`, facilitando fingerprinting del stack tecnológico.
+
+### 2. Impacto
+- Fingerprinting del servidor permite ataques dirigidos a vulnerabilidades conocidas de Express
+- Sin protección contra MIME sniffing en respuestas de la API directa (sin pasar por nginx)
+
+### 3. Solución (Parche)
+Middleware de seguridad añadido al inicio de la cadena:
+```javascript
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.removeHeader('X-Powered-By');
+  next();
+});
+```
+
+---
+
+## [ID-023] Sesiones Sin Expiración — Session Hijacking Permanente
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🔴 Crítico
+
+### 1. Descripción del fallo
+Los tokens de sesión almacenados en `sessions = {}` nunca expiraban. Un token robado era válido indefinidamente (hasta reinicio del servidor). No había mecanismo de timeout ni renovación.
+
+### 2. Impacto
+- Token robado = acceso permanente sin posibilidad de revocación automática
+- Sesiones huérfanas acumulándose en memoria (memory leak)
+
+### 3. Solución (Parche)
+- TTL de 8 horas por sesión (`SESSION_TTL = 8 * 60 * 60 * 1000`)
+- Campo `createdAt` añadido a cada sesión
+- Validación de expiración en el middleware `authenticate`
+- Limpieza periódica automática cada 15 minutos con `setInterval`
+
+---
+
+## [ID-024] Stored XSS via Descripción de Producto
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟠 Alto
+
+### 1. Descripción del fallo
+Los endpoints `POST /api/productos` y `PUT /api/productos/:id` almacenaban los campos `nombre`, `descripcion` y `categoria` sin sanitizar. Un admin malicioso (o un atacante con token admin robado) podía inyectar payloads HTML/JS que se almacenarían en la BD.
+
+### 2. Impacto
+- Si el frontend usara `dangerouslySetInnerHTML`, los payloads se ejecutarían
+- Defensa en profundidad: sanitizar en backend aunque React escape por defecto
+
+### 3. Solución (Parche)
+- Función `sanitizeText()` aplicada a todos los campos de texto almacenados
+- Límites de longitud: nombre (200), descripcion (1000), categoria (50), imagen URL (500)
+- Validación numérica de precio (rango 0-999999)
+
+---
+
+## [ID-025] Sin Límite de Body Size — DoS por Payload Masivo
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟡 Medio
+
+### 1. Descripción del fallo
+`express.json()` sin parámetro `limit` aceptaba payloads de tamaño ilimitado. Un atacante podía enviar un JSON de 100MB+ causando agotamiento de memoria.
+
+### 2. Impacto
+- Denegación de servicio por agotamiento de memoria del contenedor
+- Stack traces del error expuestos al atacante (información sensible)
+
+### 3. Solución (Parche)
+```javascript
+app.use(express.json({ limit: '10kb' }));
+```
+- Error handler global añadido para ocultar stack traces:
+```javascript
+app.use((err, req, res, _next) => {
+  if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Payload demasiado grande' });
+  res.status(err.status || 500).json({ error: 'Error interno del servidor' });
+});
+```
+
+---
+
+## [ID-026] Validación de Email Ausente en Checkout
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟡 Medio
+
+### 1. Descripción del fallo
+`POST /api/pedidos` aceptaba cualquier string como email sin validación de formato. Podía almacenar payloads XSS, strings vacíos o datos arbitrarios en el campo email.
+
+### 2. Impacto
+- Datos basura en BD
+- Potencial SMTP injection si se implementa envío de emails
+
+### 3. Solución (Parche)
+- Validación regex de email en backend: `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`
+- Límite de longitud: 254 caracteres (RFC 5321)
+- Validación de longitud de cliente (200) y dirección (500)
+- Límite de 50 items por pedido y cantidad máxima de 999 por item
+- Validación duplicada en frontend con `maxLength` en inputs
+
+---
+
+## [ID-027] Rate Limiting Memory Leak
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟡 Medio
+
+### 1. Descripción del fallo
+Los mapas `loginAttempts` y `checkoutAttempts` almacenaban entradas indefinidamente sin limpieza, causando memory leak progresivo.
+
+### 2. Impacto
+- Consumo creciente de memoria con el tiempo
+- Potencial OOM (Out of Memory) del contenedor en producción
+
+### 3. Solución (Parche)
+- `setInterval` cada 5 minutos limpia entradas expiradas de los 3 mapas de rate limiting
+- Rate limiter general (60 req/min por IP) añadido a endpoints públicos (`GET /api/productos`)
+
+---
+
+## [ID-028] File Upload — Nombres Predecibles y Validación Débil
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟠 Alto
+
+### 1. Descripción del fallo
+Los nombres de archivos subidos usaban `Date.now() + Math.random()`, que es predecible. La validación de extensión con regex parcial (`/jpeg|jpg|png/`) podía ser engañada.
+
+### 2. Impacto
+- Nombres de archivo predecibles permiten acceso directo sin enumerar
+- Regex parcial podría permitir extensiones como `.jpegx` o similares
+
+### 3. Solución (Parche)
+- Nombres generados con `crypto.randomBytes(16).toString('hex')` (128 bits de entropía)
+- Regex de extensión anclada: `/^\.(jpe?g|png|gif|webp)$/i`
+- Regex de MIME type anclada: `/^image\/(jpe?g|png|gif|webp)$/i`
+- Reutilización de funciones `safeFileFilter` y `safeFilename` para ambos uploads
+
+---
+
+## [ID-029] Containers Docker Corriendo como Root
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟠 Alto
+
+### 1. Descripción del fallo
+Los Dockerfiles de backend y frontend no especificaban `USER`, por lo que los procesos corrían como root dentro del contenedor. Un escape de contenedor daría acceso root al host.
+
+### 2. Impacto
+- Container escape → root en host
+- Archivos creados con permisos de root
+
+### 3. Solución (Parche)
+- `USER node` añadido a ambos Dockerfiles
+- `chown -R node:node /app` para permisos correctos
+- `mkdir -p src/uploads src/avatars` en backend para que el usuario node pueda escribir
+- Healthcheck añadido al backend Dockerfile
+
+---
+
+## [ID-030] nginx — Ciphers Débiles y Sin Rate Limiting
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟠 Alto
+
+### 1. Descripción del fallo
+nginx usaba `ssl_ciphers HIGH:!aNULL:!MD5` que incluye ciphers débiles. No tenía rate limiting propio, dependiendo solo del backend. Los endpoints de uploads/avatars no tenían HSTS ni headers de seguridad completos.
+
+### 2. Impacto
+- Ciphers débiles podrían ser explotados en ataques de downgrade
+- Sin rate limiting en nginx, el backend recibe toda la carga de DDoS
+- Uploads servidos sin CSP restrictivo podían ejecutar SVG maliciosos
+
+### 3. Solución (Parche)
+- Ciphers actualizados a suite moderna (ECDHE-ECDSA/RSA con AES-GCM y CHACHA20)
+- `ssl_prefer_server_ciphers on` y `ssl_session_cache`
+- Rate limiting zones: `general` (30r/s burst 50) y `login` (5r/m burst 3)
+- CSP restrictivo en uploads: `default-src 'none'; img-src 'self'`
+- HSTS en todas las locations
+- `server_tokens off` para ocultar versión de nginx
+- `client_max_body_size 5m`
+- CSP actualizado para permitir imágenes de `images.unsplash.com`
+
+---
+
+## [ID-031] Archivos de Base de Datos en Git
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🔴 Crítico
+
+### 1. Descripción del fallo
+`.gitignore` tenía comentada la línea para ignorar `tienda.db`. Archivos de base de datos SQLite estaban trackeados en el repositorio, potencialmente con credenciales hasheadas y datos de clientes.
+
+### 2. Impacto
+- Datos personales de clientes expuestos en historial de git
+- Hashes de contraseñas en el repositorio
+
+### 3. Solución (Parche)
+- Descomentado y expandido el patrón en `.gitignore`: `*.db`, `*.sqlite`, `*.sqlite3`
+
+---
+
+## [ID-032] IP Spoofing en Rate Limiting (trust proxy)
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟡 Medio
+
+### 1. Descripción del fallo
+Express no tenía configurado `trust proxy`, por lo que `req.ip` detrás de nginx devolvía la IP del proxy, no la del cliente real. Todos los usuarios compartían la misma IP para rate limiting.
+
+### 2. Impacto
+- Rate limiting bloquea a todos los usuarios cuando uno excede el límite
+- O alternativamente, nunca funciona correctamente
+
+### 3. Solución (Parche)
+```javascript
+app.set('trust proxy', 1);
+```
+Nginx ya envía `X-Real-IP` y `X-Forwarded-For` correctamente.
+
+---
+
+## [ID-033] Static Files Serving Sin Protección dotfiles
+**Fecha:** 19/03/2026
+**Nivel de Riesgo:** 🟡 Medio
+
+### 1. Descripción del fallo
+`express.static()` para `/uploads` y `/avatars` no restringía acceso a dotfiles (`.env`, `.htaccess`, etc.).
+
+### 2. Solución (Parche)
+```javascript
+app.use('/uploads', express.static(..., { dotfiles: 'deny' }));
+app.use('/avatars', express.static(..., { dotfiles: 'deny' }));
+```

@@ -30,5 +30,7 @@ coverage/
 *.tmp
 *.temp
 
-# Database (uncomment if you want to ignore it)
-# tienda.db
+# Database
+*.db
+*.sqlite
+*.sqlite3

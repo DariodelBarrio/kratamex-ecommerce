@@ -20,6 +20,38 @@ const pool       = require('./db');
 const PORT = 3001;
 
 // =================================================================
+// SEGURIDAD — Sanitización de texto (anti-XSS)
+// =================================================================
+function sanitizeText(str) {
+  if (typeof str !== 'string') return str;
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+// =================================================================
+// SEGURIDAD — Validación de extensión de archivo (magic bytes)
+// =================================================================
+const ALLOWED_EXT = /^\.(jpe?g|png|gif|webp)$/i;
+const ALLOWED_MIME = /^image\/(jpe?g|png|gif|webp)$/i;
+
+function safeFileFilter(req, file, cb) {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (ALLOWED_EXT.test(ext) && ALLOWED_MIME.test(file.mimetype)) {
+    return cb(null, true);
+  }
+  cb(new Error('Solo se permiten imágenes (jpeg, jpg, png, gif, webp)'));
+}
+
+function safeFilename(req, file, cb) {
+  const ext = path.extname(file.originalname).toLowerCase();
+  cb(null, `${crypto.randomBytes(16).toString('hex')}${ext}`);
+}
+
+// =================================================================
 // MULTER — subida de imágenes de producto
 // =================================================================
 const productStorage = multer.diskStorage({
@@ -28,20 +60,12 @@ const productStorage = multer.diskStorage({
     if (!fs.existsSync(dir)) fs.mkdirSync(dir);
     cb(null, dir);
   },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`);
-  }
+  filename: safeFilename
 });
 const upload = multer({
   storage: productStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (/jpeg|jpg|png|gif|webp/.test(path.extname(file.originalname).toLowerCase()) &&
-        /jpeg|jpg|png|gif|webp/.test(file.mimetype)) {
-      return cb(null, true);
-    }
-    cb(new Error('Solo se permiten imágenes (jpeg, jpg, png, gif, webp)'));
-  }
+  fileFilter: safeFileFilter
 });
 
 // =================================================================
@@ -54,18 +78,10 @@ const avatarUpload = multer({
       if (!fs.existsSync(dir)) fs.mkdirSync(dir);
       cb(null, dir);
     },
-    filename: (req, file, cb) => {
-      cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`);
-    }
+    filename: safeFilename
   }),
   limits: { fileSize: 2 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (/jpeg|jpg|png|gif|webp/.test(path.extname(file.originalname).toLowerCase()) &&
-        /jpeg|jpg|png|gif|webp/.test(file.mimetype)) {
-      return cb(null, true);
-    }
-    cb(new Error('Solo se permiten imágenes'));
-  }
+  fileFilter: safeFileFilter
 });
 
 // =================================================================
@@ -84,6 +100,22 @@ function logRequest(req, res, next) {
 // =================================================================
 const app = express();
 
+// trust proxy para que req.ip sea la IP real detrás de nginx
+app.set('trust proxy', 1);
+
+// =================================================================
+// SEGURIDAD — Headers (equivalente a helmet)
+// =================================================================
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.removeHeader('X-Powered-By');
+  next();
+});
+
 const ALLOWED_ORIGINS = [
   process.env.CORS_ORIGIN || 'https://localhost',
   'http://localhost:3000',   // Vite dev server directo
@@ -94,10 +126,46 @@ app.use(cors({
     cb(new Error('Origen no permitido por CORS'));
   }
 }));
-app.use(express.json());
+app.use(express.json({ limit: '10kb' }));
 app.use(logRequest);
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/avatars',  express.static(path.join(__dirname, 'avatars')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { dotfiles: 'deny' }));
+app.use('/avatars',  express.static(path.join(__dirname, 'avatars'), { dotfiles: 'deny' }));
+
+// =================================================================
+// RATE LIMITING — general (anti-flood para endpoints públicos)
+// =================================================================
+const generalAttempts = {};
+const GENERAL_MAX     = 60;
+const GENERAL_WINDOW  = 60 * 1000;
+
+function generalRateLimiter(req, res, next) {
+  const ip  = req.ip;
+  const now = Date.now();
+  if (!generalAttempts[ip] || now - generalAttempts[ip].windowStart > GENERAL_WINDOW) {
+    generalAttempts[ip] = { count: 1, windowStart: now };
+    return next();
+  }
+  if (++generalAttempts[ip].count > GENERAL_MAX) {
+    return res.status(429).json({ error: 'Demasiadas solicitudes. Intenta más tarde.' });
+  }
+  next();
+}
+
+// Limpieza periódica de mapas de rate limiting (prevenir memory leak)
+setInterval(() => {
+  const now = Date.now();
+  for (const ip of Object.keys(loginAttempts)) {
+    const rec = loginAttempts[ip];
+    if (rec.blockedUntil && now > rec.blockedUntil + 300000) delete loginAttempts[ip];
+    else if (!rec.blockedUntil && now - (rec.lastAttempt || 0) > 300000) delete loginAttempts[ip];
+  }
+  for (const ip of Object.keys(checkoutAttempts)) {
+    if (now - checkoutAttempts[ip].windowStart > CHECKOUT_WINDOW * 5) delete checkoutAttempts[ip];
+  }
+  for (const ip of Object.keys(generalAttempts)) {
+    if (now - generalAttempts[ip].windowStart > GENERAL_WINDOW * 5) delete generalAttempts[ip];
+  }
+}, 5 * 60 * 1000);
 
 // =================================================================
 // RATE LIMITING — login (fuerza bruta)
@@ -150,14 +218,28 @@ function checkoutRateLimiter(req, res, next) {
 }
 
 // =================================================================
-// AUTENTICACIÓN + RBAC
+// AUTENTICACIÓN + RBAC (con expiración de sesiones)
 // =================================================================
 const sessions = {};
+const SESSION_TTL = 8 * 60 * 60 * 1000; // 8 horas
+
+// Limpieza de sesiones expiradas
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, session] of Object.entries(sessions)) {
+    if (now - session.createdAt > SESSION_TTL) delete sessions[token];
+  }
+}, 15 * 60 * 1000);
 
 function authenticate(req, res, next) {
   const token = req.headers.authorization;
   if (!token || !sessions[token]) return res.status(401).json({ error: 'No autenticado' });
-  req.user = sessions[token];
+  const session = sessions[token];
+  if (Date.now() - session.createdAt > SESSION_TTL) {
+    delete sessions[token];
+    return res.status(401).json({ error: 'Sesión expirada' });
+  }
+  req.user = session;
   next();
 }
 
@@ -172,7 +254,7 @@ function requireAdmin(req, res, next) {
 // =================================================================
 
 // GET /api/productos  — filtros opcionales: busqueda, categoria, orden, desde, hasta
-app.get('/api/productos', async (req, res) => {
+app.get('/api/productos', generalRateLimiter, async (req, res) => {
   try {
     const { busqueda, categoria, orden, desde, hasta } = req.query;
     let sql    = 'SELECT * FROM productos WHERE TRUE';
@@ -180,14 +262,14 @@ app.get('/api/productos', async (req, res) => {
     let idx    = 1;
 
     if (busqueda) {
+      const term = `%${String(busqueda).slice(0, 100)}%`;
       sql += ` AND (nombre ILIKE $${idx} OR descripcion ILIKE $${idx+1} OR categoria ILIKE $${idx+2})`;
-      const term = `%${busqueda}%`;
       params.push(term, term, term);
       idx += 3;
     }
-    if (categoria) { sql += ` AND categoria = $${idx++}`;          params.push(categoria); }
-    if (desde)     { sql += ` AND precio >= $${idx++}`;            params.push(parseFloat(desde)); }
-    if (hasta)     { sql += ` AND precio <= $${idx++}`;            params.push(parseFloat(hasta)); }
+    if (categoria) { sql += ` AND categoria = $${idx++}`;          params.push(String(categoria).slice(0, 50)); }
+    if (desde)     { const v = parseFloat(desde); if (!isNaN(v) && v >= 0) { sql += ` AND precio >= $${idx++}`; params.push(v); } }
+    if (hasta)     { const v = parseFloat(hasta); if (!isNaN(v) && v >= 0) { sql += ` AND precio <= $${idx++}`; params.push(v); } }
 
     if      (orden === 'asc')  sql += ' ORDER BY precio ASC';
     else if (orden === 'desc') sql += ' ORDER BY precio DESC';
@@ -218,9 +300,11 @@ app.post('/api/productos', authenticate, requireAdmin, async (req, res) => {
   try {
     const { nombre, descripcion, precio, imagen, categoria } = req.body;
     if (!nombre || !precio) return res.status(400).json({ error: 'Nombre y precio son requeridos' });
+    const precioNum = parseFloat(precio);
+    if (isNaN(precioNum) || precioNum < 0 || precioNum > 999999) return res.status(400).json({ error: 'Precio inválido' });
     const { rows } = await pool.query(
       'INSERT INTO productos (nombre, descripcion, precio, imagen, categoria) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-      [nombre, descripcion || '', precio, imagen || '', categoria || '']
+      [sanitizeText(String(nombre).slice(0, 200)), sanitizeText(String(descripcion || '').slice(0, 1000)), precioNum, String(imagen || '').slice(0, 500), sanitizeText(String(categoria || '').slice(0, 50))]
     );
     res.json({ id: rows[0].id, mensaje: 'Producto creado' });
   } catch (err) {
@@ -233,9 +317,11 @@ app.post('/api/productos', authenticate, requireAdmin, async (req, res) => {
 app.put('/api/productos/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const { nombre, descripcion, precio, imagen, categoria } = req.body;
+    const precioNum = parseFloat(precio);
+    if (isNaN(precioNum) || precioNum < 0 || precioNum > 999999) return res.status(400).json({ error: 'Precio inválido' });
     const result = await pool.query(
       'UPDATE productos SET nombre=$1, descripcion=$2, precio=$3, imagen=$4, categoria=$5 WHERE id=$6',
-      [nombre, descripcion, precio, imagen, categoria, req.params.id]
+      [sanitizeText(String(nombre || '').slice(0, 200)), sanitizeText(String(descripcion || '').slice(0, 1000)), precioNum, String(imagen || '').slice(0, 500), sanitizeText(String(categoria || '').slice(0, 50)), req.params.id]
     );
     if (result.rowCount === 0) return res.status(404).json({ error: 'Producto no encontrado' });
     res.json({ mensaje: 'Producto actualizado' });
@@ -267,6 +353,15 @@ app.post('/api/pedidos', checkoutRateLimiter, async (req, res) => {
   if (!cliente || !email || !direccion || !items?.length)
     return res.status(400).json({ error: 'Faltan datos requeridos' });
 
+  // Validación de email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email) || email.length > 254)
+    return res.status(400).json({ error: 'Email inválido' });
+  if (String(cliente).length > 200 || String(direccion).length > 500)
+    return res.status(400).json({ error: 'Datos demasiado largos' });
+  if (items.length > 50)
+    return res.status(400).json({ error: 'Demasiados artículos en el pedido' });
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -282,7 +377,7 @@ app.post('/api/pedidos', checkoutRateLimiter, async (req, res) => {
         return res.status(400).json({ error: 'Uno o más artículos no están disponibles' });
       }
       const cantidad = parseInt(item.cantidad);
-      if (!cantidad || cantidad < 1) {
+      if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 999) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: 'Cantidad inválida' });
       }
@@ -292,7 +387,7 @@ app.post('/api/pedidos', checkoutRateLimiter, async (req, res) => {
 
     const { rows: pedidoRows } = await client.query(
       'INSERT INTO pedidos (cliente, email, direccion, total) VALUES ($1,$2,$3,$4) RETURNING id',
-      [cliente, email, direccion, total]
+      [sanitizeText(String(cliente).slice(0, 200)), String(email).slice(0, 254), sanitizeText(String(direccion).slice(0, 500)), total]
     );
     const pedidoId = pedidoRows[0].id;
 
@@ -317,7 +412,9 @@ app.post('/api/pedidos', checkoutRateLimiter, async (req, res) => {
 // GET /api/pedidos  (solo admin)
 app.get('/api/pedidos', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM pedidos ORDER BY fecha DESC');
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+    const { rows } = await pool.query('SELECT * FROM pedidos ORDER BY fecha DESC LIMIT $1 OFFSET $2', [limit, offset]);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -352,7 +449,9 @@ app.get('/api/pedidos/:id', authenticate, requireAdmin, async (req, res) => {
 // GET /api/admin/pedidos
 app.get('/api/admin/pedidos', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM pedidos ORDER BY fecha DESC');
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+    const { rows } = await pool.query('SELECT * FROM pedidos ORDER BY fecha DESC LIMIT $1 OFFSET $2', [limit, offset]);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -401,7 +500,7 @@ app.post('/api/login', loginRateLimiter, async (req, res) => {
 
     resetLoginAttempts(ip);
     const token = crypto.randomBytes(32).toString('hex');
-    sessions[token] = { id: user.id, username: user.username, role: user.role, avatar: user.avatar };
+    sessions[token] = { id: user.id, username: user.username, role: user.role, avatar: user.avatar, createdAt: Date.now() };
 
     res.json({
       success: true,
@@ -493,31 +592,57 @@ async function seedProductos() {
   if (parseInt(rows[0].count) > 0) return;
 
   const productos = [
-    ['MacBook Pro 14"',          'Apple M3 Pro, 18GB RAM, 512GB SSD, Pantalla Liquid Retina XDR',                    2249.00, 'MacBook',   'Portátiles'],
-    ['Dell XPS 15',              'Intel Core i7-13700H, 32GB RAM, 1TB SSD, NVIDIA RTX 4060, 15.6" 3.5K OLED',       1899.00, 'Dell',      'Portátiles'],
-    ['HP Spectre x360',          'Intel Core i7-1255U, 16GB RAM, 512GB SSD, Pantalla 14" FHD Táctil 2-en-1',        1499.00, 'HP',        'Portátiles'],
-    ['Lenovo ThinkPad X1 Carbon','Intel Core i7-1365U, 16GB RAM, 512GB SSD, Pantalla 14" 2.8K OLED',                1799.00, 'Lenovo',    'Portátiles'],
-    ['LG Gram 17',               'Intel Core i7-1360P, 32GB RAM, 1TB SSD, Pantalla 17" WQXGA, Peso 1.35kg',         2199.00, 'LG',        'Portátiles'],
-    ['Samsung Galaxy Book4 Pro', 'Intel Core Ultra 7 155H, 16GB RAM, 512GB SSD, Pantalla 14" AMOLED 120Hz',         1449.00, 'Samsung',   'Portátiles'],
-    ['ASUS ROG Strix G16',       'Intel Core i9-13980HX, 32GB RAM, 1TB SSD, NVIDIA RTX 4070, 16" FHD 165Hz',        2199.00, 'ASUS',      'Gaming'],
-    ['Alienware m18',            'Intel Core i9-13980HX, 64GB RAM, 2TB SSD, NVIDIA RTX 4090, 18" QHD+ 165Hz',       3499.00, 'Alienware', 'Gaming'],
-    ['MSI Titan GT77',           'Intel Core i9-13900HX, 64GB RAM, 2TB SSD, NVIDIA RTX 4090, 17.3" 4K 144Hz',       3799.00, 'MSI',       'Gaming'],
-    ['Razer Blade 15',           'Intel Core i7-13800H, 16GB RAM, 1TB SSD, NVIDIA RTX 4070, 15.6" QHD 240Hz',       2499.00, 'Razer',     'Gaming'],
-    ['HP Omen 16',               'AMD Ryzen 9 7940HS, 32GB RAM, 1TB SSD, NVIDIA RTX 4070, 16.1" QHD 165Hz',         1699.00, 'HP',        'Gaming'],
-    ['Acer Predator Helios 18',  'Intel Core i9-13900HX, 32GB RAM, 1TB SSD, NVIDIA RTX 4080, 18" WQXGA 240Hz',      2699.00, 'Acer',      'Gaming'],
-    ['Apple iMac 24"',           'Apple M3, 8GB RAM, 256GB SSD, Pantalla 4.5K Retina 24", Cámara 1080p',             1499.00, 'Apple',     'Sobremesa'],
-    ['Dell Inspiron 24',         'Intel Core i7-1355U, 16GB RAM, 512GB SSD, Pantalla 23.8" FHD Táctil',             1099.00, 'Dell',      'Sobremesa'],
-    ['HP Pavilion 27',           'AMD Ryzen 7 7735HS, 16GB RAM, 512GB SSD, Pantalla 27" QHD',                       1199.00, 'HP',        'Sobremesa'],
+    ['MacBook Pro 14"',          'Apple M3 Pro, 18GB RAM, 512GB SSD, Pantalla Liquid Retina XDR',                    2249.00, 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&h=300&fit=crop',   'Portátiles'],
+    ['Dell XPS 15',              'Intel Core i7-13700H, 32GB RAM, 1TB SSD, NVIDIA RTX 4060, 15.6" 3.5K OLED',       1899.00, 'https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?w=400&h=300&fit=crop',   'Portátiles'],
+    ['HP Spectre x360',          'Intel Core i7-1255U, 16GB RAM, 512GB SSD, Pantalla 14" FHD Táctil 2-en-1',        1499.00, 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400&h=300&fit=crop',   'Portátiles'],
+    ['Lenovo ThinkPad X1 Carbon','Intel Core i7-1365U, 16GB RAM, 512GB SSD, Pantalla 14" 2.8K OLED',                1799.00, 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?w=400&h=300&fit=crop',   'Portátiles'],
+    ['LG Gram 17',               'Intel Core i7-1360P, 32GB RAM, 1TB SSD, Pantalla 17" WQXGA, Peso 1.35kg',         2199.00, 'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=400&h=300&fit=crop',     'Portátiles'],
+    ['Samsung Galaxy Book4 Pro', 'Intel Core Ultra 7 155H, 16GB RAM, 512GB SSD, Pantalla 14" AMOLED 120Hz',         1449.00, 'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?w=400&h=300&fit=crop',   'Portátiles'],
+    ['ASUS ROG Strix G16',       'Intel Core i9-13980HX, 32GB RAM, 1TB SSD, NVIDIA RTX 4070, 16" FHD 165Hz',        2199.00, 'https://images.unsplash.com/photo-1603302576837-37561b2e2302?w=400&h=300&fit=crop',   'Gaming'],
+    ['Alienware m18',            'Intel Core i9-13980HX, 64GB RAM, 2TB SSD, NVIDIA RTX 4090, 18" QHD+ 165Hz',       3499.00, 'https://images.unsplash.com/photo-1587614382346-4ec70e388b28?w=400&h=300&fit=crop',   'Gaming'],
+    ['MSI Titan GT77',           'Intel Core i9-13900HX, 64GB RAM, 2TB SSD, NVIDIA RTX 4090, 17.3" 4K 144Hz',       3799.00, 'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?w=400&h=300&fit=crop',   'Gaming'],
+    ['Razer Blade 15',           'Intel Core i7-13800H, 16GB RAM, 1TB SSD, NVIDIA RTX 4070, 15.6" QHD 240Hz',       2499.00, 'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?w=400&h=300&fit=crop',   'Gaming'],
+    ['HP Omen 16',               'AMD Ryzen 9 7940HS, 32GB RAM, 1TB SSD, NVIDIA RTX 4070, 16.1" QHD 165Hz',         1699.00, 'https://images.unsplash.com/photo-1618424181497-157f25b6ddd5?w=400&h=300&fit=crop',   'Gaming'],
+    ['Acer Predator Helios 18',  'Intel Core i9-13900HX, 32GB RAM, 1TB SSD, NVIDIA RTX 4080, 18" WQXGA 240Hz',      2699.00, 'https://images.unsplash.com/photo-1620283085439-39620a119571?w=400&h=300&fit=crop',   'Gaming'],
+    ['Apple iMac 24"',           'Apple M3, 8GB RAM, 256GB SSD, Pantalla 4.5K Retina 24", Cámara 1080p',             1499.00, 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=400&h=300&fit=crop',   'Sobremesa'],
+    ['Dell Inspiron 24',         'Intel Core i7-1355U, 16GB RAM, 512GB SSD, Pantalla 23.8" FHD Táctil',             1099.00, 'https://images.unsplash.com/photo-1547082299-de196ea013d6?w=400&h=300&fit=crop',     'Sobremesa'],
+    ['HP Pavilion 27',           'AMD Ryzen 7 7735HS, 16GB RAM, 512GB SSD, Pantalla 27" QHD',                       1199.00, 'https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=400&h=300&fit=crop',   'Sobremesa'],
   ];
 
-  for (const [nombre, descripcion, precio, imgKey, categoria] of productos) {
-    const imagen = `https://placehold.co/400x300/1e293b/94a3b8?text=${encodeURIComponent(imgKey)}`;
+  for (const [nombre, descripcion, precio, imagen, categoria] of productos) {
     await pool.query(
       'INSERT INTO productos (nombre, descripcion, precio, imagen, categoria) VALUES ($1,$2,$3,$4,$5)',
       [nombre, descripcion, precio, imagen, categoria]
     );
   }
   console.log('Productos de ejemplo insertados');
+}
+
+async function updateProductImages() {
+  const imageMap = {
+    'MacBook Pro':      'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&h=300&fit=crop',
+    'Dell XPS':         'https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?w=400&h=300&fit=crop',
+    'HP Spectre':       'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400&h=300&fit=crop',
+    'ThinkPad':         'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?w=400&h=300&fit=crop',
+    'LG Gram':          'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=400&h=300&fit=crop',
+    'Galaxy Book':      'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?w=400&h=300&fit=crop',
+    'ROG Strix':        'https://images.unsplash.com/photo-1603302576837-37561b2e2302?w=400&h=300&fit=crop',
+    'Alienware':        'https://images.unsplash.com/photo-1587614382346-4ec70e388b28?w=400&h=300&fit=crop',
+    'MSI Titan':        'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?w=400&h=300&fit=crop',
+    'Razer Blade':      'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?w=400&h=300&fit=crop',
+    'HP Omen':          'https://images.unsplash.com/photo-1618424181497-157f25b6ddd5?w=400&h=300&fit=crop',
+    'Predator Helios':  'https://images.unsplash.com/photo-1620283085439-39620a119571?w=400&h=300&fit=crop',
+    'iMac':             'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=400&h=300&fit=crop',
+    'Dell Inspiron':    'https://images.unsplash.com/photo-1547082299-de196ea013d6?w=400&h=300&fit=crop',
+    'HP Pavilion':      'https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=400&h=300&fit=crop',
+  };
+  for (const [key, url] of Object.entries(imageMap)) {
+    await pool.query(
+      'UPDATE productos SET imagen = $1 WHERE nombre ILIKE $2 AND imagen LIKE $3',
+      [url, `%${key}%`, 'https://placehold.co/%']
+    );
+  }
+  console.log('Imágenes de productos actualizadas');
 }
 
 async function seedUsuarios() {
@@ -602,11 +727,26 @@ async function waitForDB(maxAttempts = 15, delayMs = 2000) {
   }
 }
 
+// =================================================================
+// ERROR HANDLER GLOBAL — oculta detalles internos al cliente
+// =================================================================
+app.use((err, req, res, _next) => {
+  console.error(err);
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Payload demasiado grande' });
+  }
+  if (err.message?.includes('CORS')) {
+    return res.status(403).json({ error: 'Origen no permitido' });
+  }
+  res.status(err.status || 500).json({ error: 'Error interno del servidor' });
+});
+
 (async () => {
   try {
     await waitForDB();
     await initDB();
     await seedProductos();
+    await updateProductImages();
     await seedUsuarios();
     await seedPedidos();
     app.listen(PORT, () => console.log(`Backend corriendo en http://localhost:${PORT}`));
