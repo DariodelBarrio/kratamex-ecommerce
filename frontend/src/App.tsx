@@ -18,9 +18,65 @@ import { useState, useEffect, useMemo } from 'react'
 import { Routes, Route, Link } from 'react-router-dom'
 import { ShoppingCart, X, Plus, Minus, Check, Search, SlidersHorizontal } from 'lucide-react'
 import Admin from './components/Admin/Admin';
-import { OptimizedImage } from './components/OptimizedImage';
 import { Producto, CarritoItem } from './interfaces';
-import { sanitize } from './utils';
+
+// =================================================================
+// BRAND LOGO SYSTEM
+// =================================================================
+const BRAND_CONFIG: Record<string, { color: string; label: string }> = {
+  apple:   { color: '#e8e8ed', label: 'apple' },
+  dell:    { color: '#007db8', label: 'DELL' },
+  hp:      { color: '#0096d6', label: 'hp' },
+  lenovo:  { color: '#e2231a', label: 'Lenovo' },
+  asus:    { color: '#00aaff', label: 'ASUS' },
+  default: { color: '#64748b', label: '●' },
+};
+
+function detectBrand(name: string): string {
+  const l = name.toLowerCase();
+  if (l.includes('macbook') || l.includes('imac') || l.includes('apple') || l.includes('mac mini') || l.includes('mac pro')) return 'apple';
+  if (l.includes('dell') || l.includes('xps') || l.includes('inspiron') || l.includes('latitude')) return 'dell';
+  if (l.startsWith('hp ') || l.includes(' hp ') || l.includes('elitebook') || l.includes('spectre') || l.includes('pavilion') || l.includes('envy')) return 'hp';
+  if (l.includes('lenovo') || l.includes('thinkpad') || l.includes('ideapad') || l.includes('yoga') || l.includes('legion')) return 'lenovo';
+  if (l.includes('asus') || l.includes('rog') || l.includes('zenbook') || l.includes('vivobook') || l.includes('zephyrus')) return 'asus';
+  return 'default';
+}
+
+function BrandLogo({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
+  const brand = detectBrand(name);
+  const { color, label } = BRAND_CONFIG[brand] ?? BRAND_CONFIG['default'];
+  const isSmall = size === 'sm';
+
+  const svg = (
+    <svg
+      viewBox="0 0 220 56"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ width: isSmall ? 36 : 110, height: isSmall ? 14 : 28 }}
+      aria-label={label}
+    >
+      <text
+        x="110"
+        y="42"
+        textAnchor="middle"
+        fill={color}
+        fontFamily="'Inter', system-ui, -apple-system, sans-serif"
+        fontSize={isSmall ? 22 : 38}
+        fontWeight="700"
+        letterSpacing={brand === 'apple' ? -1 : 3}
+      >
+        {label}
+      </text>
+    </svg>
+  );
+
+  if (isSmall) return <div className="brand-logo-sm">{svg}</div>;
+
+  return (
+    <div className="product-image-area">
+      <div className="brand-logo-container">{svg}</div>
+    </div>
+  );
+}
 
 // =================================================================
 // COMPONENTE: TIENDA (PÁGINA PRINCIPAL)
@@ -298,16 +354,12 @@ function Tienda() {
           <div className="products-grid">
             {productosFiltrados.map(producto => (
               <div key={producto.id} className="product-card">
-                {/* Imagen del producto */}
-                <OptimizedImage
-                  src={producto.imagen}
-                  alt={sanitize(producto.nombre)}
-                  className="product-image"
-                />
+                {/* Logo de marca del producto */}
+                <BrandLogo name={producto.nombre} size="md" />
                 <div className="product-info">
-                  <div className="product-category">{sanitize(producto.categoria)}</div>
-                  <h3 className="product-name">{sanitize(producto.nombre)}</h3>
-                  <p className="product-description">{sanitize(producto.descripcion)}</p>
+                  <div className="product-category">{producto.categoria}</div>
+                  <h3 className="product-name">{producto.nombre}</h3>
+                  <p className="product-description">{producto.descripcion}</p>
                   <div className="product-price">${producto.precio.toFixed(2)}</div>
                   <button
                     className="add-to-cart"
@@ -353,9 +405,9 @@ function Tienda() {
                 <div className="cart-items">
                   {carrito.map(item => (
                     <div key={item.id} className="cart-item">
-                      <OptimizedImage src={item.imagen} alt={sanitize(item.nombre)} className="cart-item-image" />
+                      <BrandLogo name={item.nombre} size="sm" />
                       <div className="cart-item-info">
-                        <div className="cart-item-name">{sanitize(item.nombre)}</div>
+                        <div className="cart-item-name">{item.nombre}</div>
                         <div className="cart-item-price">${item.precio.toFixed(2)}</div>
                         <div className="cart-item-quantity">
                           {/* Botones para decrease/cantidad */}
