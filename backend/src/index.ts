@@ -356,6 +356,48 @@ app.put('/api/productos/:id', authenticate, requireAdmin, zValidator('json', Pro
   }
 });
 
+// POST /api/productos/:id/imagen (admin) — sube imagen al producto
+app.post('/api/productos/:id/imagen', authenticate, requireAdmin, async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'));
+    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+
+    const [prod] = await db.select({ id: productos.id }).from(productos).where(eq(productos.id, id));
+    if (!prod) return c.json({ error: 'Producto no encontrado' }, 404);
+
+    const body = await c.req.parseBody();
+    const file = body['imagen'];
+
+    if (!file || typeof file === 'string')
+      return c.json({ error: 'No se proporcionó imagen' }, 400);
+
+    const ext = path.extname(file.name).toLowerCase();
+    if (!ALLOWED_EXT.test(ext) || !ALLOWED_MIME.test(file.type))
+      return c.json({ error: 'Solo se permiten imágenes (jpeg, jpg, png, gif, webp)' }, 400);
+    if (file.size > 5 * 1024 * 1024)
+      return c.json({ error: 'La imagen no puede superar 5MB' }, 400);
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    let imagenUrl: string;
+
+    if (process.env.CLOUDINARY_CLOUD_NAME) {
+      imagenUrl = await uploadToCloudinary(buffer, 'kratamex/productos');
+    } else {
+      const filename = `${crypto.randomBytes(16).toString('hex')}${ext}`;
+      const dir = path.join(__dirname, 'uploads');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+      fs.writeFileSync(path.join(dir, filename), buffer);
+      imagenUrl = `/uploads/${filename}`;
+    }
+
+    await db.update(productos).set({ imagen: imagenUrl }).where(eq(productos.id, id));
+    return c.json({ success: true, imagen: imagenUrl });
+  } catch (err) {
+    console.error(err);
+    return c.json({ error: 'Error al subir la imagen' }, 500);
+  }
+});
+
 // DELETE /api/productos/:id (admin)
 app.delete('/api/productos/:id', authenticate, requireAdmin, async (c) => {
   try {

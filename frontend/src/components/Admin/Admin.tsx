@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Lock, Eye, EyeOff, Package, TrendingUp, LayoutDashboard, Trash2, ShoppingBag, DollarSign, Users } from 'lucide-react';
+import { Lock, Eye, EyeOff, Package, TrendingUp, LayoutDashboard, Trash2, ShoppingBag, DollarSign, Users, Upload, X, ImageIcon } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import styles from './Admin.module.css';
 import type { Producto } from '../../interfaces';
@@ -94,6 +94,12 @@ function Admin() {
 function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista, setVista,
   editando, setEditando, formProducto, setFormProducto, onLogout }: any) {
 
+  const [imagenFile, setImagenFile] = useState<File | null>(null);
+  const [imagenPreview, setImagenPreview] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const [mensajeForm, setMensajeForm] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => { cargarDatos(); }, [token]);
 
   const cargarDatos = () => {
@@ -108,15 +114,70 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
     cargarDatos();
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImagenFile(file);
+    setImagenPreview(URL.createObjectURL(file));
+  };
+
+  const limpiarImagen = () => {
+    setImagenFile(null);
+    setImagenPreview('');
+    setFormProducto((prev: any) => ({ ...prev, imagen: '' }));
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const guardarProducto = async () => {
-    if (!formProducto.nombre || !formProducto.precio) { alert('Nombre y precio son requeridos'); return; }
-    const data = { ...formProducto, precio: parseFloat(formProducto.precio) };
-    const url = editando ? `/api/productos/${editando.id}` : '/api/productos';
-    const method = editando ? 'PUT' : 'POST';
-    await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': token }, body: JSON.stringify(data) });
-    setFormProducto({ nombre: '', descripcion: '', precio: '', imagen: '', categoria: '' });
-    setEditando(null);
-    cargarDatos();
+    if (!formProducto.nombre || !formProducto.precio) {
+      setMensajeForm('Nombre y precio son requeridos');
+      return;
+    }
+    setGuardando(true);
+    setMensajeForm('');
+    try {
+      const data = { ...formProducto, precio: parseFloat(formProducto.precio) };
+      const url = editando ? `/api/productos/${editando.id}` : '/api/productos';
+      const method = editando ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'Authorization': token },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setMensajeForm(err.error || 'Error al guardar');
+        return;
+      }
+      const result = await res.json();
+      const productoId = editando ? editando.id : result.id;
+
+      if (imagenFile) {
+        const formData = new FormData();
+        formData.append('imagen', imagenFile);
+        const imgRes = await fetch(`/api/productos/${productoId}/imagen`, {
+          method: 'POST',
+          headers: { 'Authorization': token },
+          body: formData,
+        });
+        if (!imgRes.ok) {
+          const err = await imgRes.json();
+          setMensajeForm(`Producto guardado pero error en imagen: ${err.error}`);
+          cargarDatos();
+          return;
+        }
+      }
+
+      setFormProducto({ nombre: '', descripcion: '', precio: '', imagen: '', categoria: '' });
+      setImagenFile(null);
+      setImagenPreview('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setEditando(null);
+      setMensajeForm('');
+      cargarDatos();
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const eliminarProducto = async (id: number) => {
@@ -310,25 +371,75 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
             <div className={styles['admin-form']}>
               <h3>{editando ? 'Editar Producto' : 'Nuevo Producto'}</h3>
               <div className={styles['form-grid']}>
-                <input type="text" placeholder="Nombre" className={styles['form-input']}
+                <input type="text" placeholder="Nombre *" className={styles['form-input']}
                   value={formProducto.nombre} onChange={e => setFormProducto({ ...formProducto, nombre: e.target.value })} />
                 <input type="text" placeholder="Descripción" className={styles['form-input']}
                   value={formProducto.descripcion} onChange={e => setFormProducto({ ...formProducto, descripcion: e.target.value })} />
-                <input type="number" placeholder="Precio" className={styles['form-input']}
-                  value={formProducto.precio} onChange={e => setFormProducto({ ...formProducto, precio: e.target.value })} />
-                <input type="text" placeholder="URL Imagen" className={styles['form-input']}
-                  value={formProducto.imagen} onChange={e => setFormProducto({ ...formProducto, imagen: e.target.value })} />
+                <input type="number" placeholder="Precio *" className={styles['form-input']}
+                  value={formProducto.precio} onChange={e => setFormProducto({ ...formProducto, precio: e.target.value })} min={0} step={0.01} />
                 <input type="text" placeholder="Categoría" className={styles['form-input']}
                   value={formProducto.categoria} onChange={e => setFormProducto({ ...formProducto, categoria: e.target.value })} />
               </div>
+
+              {/* Imagen */}
+              <div className={styles['imagen-upload-area']}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                  style={{ display: 'none' }}
+                  onChange={handleFileChange}
+                />
+                {imagenPreview ? (
+                  <div className={styles['imagen-preview-wrap']}>
+                    <img src={imagenPreview} alt="Preview" className={styles['imagen-preview']} />
+                    <button
+                      type="button"
+                      className={styles['imagen-remove-btn']}
+                      onClick={limpiarImagen}
+                      title="Quitar imagen"
+                    >
+                      <X size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles['imagen-change-btn']}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload size={14} /> Cambiar imagen
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className={styles['imagen-upload-btn']}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <ImageIcon size={32} className={styles['imagen-upload-icon']} />
+                    <span>Subir imagen del producto</span>
+                    <span className={styles['imagen-upload-hint']}>JPG, PNG, WEBP · máx. 5MB</span>
+                  </button>
+                )}
+              </div>
+
+              {mensajeForm && (
+                <p className={styles[mensajeForm.includes('guardado') ? 'form-warning' : 'form-error']}>
+                  {mensajeForm}
+                </p>
+              )}
+
               <div className={styles['form-actions']}>
-                <button className={styles['btn-primary']} onClick={guardarProducto}>
-                  {editando ? 'Actualizar' : 'Crear'}
+                <button className={styles['btn-primary']} onClick={guardarProducto} disabled={guardando}>
+                  {guardando ? 'Guardando...' : editando ? 'Actualizar' : 'Crear producto'}
                 </button>
                 {editando && (
                   <button className={styles['btn-secondary']} onClick={() => {
                     setEditando(null);
                     setFormProducto({ nombre: '', descripcion: '', precio: '', imagen: '', categoria: '' });
+                    setImagenFile(null);
+                    setImagenPreview('');
+                    setMensajeForm('');
+                    if (fileInputRef.current) fileInputRef.current.value = '';
                   }}>Cancelar</button>
                 )}
               </div>
@@ -336,12 +447,18 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
             <div className={styles['admin-table']}>
               <table>
                 <thead>
-                  <tr><th>ID</th><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Acciones</th></tr>
+                  <tr><th>ID</th><th>Imagen</th><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Acciones</th></tr>
                 </thead>
                 <tbody>
                   {productos.map((p: Producto) => (
                     <tr key={p.id}>
                       <td>{p.id}</td>
+                      <td>
+                        {p.imagen
+                          ? <img src={p.imagen} alt={p.nombre} className={styles['tabla-thumbnail']} />
+                          : <div className={styles['tabla-thumbnail-placeholder']}><ImageIcon size={16} /></div>
+                        }
+                      </td>
                       <td>{sanitize(p.nombre)}</td>
                       <td>{sanitize(p.categoria)}</td>
                       <td>${p.precio.toFixed(2)}</td>
@@ -349,6 +466,10 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
                         <button className={styles['btn-edit']} onClick={() => {
                           setEditando(p);
                           setFormProducto({ nombre: p.nombre, descripcion: p.descripcion, precio: p.precio.toString(), imagen: p.imagen, categoria: p.categoria });
+                          setImagenFile(null);
+                          setImagenPreview(p.imagen || '');
+                          if (fileInputRef.current) fileInputRef.current.value = '';
+                          setMensajeForm('');
                         }}>Editar</button>
                         <button className={styles['btn-delete']} onClick={() => eliminarProducto(p.id)}>Eliminar</button>
                       </td>

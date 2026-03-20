@@ -87,8 +87,9 @@ proyecto/
 
 ### Admin (`/admin`)
 - Dashboard con métricas y gráficas (Recharts)
-- CRUD completo de productos
+- CRUD completo de productos con **subida de imagen** directa (área drag-and-drop con preview)
 - Gestión de pedidos
+- Tabla de productos con miniatura de imagen
 
 ## Backend — API REST
 
@@ -101,6 +102,7 @@ proyecto/
 | POST | /api/productos | Admin | Crear producto |
 | PUT | /api/productos/:id | Admin | Actualizar producto |
 | DELETE | /api/productos/:id | Admin | Eliminar producto |
+| POST | /api/productos/:id/imagen | Admin | Subir imagen del producto (Cloudinary o local, máx. 5MB) |
 | GET | /api/productos/:id/comentarios | No | Listar comentarios del producto |
 | POST | /api/productos/:id/comentarios | No | Publicar comentario (rate limited: 10/min) |
 | POST | /api/pedidos | No | Crear pedido (rate limited: 10/60s) |
@@ -148,7 +150,7 @@ Usuarios de ejemplo:
 
 ### Cloudinary (opcional)
 
-Para usar Cloudinary en subida de avatares, añadir al `backend/.env`:
+Para usar Cloudinary en subida de imágenes (avatares y productos), añadir al `backend/.env`:
 
 ```env
 CLOUDINARY_CLOUD_NAME=tu_cloud_name
@@ -156,7 +158,9 @@ CLOUDINARY_API_KEY=tu_api_key
 CLOUDINARY_API_SECRET=tu_api_secret
 ```
 
-Si las variables no están configuradas, los avatares se guardan localmente en `src/avatars/`.
+Si las variables no están configuradas, los archivos se guardan localmente:
+- Avatares → `src/avatars/`
+- Imágenes de productos → `src/uploads/`
 
 ## Autenticación y RBAC
 
@@ -236,4 +240,4 @@ docker compose up --build -d backend
 
 ---
 
-*Última actualización: 19/03/2026*
+*Última actualización: 20/03/2026*

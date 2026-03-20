@@ -174,8 +174,14 @@ Panel protegido por autenticacion con rol `admin`.
 - Grafica de pedidos por dia (LineChart)
 - Tabla de compras de clientes
 
-**Gestion**:
-- CRUD completo de productos
+**Gestion de Productos**:
+- CRUD completo sin editar codigo
+- Formulario con campos: nombre, descripcion, precio, categoria
+- **Subida de imagen directa** — area de upload con preview instantaneo (JPG/PNG/WEBP/GIF, max 5MB)
+- En edicion muestra la imagen actual y permite reemplazarla
+- Tabla de productos con miniatura de imagen en cada fila
+
+**Gestion de Pedidos**:
 - Listado y eliminacion de pedidos
 
 ### UI Design System
@@ -447,6 +453,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
 | POST | `/api/productos` | Admin | Crear producto |
 | PUT | `/api/productos/:id` | Admin | Actualizar producto |
 | DELETE | `/api/productos/:id` | Admin | Eliminar producto |
+| POST | `/api/productos/:id/imagen` | Admin | Subir imagen del producto (multipart, max 5MB, Cloudinary o local) |
 
 ### Endpoints de Pedidos
 
@@ -670,7 +677,7 @@ cd frontend && npm install && npm run dev
 ## Estado actual del proyecto
 
 - **Productos de ejemplo**: 15 ordenadores (Portatiles, Gaming, Sobremesa)
-- **Endpoints API**: 14 rutas REST
+- **Endpoints API**: 15 rutas REST
 - **Tablas DB**: 4 (PostgreSQL)
 - **Correcciones de seguridad**: 21 vulnerabilidades documentadas y corregidas
 - **UI**: Glassmorphism + Framer Motion + Skeleton Loading
@@ -678,4 +685,4 @@ cd frontend && npm install && npm run dev
 
 ---
 
-*Ultima actualizacion: 19/03/2026 -- v2.0.0*
+*Ultima actualizacion: 20/03/2026 -- v2.1.0*
