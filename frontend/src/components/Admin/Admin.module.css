@@ -376,6 +376,135 @@
   font-weight: 600;
 }
 
+/* ── Imagen upload ── */
+.imagen-upload-area {
+  margin-bottom: 16px;
+}
+
+.imagen-upload-btn {
+  width: 100%;
+  min-height: 120px;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  background: var(--background);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-light);
+  font-size: 0.875rem;
+  transition: border-color 0.2s, background 0.2s;
+  padding: 20px;
+}
+
+.imagen-upload-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.imagen-upload-icon {
+  opacity: 0.5;
+}
+
+.imagen-upload-hint {
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+.imagen-preview-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--background);
+}
+
+.imagen-preview {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.imagen-remove-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--error);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.imagen-change-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: border-color 0.2s;
+}
+
+.imagen-change-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.tabla-thumbnail {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+}
+
+.tabla-thumbnail-placeholder {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  background: var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-light);
+}
+
+.form-error {
+  color: var(--error);
+  font-size: 0.8rem;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: 6px;
+}
+
+.form-warning {
+  color: #d97706;
+  font-size: 0.8rem;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: rgba(217, 119, 6, 0.08);
+  border-radius: 6px;
+}
+
 .btn-primary {
   padding: 10px 20px;
   background: var(--primary);
