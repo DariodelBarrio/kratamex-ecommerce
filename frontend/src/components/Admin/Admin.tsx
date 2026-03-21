@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Lock, Eye, EyeOff, Package, TrendingUp, LayoutDashboard, Trash2, ShoppingBag, DollarSign, Users, Upload, X, ImageIcon } from 'lucide-react';
+import { Lock, Eye, EyeOff, Package, TrendingUp, LayoutDashboard, Trash2, ShoppingBag, DollarSign, Users, Upload, X, ImageIcon, Star, MessageSquare } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import styles from './Admin.module.css';
 import type { Producto } from '../../interfaces';
@@ -16,7 +16,7 @@ function Admin() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [token, setToken] = useState('');
-  const [vista, setVista] = useState<'dashboard' | 'productos' | 'pedidos'>('dashboard');
+  const [vista, setVista] = useState<'dashboard' | 'productos' | 'pedidos' | 'reseñas'>('dashboard');
   const [editando, setEditando] = useState<Producto | null>(null);
   const [formProducto, setFormProducto] = useState({
     nombre: '', descripcion: '', precio: '', imagen: '', categoria: '',
@@ -98,6 +98,7 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
   const [imagenPreview, setImagenPreview] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [mensajeForm, setMensajeForm] = useState('');
+  const [reseñas, setReseñas] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { cargarDatos(); }, [token]);
@@ -106,12 +107,20 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
     fetch('/api/productos').then(r => r.json()).then(setProductos).catch(console.error);
     fetch('/api/admin/pedidos', { headers: { 'Authorization': token } })
       .then(r => r.json()).then(setPedidos).catch(console.error);
+    fetch('/api/admin/valoraciones', { headers: { 'Authorization': token } })
+      .then(r => r.json()).then(data => { if (Array.isArray(data)) setReseñas(data); }).catch(console.error);
   };
 
   const eliminarPedido = async (id: number) => {
     if (!confirm('¿Eliminar este pedido?')) return;
     await fetch(`/api/admin/pedidos/${id}`, { method: 'DELETE', headers: { 'Authorization': token } });
     cargarDatos();
+  };
+
+  const eliminarReseña = async (id: number) => {
+    if (!confirm('¿Eliminar esta reseña?')) return;
+    await fetch(`/api/admin/valoraciones/${id}`, { method: 'DELETE', headers: { 'Authorization': token } });
+    setReseñas(prev => prev.filter(r => r.id !== id));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -222,6 +231,11 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
           <button className={`${styles['tab-btn']} ${vista === 'pedidos' ? styles.active : ''}`}
             onClick={() => setVista('pedidos')}>
             <TrendingUp size={18} /> Pedidos
+          </button>
+          <button className={`${styles['tab-btn']} ${vista === 'reseñas' ? styles.active : ''}`}
+            onClick={() => setVista('reseñas')}>
+            <MessageSquare size={18} /> Reseñas
+            {reseñas.length > 0 && <span style={{ marginLeft: 6, background: '#6366f1', color: '#fff', borderRadius: '99px', fontSize: '0.7rem', padding: '1px 7px' }}>{reseñas.length}</span>}
           </button>
         </div>
 
@@ -509,6 +523,48 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
               </table>
               {pedidos.length === 0 && <p style={{ padding: '20px', textAlign: 'center' }}>No hay pedidos</p>}
             </div>
+          </div>
+        )}
+
+        {/* RESEÑAS */}
+        {vista === 'reseñas' && (
+          <div className={styles['admin-section']}>
+            <h2 style={{ color: '#fff', marginBottom: '16px' }}>Reseñas de clientes</h2>
+            {reseñas.length === 0 ? (
+              <p style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>No hay reseñas todavía</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {reseñas.map((r: any) => (
+                  <div key={r.id} className={styles['review-card']}>
+                    <div className={styles['review-header']}>
+                      <div className={styles['review-meta']}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {r.avatar
+                            ? <img src={r.avatar} alt={r.username} className={styles['review-avatar']} />
+                            : <div className={styles['review-avatar-placeholder']}>{r.username[0].toUpperCase()}</div>
+                          }
+                          <span className={styles['review-username']}>{sanitize(r.username)}</span>
+                        </div>
+                        <span className={styles['review-product']}>sobre: <strong>{sanitize(r.productoNombre)}</strong></span>
+                        <span className={styles['review-date']}>{new Date(r.fecha).toLocaleDateString('es-ES')}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ display: 'flex', gap: '2px' }}>
+                          {[1,2,3,4,5].map(n => (
+                            <Star key={n} size={14} fill={n <= r.puntuacion ? '#f59e0b' : 'none'} color={n <= r.puntuacion ? '#f59e0b' : '#475569'} />
+                          ))}
+                        </div>
+                        <button className={styles['btn-delete']} onClick={() => eliminarReseña(r.id)} title="Eliminar reseña">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                    {r.titulo && <p className={styles['review-title']}>{sanitize(r.titulo)}</p>}
+                    {r.comentario && <p className={styles['review-body']}>{sanitize(r.comentario)}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

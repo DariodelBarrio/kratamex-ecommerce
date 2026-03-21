@@ -1,0 +1,453 @@
+/* ================================================================
+   KRATAMEX SOC — Security Operations Center
+   Estética terminal / cyberpunk
+   ================================================================ */
+
+:root {
+  --soc-bg:       #020b14;
+  --soc-surface:  #050f1c;
+  --soc-panel:    #071624;
+  --soc-border:   rgba(0, 200, 100, 0.12);
+  --soc-green:    #00ff88;
+  --soc-green2:   #10b981;
+  --soc-text:     #94a3b8;
+  --soc-text-hi:  #e2e8f0;
+  --soc-muted:    #334155;
+  --soc-scan:     rgba(0, 255, 136, 0.03);
+}
+
+/* ── LAYOUT ────────────────────────────────────────────────────── */
+.wrap {
+  min-height: 100vh;
+  background: var(--soc-bg);
+  color: var(--soc-text);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: 0.8rem;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 2px, var(--soc-scan) 2px, var(--soc-scan) 4px);
+}
+
+/* ── HEADER ────────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--soc-surface);
+  border-bottom: 1px solid var(--soc-border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.headerIcon { color: var(--soc-green); }
+
+.headerTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--soc-green);
+  letter-spacing: 3px;
+}
+
+.headerSub {
+  font-size: 0.65rem;
+  color: var(--soc-muted);
+  letter-spacing: 2px;
+}
+
+.headerBlink {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--soc-green);
+  box-shadow: 0 0 8px var(--soc-green);
+  animation: blink 1.5s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.refreshTime {
+  font-size: 0.65rem;
+  color: var(--soc-muted);
+  margin-right: 4px;
+}
+
+.iconBtn {
+  background: transparent;
+  border: 1px solid var(--soc-border);
+  color: var(--soc-text);
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, border-color 0.15s;
+  text-decoration: none;
+}
+
+.iconBtn:hover { color: var(--soc-green); border-color: var(--soc-green); }
+.iconBtnActive { color: var(--soc-green) !important; border-color: var(--soc-green) !important; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; }
+
+/* ── BODY ──────────────────────────────────────────────────────── */
+.body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── STAT CARDS ────────────────────────────────────────────────── */
+.statsRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.statCard {
+  background: var(--soc-panel);
+  border: 1px solid var(--soc-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.2s;
+}
+
+.statCard:hover { border-color: rgba(0, 255, 136, 0.3); }
+
+.statCardThreat {
+  border-width: 2px;
+}
+
+.statLabel {
+  font-size: 0.6rem;
+  letter-spacing: 1.5px;
+  color: var(--soc-muted);
+  text-transform: uppercase;
+}
+
+.statValue {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--soc-green);
+}
+
+.statSub {
+  font-size: 0.6rem;
+  color: var(--soc-muted);
+}
+
+/* ── MID ROW ───────────────────────────────────────────────────── */
+.midRow {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 16px;
+}
+
+/* ── PANELS ────────────────────────────────────────────────────── */
+.panel {
+  background: var(--soc-panel);
+  border: 1px solid var(--soc-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.panelTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 0.65rem;
+  letter-spacing: 2px;
+  color: var(--soc-green);
+  border-bottom: 1px solid var(--soc-border);
+  background: rgba(0, 255, 136, 0.03);
+  flex-wrap: wrap;
+}
+
+.panelChart { padding-bottom: 12px; }
+
+.panelTopIps { padding: 0; }
+.panelTopIps .panelTitle { padding: 10px 16px; }
+
+/* ── IP LIST ───────────────────────────────────────────────────── */
+.ipList {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ipRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.ipRow:hover { border-color: var(--soc-border); }
+
+.ipRank  { color: var(--soc-muted); font-size: 0.65rem; width: 20px; }
+.ipAddr  { flex: 1; color: var(--soc-text-hi); font-size: 0.75rem; }
+.ipCount { color: #6366f1; font-size: 0.65rem; }
+
+/* ── FILTER ROW ────────────────────────────────────────────────── */
+.filterRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.filterBtn {
+  background: transparent;
+  border: 1px solid var(--soc-border);
+  color: var(--soc-muted);
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.6rem;
+  letter-spacing: 1px;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.filterBtn:hover { color: var(--soc-text); border-color: var(--soc-text); }
+.filterBtnActive { color: var(--soc-green) !important; border-color: var(--soc-green) !important; }
+
+/* ── LOG TABLE ─────────────────────────────────────────────────── */
+.logTable {
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.logHeader {
+  display: grid;
+  grid-template-columns: 130px 140px 110px 100px 200px 1fr;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(0, 255, 136, 0.04);
+  border-bottom: 1px solid var(--soc-border);
+  font-size: 0.6rem;
+  letter-spacing: 1.5px;
+  color: var(--soc-muted);
+  text-transform: uppercase;
+  position: sticky;
+  top: 0;
+}
+
+.logRow {
+  display: grid;
+  grid-template-columns: 130px 140px 110px 100px 200px 1fr;
+  gap: 8px;
+  padding: 7px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: background 0.1s;
+  align-items: center;
+}
+
+.logRow:hover { background: rgba(255,255,255,0.02); }
+
+.logTime     { color: var(--soc-muted); font-size: 0.7rem; white-space: nowrap; }
+.logIp       { color: #38bdf8; font-size: 0.72rem; }
+.logUser     { color: #a78bfa; font-size: 0.72rem; }
+.logEndpoint { color: var(--soc-text); font-size: 0.68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.logDetails  { color: var(--soc-muted); font-size: 0.68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── EVENT BADGES ──────────────────────────────────────────────── */
+.logBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.62rem;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ev-ok       .logBadge, .ev-ok.logBadge       { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+.ev-fail     .logBadge, .ev-fail.logBadge     { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+.ev-critical .logBadge, .ev-critical.logBadge { background: rgba(239,68,68,0.2);  color: #ef4444; border: 1px solid rgba(239,68,68,0.4); }
+.ev-warn     .logBadge, .ev-warn.logBadge     { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.3); }
+.ev-info     .logBadge, .ev-info.logBadge     { background: rgba(148,163,184,0.1); color: #94a3b8; border: 1px solid rgba(148,163,184,0.2); }
+
+/* Row tinting */
+.ev-critical { background: rgba(239,68,68,0.04); }
+.ev-fail     { background: rgba(245,158,11,0.03); }
+
+.emptyLog {
+  padding: 32px;
+  text-align: center;
+  color: var(--soc-muted);
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+}
+
+.empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--soc-muted);
+  font-size: 0.72rem;
+}
+
+/* ── LOGIN ─────────────────────────────────────────────────────── */
+.loginWrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--soc-bg);
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 2px, var(--soc-scan) 2px, var(--soc-scan) 4px);
+}
+
+.loginBox {
+  width: 380px;
+  background: var(--soc-panel);
+  border: 1px solid var(--soc-border);
+  border-radius: 12px;
+  padding: 40px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 0 60px rgba(0, 255, 136, 0.04);
+}
+
+.loginLogo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--soc-green);
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 4px;
+  margin-bottom: 4px;
+}
+
+.loginSub {
+  font-size: 0.65rem;
+  color: var(--soc-muted);
+  letter-spacing: 1.5px;
+  margin-top: -8px;
+}
+
+.loginField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.loginField label {
+  font-size: 0.6rem;
+  letter-spacing: 2px;
+  color: var(--soc-muted);
+}
+
+.loginField input {
+  background: var(--soc-surface);
+  border: 1px solid var(--soc-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--soc-text-hi);
+  font-family: inherit;
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+}
+
+.loginField input:focus { border-color: var(--soc-green); }
+
+.passWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.passWrap input { padding-right: 40px; }
+
+.passWrap button {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--soc-muted);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+}
+
+.loginErr {
+  color: #ef4444;
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+}
+
+.loginBtn {
+  background: transparent;
+  border: 1px solid var(--soc-green);
+  color: var(--soc-green);
+  padding: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.2s;
+  margin-top: 4px;
+}
+
+.loginBtn:hover { background: rgba(0, 255, 136, 0.07); }
+
+.loginBack {
+  text-align: center;
+  color: var(--soc-muted);
+  font-size: 0.65rem;
+  text-decoration: none;
+  letter-spacing: 1px;
+}
+
+.loginBack:hover { color: var(--soc-text); }
+
+/* ── RESPONSIVE ────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .midRow { grid-template-columns: 1fr; }
+  .logHeader, .logRow {
+    grid-template-columns: 110px 120px 90px 1fr;
+  }
+  .logHeader span:nth-child(5),
+  .logHeader span:nth-child(6),
+  .logRow span:nth-child(5),
+  .logRow span:nth-child(6) { display: none; }
+}
