@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, AlertTriangle, CheckCircle, XCircle, Activity, Users, Wifi, Lock, RefreshCw, LogOut, Terminal, Eye, EyeOff, Globe } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import styles from './SecurityDashboard.module.css';
 
 // ================================================================
@@ -227,45 +227,54 @@ export default function SecurityDashboard() {
       <div className={styles.body}>
         {/* STAT CARDS */}
         <div className={styles.statsRow}>
-          <div className={`${styles.statCard} ${styles.statCardThreat}`} style={{ borderColor: threatColor }}>
-            <div className={styles.statLabel}>NIVEL DE AMENAZA</div>
-            <div className={styles.statValue} style={{ color: threatColor }}>{threatLevel}</div>
+          {/* Threat level */}
+          <div className={`${styles.statCard} ${styles.statCardThreat}`}
+            style={{ borderColor: threatColor, boxShadow: `0 0 20px ${threatColor}22` }}>
+            <Shield size={15} className={styles.statIcon} style={{ color: threatColor, opacity: 0.3 }} />
+            <div className={styles.statLabel}>NIVEL AMENAZA</div>
+            <div className={styles.statValue} style={{ color: threatColor, textShadow: `0 0 16px ${threatColor}88`, fontSize: '1.5rem' }}>{threatLevel}</div>
             <div className={styles.statSub}>últimas 24h</div>
           </div>
-          <div className={styles.statCard}>
-            <AlertTriangle size={18} style={{ color: '#f59e0b' }} />
+
+          <div className={styles.statCard} style={{ borderColor: 'rgba(245,158,11,0.2)', boxShadow: '0 0 20px rgba(245,158,11,0.06)' }}>
+            <AlertTriangle size={15} className={styles.statIcon} style={{ color: '#f59e0b', opacity: 0.25 }} />
             <div className={styles.statLabel}>FALLOS LOGIN</div>
-            <div className={styles.statValue} style={{ color: '#f59e0b' }}>{stats?.login_fail ?? '—'}</div>
+            <div className={styles.statValue} style={{ color: '#fbbf24', textShadow: '0 0 12px rgba(245,158,11,0.5)' }}>{stats?.login_fail ?? '—'}</div>
             <div className={styles.statSub}>24h</div>
           </div>
-          <div className={styles.statCard}>
-            <XCircle size={18} style={{ color: '#ef4444' }} />
+
+          <div className={styles.statCard} style={{ borderColor: 'rgba(239,68,68,0.25)', boxShadow: '0 0 20px rgba(239,68,68,0.07)' }}>
+            <XCircle size={15} className={styles.statIcon} style={{ color: '#ef4444', opacity: 0.25 }} />
             <div className={styles.statLabel}>BRUTE FORCE</div>
-            <div className={styles.statValue} style={{ color: '#ef4444' }}>{stats?.brute_force ?? '—'}</div>
+            <div className={styles.statValue} style={{ color: '#f87171', textShadow: '0 0 12px rgba(239,68,68,0.5)' }}>{stats?.brute_force ?? '—'}</div>
             <div className={styles.statSub}>24h</div>
           </div>
-          <div className={styles.statCard}>
-            <CheckCircle size={18} style={{ color: '#10b981' }} />
+
+          <div className={styles.statCard} style={{ borderColor: 'rgba(16,185,129,0.2)', boxShadow: '0 0 20px rgba(16,185,129,0.05)' }}>
+            <CheckCircle size={15} className={styles.statIcon} style={{ color: '#10b981', opacity: 0.25 }} />
             <div className={styles.statLabel}>LOGINS OK</div>
-            <div className={styles.statValue} style={{ color: '#10b981' }}>{stats?.login_ok ?? '—'}</div>
+            <div className={styles.statValue} style={{ color: '#34d399', textShadow: '0 0 12px rgba(16,185,129,0.5)' }}>{stats?.login_ok ?? '—'}</div>
             <div className={styles.statSub}>24h</div>
           </div>
-          <div className={styles.statCard}>
-            <Lock size={18} style={{ color: '#6366f1' }} />
+
+          <div className={styles.statCard} style={{ borderColor: 'rgba(99,102,241,0.2)', boxShadow: '0 0 20px rgba(99,102,241,0.06)' }}>
+            <Lock size={15} className={styles.statIcon} style={{ color: '#6366f1', opacity: 0.25 }} />
             <div className={styles.statLabel}>TOKEN INVÁLIDOS</div>
-            <div className={styles.statValue} style={{ color: '#6366f1' }}>{stats?.auth_invalid ?? '—'}</div>
+            <div className={styles.statValue} style={{ color: '#a5b4fc', textShadow: '0 0 12px rgba(99,102,241,0.5)' }}>{stats?.auth_invalid ?? '—'}</div>
             <div className={styles.statSub}>24h</div>
           </div>
-          <div className={styles.statCard}>
-            <Wifi size={18} style={{ color: '#38bdf8' }} />
+
+          <div className={styles.statCard} style={{ borderColor: 'rgba(34,211,238,0.2)', boxShadow: '0 0 20px rgba(34,211,238,0.05)' }}>
+            <Wifi size={15} className={styles.statIcon} style={{ color: '#22d3ee', opacity: 0.25 }} />
             <div className={styles.statLabel}>IPs ÚNICAS</div>
-            <div className={styles.statValue} style={{ color: '#38bdf8' }}>{stats?.unique_ips ?? '—'}</div>
+            <div className={styles.statValue} style={{ color: '#67e8f9', textShadow: '0 0 12px rgba(34,211,238,0.5)' }}>{stats?.unique_ips ?? '—'}</div>
             <div className={styles.statSub}>24h</div>
           </div>
-          <div className={styles.statCard}>
-            <Users size={18} style={{ color: '#a78bfa' }} />
+
+          <div className={styles.statCard} style={{ borderColor: 'rgba(167,139,250,0.2)', boxShadow: '0 0 20px rgba(167,139,250,0.05)' }}>
+            <Users size={15} className={styles.statIcon} style={{ color: '#a78bfa', opacity: 0.25 }} />
             <div className={styles.statLabel}>SESIONES ACTIVAS</div>
-            <div className={styles.statValue} style={{ color: '#a78bfa' }}>{stats?.active_sessions ?? '—'}</div>
+            <div className={styles.statValue} style={{ color: '#c4b5fd', textShadow: '0 0 12px rgba(167,139,250,0.5)' }}>{stats?.active_sessions ?? '—'}</div>
             <div className={styles.statSub}>ahora</div>
           </div>
         </div>
@@ -274,19 +283,32 @@ export default function SecurityDashboard() {
         <div className={styles.midRow}>
           <div className={`${styles.panel} ${styles.panelChart}`}>
             <div className={styles.panelTitle}><Activity size={14} /> ACTIVIDAD ÚLTIMAS 24H</div>
-            <ResponsiveContainer width="100%" height={180}>
-              <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={chartData} margin={{ top: 12, right: 16, left: -16, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="gOk"    x1="0" y1="0" x2="0" y2="1"><stop offset="5%"  stopColor="#10b981" stopOpacity={0.4}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
-                  <linearGradient id="gFail"  x1="0" y1="0" x2="0" y2="1"><stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.4}/><stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/></linearGradient>
-                  <linearGradient id="gBrute" x1="0" y1="0" x2="0" y2="1"><stop offset="5%"  stopColor="#ef4444" stopOpacity={0.5}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0}/></linearGradient>
+                  <linearGradient id="gOk"    x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor="#10b981" stopOpacity={0.35}/>
+                    <stop offset="100%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="gFail"  x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor="#f59e0b" stopOpacity={0.35}/>
+                    <stop offset="100%" stopColor="#f59e0b" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="gBrute" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor="#ef4444" stopOpacity={0.45}/>
+                    <stop offset="100%" stopColor="#ef4444" stopOpacity={0}/>
+                  </linearGradient>
                 </defs>
-                <XAxis dataKey="hora" tick={{ fill: '#475569', fontSize: 10 }} />
-                <YAxis tick={{ fill: '#475569', fontSize: 10 }} />
-                <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', color: '#94a3b8', fontSize: 12 }} />
-                <Area type="monotone" dataKey="ok"    stroke="#10b981" fill="url(#gOk)"    name="Login OK" strokeWidth={1.5} />
-                <Area type="monotone" dataKey="fail"  stroke="#f59e0b" fill="url(#gFail)"  name="Login Fail" strokeWidth={1.5} />
-                <Area type="monotone" dataKey="brute" stroke="#ef4444" fill="url(#gBrute)" name="Brute Force" strokeWidth={1.5} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                <XAxis dataKey="hora" tick={{ fill: '#2d4a5e', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#2d4a5e', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ background: '#040f1c', border: '1px solid rgba(0,232,122,0.15)', color: '#7fa8c0', fontSize: 12, borderRadius: 8, fontFamily: 'JetBrains Mono, monospace' }}
+                  cursor={{ stroke: 'rgba(0,232,122,0.15)', strokeWidth: 1 }}
+                />
+                <Area type="monotone" dataKey="ok"    stroke="#10b981" fill="url(#gOk)"    name="Login OK"     strokeWidth={2} dot={false} />
+                <Area type="monotone" dataKey="fail"  stroke="#f59e0b" fill="url(#gFail)"  name="Login Fail"   strokeWidth={2} dot={false} />
+                <Area type="monotone" dataKey="brute" stroke="#ef4444" fill="url(#gBrute)" name="Brute Force"  strokeWidth={2} dot={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -294,25 +316,22 @@ export default function SecurityDashboard() {
           <div className={`${styles.panel} ${styles.panelTopIps}`}>
             <div className={styles.panelTitle}><Globe size={14} /> TOP IPs (24H)</div>
             {stats?.top_ips && stats.top_ips.length > 0 ? (
-              <>
-                <ResponsiveContainer width="100%" height={100}>
-                  <BarChart data={stats.top_ips.slice(0, 6)} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
-                    <XAxis dataKey="ip" tick={{ fill: '#475569', fontSize: 9 }} />
-                    <YAxis tick={{ fill: '#475569', fontSize: 9 }} />
-                    <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', color: '#94a3b8', fontSize: 11 }} />
-                    <Bar dataKey="count" fill="#6366f1" name="Eventos" radius={[3,3,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-                <div className={styles.ipList}>
-                  {stats.top_ips.map((r, i) => (
+              <div className={styles.ipList}>
+                {stats.top_ips.map((r, i) => {
+                  const max = stats.top_ips[0].count;
+                  const pct = Math.round((r.count / max) * 100);
+                  return (
                     <div key={r.ip} className={styles.ipRow}>
                       <span className={styles.ipRank}>#{i+1}</span>
                       <span className={styles.ipAddr}>{r.ip}</span>
+                      <div className={styles.ipBar}>
+                        <div className={styles.ipBarFill} style={{ width: `${pct}%` }} />
+                      </div>
                       <span className={styles.ipCount}>{r.count} ev.</span>
                     </div>
-                  ))}
-                </div>
-              </>
+                  );
+                })}
+              </div>
             ) : (
               <p className={styles.empty}>Sin datos</p>
             )}
