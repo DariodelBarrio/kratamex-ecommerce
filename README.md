@@ -1,4 +1,4 @@
-# Kratamex - Tienda Online de Ordenadores
+# Kratamex — Tienda Online de Ordenadores
 
 ## Estructura del Proyecto
 
@@ -8,37 +8,43 @@ proyecto/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── Admin/
-│   │   │   │   ├── Admin.tsx
-│   │   │   │   └── Admin.module.css
-│   │   │   ├── ProductCard.tsx         # Tarjeta de producto con Framer Motion
-│   │   │   ├── ProductoDetalle.tsx     # Página de detalle + comentarios
-│   │   │   ├── SkeletonCard.tsx        # Skeleton loading placeholder
-│   │   │   ├── SecurityBadge.tsx       # Indicador TLS en header
-│   │   │   ├── PasswordStrength.tsx    # Barra de fuerza de contraseña
-│   │   │   └── OptimizedImage.tsx      # Imagen con lazy loading
+│   │   │   │   ├── Admin.tsx               # Panel de administración
+│   │   │   │   └── Admin.module.css        # Estilos (CSS Modules)
+│   │   │   ├── SecurityDashboard.tsx       # SOC — panel de ciberseguridad
+│   │   │   ├── SecurityDashboard.module.css
+│   │   │   ├── OrderHistory.tsx            # Historial de pedidos del usuario
+│   │   │   ├── UserProfile.tsx             # Perfil editable del usuario
+│   │   │   ├── ProductCard.tsx             # Tarjeta de producto con Framer Motion
+│   │   │   ├── ProductoDetalle.tsx         # Página de detalle + comentarios
+│   │   │   ├── SkeletonCard.tsx            # Skeleton loading placeholder
+│   │   │   ├── SecurityBadge.tsx           # Indicador TLS en header
+│   │   │   ├── PasswordStrength.tsx        # Barra de fuerza de contraseña
+│   │   │   └── OptimizedImage.tsx          # Imagen con lazy loading
 │   │   ├── App.tsx        # Componente tienda principal + router
 │   │   ├── main.tsx       # Punto de entrada con QueryClientProvider + BrowserRouter
-│   │   ├── index.css      # Estilos globales (Glassmorphism)
+│   │   ├── api.ts         # Funciones fetch centralizadas
+│   │   ├── i18n.ts        # Internacionalización (es/en)
+│   │   ├── index.css      # Estilos globales + dark/light mode
 │   │   └── interfaces.ts  # Interfaces TypeScript
 │   ├── package.json
 │   ├── vite.config.ts
 │   └── Dockerfile
 ├── backend/               # API REST con Hono + Drizzle ORM + PostgreSQL
 │   ├── src/
-│   │   ├── index.ts       # Servidor Hono, rutas, middlewares, seed
+│   │   ├── index.ts       # Servidor Hono, rutas, middlewares, seed, logger SOC
 │   │   ├── schemas.ts     # Esquemas de validación Zod
 │   │   └── db/
-│   │       ├── schema.ts  # Schema de Drizzle ORM (tablas con tipos TypeScript)
+│   │       ├── schema.ts  # Schema Drizzle ORM (tablas con tipos TypeScript)
 │   │       └── index.ts   # Conexión Drizzle + Pool pg
-│   ├── drizzle.config.ts  # Configuración Drizzle Kit (migraciones)
-│   ├── tsconfig.json      # Configuración TypeScript
+│   ├── drizzle.config.ts
 │   ├── package.json
 │   └── Dockerfile
 ├── nginx/                 # Reverse proxy HTTPS
 │   ├── nginx.conf
 │   └── certs/
 ├── docker-compose.yml     # Orquestación (4 servicios)
-├── .env.example           # Variables de entorno raíz
+├── simulate_attacks.mjs   # Script de simulación de ataques (Node 18+)
+├── .env.example
 ├── correcciones_seguridad.md
 ├── DOCUMENTACION_COMPLETA.md
 └── README.md
@@ -48,109 +54,191 @@ proyecto/
 
 ### Frontend
 - **React 19** + **TypeScript** — Framework de UI
-- **Vite 5** — Build tool con HMR
-- **TanStack Query v5** — Caché de datos del servidor, estados de carga y error
-- **Zod** — Validación de formularios client-side (checkout, comentarios)
-- **Framer Motion** — Micro-interacciones y animaciones
+- **Vite 8** — Build tool con HMR (manualChunks como función para Rolldown)
+- **TanStack Query v5** — Caché de datos, estados de carga y error
+- **Framer Motion** — Micro-interacciones, animaciones, efecto 3D tilt
+- **Recharts** — Gráficas en admin dashboard y SOC panel
 - **Lucide React** — Iconos SVG
-- **Recharts** — Gráficas del dashboard admin
-- **React Router v6** — Routing (/, /producto/:id, /admin)
+- **React Router v6** — Routing SPA
+- **Zod** — Validación de formularios client-side
 
 ### Backend
-- **Hono** — Framework web ultra-ligero, TypeScript nativo, compatible con Edge/Node/Bun
-- **@hono/node-server** — Adaptador Node.js para Hono
-- **@hono/zod-validator** — Validación de requests por ruta con Zod
-- **Drizzle ORM** — ORM type-safe, queries SQL con tipos TypeScript inferidos
+- **Hono** — Framework web ultra-ligero, TypeScript nativo
+- **@hono/node-server** — Adaptador Node.js
+- **@hono/zod-validator** — Validación de requests por ruta
+- **Drizzle ORM** — ORM type-safe con queries parametrizadas
 - **PostgreSQL 16** — Base de datos relacional (driver pg)
-- **Zod** — Esquemas de validación compartidos entre rutas
-- **argon2** — Hashing de contraseñas (argon2id, ganador PHC)
-- **Cloudinary** — Almacenamiento de avatares en CDN (fallback local si no hay credenciales)
-- **tsx** — Runtime TypeScript para desarrollo con hot-reload
-- **TypeScript** — Tipado completo del backend
+- **argon2** — Hashing de contraseñas (argon2id)
+- **Cloudinary** — CDN para imágenes (fallback local)
+- **tsx** — Runtime TypeScript con hot-reload
 
 ### Infraestructura
 - **Docker Compose** — Orquestación de 4 servicios
-- **nginx:alpine** — Reverse proxy con TLS
+- **nginx:alpine** — Reverse proxy con TLS 1.2/1.3
 - **postgres:16-alpine** — Base de datos
 
-## Frontend — Páginas y Componentes
+## Páginas y Rutas
 
-### Tienda (`/`)
-- Hero con trust badges, barra de búsqueda en header, pills de categoría
-- Productos con TanStack Query (caché 30s, skeleton loading automático)
-- Carrito lateral con checkout validado por Zod + useMutation
+| Ruta | Componente | Auth | Descripción |
+|------|-----------|------|-------------|
+| `/` | App.tsx | No | Tienda — catálogo, búsqueda, filtros, carrito |
+| `/producto/:id` | ProductoDetalle | No | Detalle de producto + reseñas |
+| `/login` | — (inline) | No | Login de usuario |
+| `/registro` | — (inline) | No | Registro de usuario |
+| `/perfil` | UserProfile | Usuario | Perfil editable (avatar, email, idioma) |
+| `/mis-pedidos` | OrderHistory | Usuario | Historial de pedidos con desglose |
+| `/admin` | Admin | Admin | Panel de administración completo |
+| `/panel` | SecurityDashboard | Admin (SOC) | Centro de operaciones de ciberseguridad |
 
-### Detalle de Producto (`/producto/:id`)
-- Vista ampliada con imagen, especificaciones técnicas, precio e IVA
-- Sección de comentarios de clientes con formulario validado por Zod
-- Breadcrumb de navegación (Tienda → Categoría → Producto)
+## Admin (`/admin`) — Pestañas
 
-### Admin (`/admin`)
-- Dashboard con métricas y gráficas (Recharts)
-- CRUD completo de productos con **subida de imagen** directa (área drag-and-drop con preview)
-- Gestión de pedidos
-- Tabla de productos con miniatura de imagen
+- **Dashboard** — Métricas (pedidos, ingresos, ticket medio, clientes únicos), gráficas AreaChart/LineChart, tabla de compras
+- **Productos** — CRUD completo, subida de imagen (drag-and-drop, preview, JPG/PNG/WEBP, máx. 5 MB)
+- **Pedidos** — Listado y eliminación de pedidos
+- **Reseñas** — Todas las valoraciones de clientes con estrellas, texto y opción de borrado individual
+
+## SOC Panel (`/panel`) — Security Operations Center
+
+Panel de ciberseguridad independiente con estética terminal/cyberpunk (fondo oscuro, tipografía monoespaciada, acento verde neón).
+
+### Métricas en tiempo real
+- Nivel de amenaza (BAJO / MEDIO / ALTO / CRÍTICO)
+- Fallos de login (24h)
+- Ataques de fuerza bruta (24h)
+- Logins exitosos (24h)
+- Tokens inválidos (24h)
+- IPs únicas (24h)
+- Sesiones activas (ahora)
+
+### Visualizaciones
+- AreaChart de actividad por hora (login_ok, login_fail, brute_force)
+- BarChart + ranking top 10 IPs con más eventos
+- Log de eventos en tabla con filtros por tipo, auto-refresh cada 15 s
+
+### Tipos de evento monitorizados
+| Tipo | Descripción |
+|------|-------------|
+| `login_ok` | Autenticación exitosa |
+| `login_fail` | Credenciales incorrectas |
+| `brute_force` | IP bloqueada tras ≥12 intentos |
+| `auth_invalid` | Token no válido o expirado |
+| `register` | Nuevo registro de usuario |
+| `forbidden` | Acceso a ruta sin permisos |
+
+### Simulador de ataques
+
+```bash
+# Genera eventos de prueba visibles en el panel SOC
+node simulate_attacks.mjs http://localhost:3000 <tu_password>
+```
+
+Simula: fallos de login masivos (IPs variadas), fuerza bruta (IP fija, 13 intentos), tokens inválidos, escaneo de rutas sensibles, segundo brute force.
 
 ## Backend — API REST
 
-### Endpoints
+### Endpoints públicos y de usuario
 
 | Método | Ruta | Auth | Descripción |
 |--------|------|------|-------------|
-| GET | /api/productos | No | Listar productos (filtros: busqueda, categoria, orden, desde, hasta) |
-| GET | /api/productos/:id | No | Obtener producto por ID |
-| POST | /api/productos | Admin | Crear producto |
-| PUT | /api/productos/:id | Admin | Actualizar producto |
-| DELETE | /api/productos/:id | Admin | Eliminar producto |
-| POST | /api/productos/:id/imagen | Admin | Subir imagen del producto (Cloudinary o local, máx. 5MB) |
-| GET | /api/productos/:id/comentarios | No | Listar comentarios del producto |
-| POST | /api/productos/:id/comentarios | No | Publicar comentario (rate limited: 10/min) |
-| POST | /api/pedidos | No | Crear pedido (rate limited: 10/60s) |
-| GET | /api/pedidos | Admin | Listar pedidos |
-| GET | /api/pedidos/:id | Admin | Obtener pedido con items |
-| POST | /api/login | No | Autenticar (rate limited: 12 intentos/bloqueo 60s) |
-| POST | /api/logout | Token | Cerrar sesión |
-| GET | /api/usuario | Token | Datos del usuario autenticado |
-| POST | /api/usuario/avatar | Token | Subir avatar (Cloudinary o local) |
-| GET | /api/admin/pedidos | Admin | Listar pedidos (admin) |
-| DELETE | /api/admin/pedidos/:id | Admin | Eliminar pedido |
+| GET | `/api/productos` | No | Listar productos (filtros: busqueda, categoria, orden, desde, hasta) |
+| GET | `/api/productos/:id` | No | Obtener producto por ID |
+| GET | `/api/productos/:id/comentarios` | No | Listar reseñas del producto |
+| POST | `/api/productos/:id/comentarios` | No | Publicar reseña (rate limited: 10/min) |
+| POST | `/api/pedidos` | No | Crear pedido (rate limited: 10/60s) |
+| POST | `/api/login` | No | Autenticar (rate limited: 12 intentos/bloqueo 60s) |
+| POST | `/api/registro` | No | Registrar usuario |
+| POST | `/api/logout` | Token | Cerrar sesión |
+| GET | `/api/usuario` | Token | Datos del usuario autenticado |
+| PUT | `/api/usuario/perfil` | Token | Actualizar perfil (nombre, email, avatar, idioma…) |
+| POST | `/api/usuario/avatar` | Token | Subir avatar (Cloudinary o local) |
+| GET | `/api/mis-pedidos` | Token | Pedidos del usuario autenticado |
 
-### Validación con Zod
+### Endpoints de administración
 
-Todas las rutas con body o query params tienen un esquema Zod asociado validado automáticamente por `@hono/zod-validator`. Si el input no cumple el esquema, Hono devuelve 400 antes de ejecutar el handler.
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| POST | `/api/productos` | Admin | Crear producto |
+| PUT | `/api/productos/:id` | Admin | Actualizar producto |
+| DELETE | `/api/productos/:id` | Admin | Eliminar producto |
+| POST | `/api/productos/:id/imagen` | Admin | Subir imagen (máx. 5 MB) |
+| GET | `/api/admin/pedidos` | Admin | Listar todos los pedidos |
+| DELETE | `/api/admin/pedidos/:id` | Admin | Eliminar pedido |
+| GET | `/api/admin/valoraciones` | Admin | Todas las reseñas (con producto y usuario) |
+| DELETE | `/api/admin/valoraciones/:id` | Admin | Eliminar reseña |
 
-Esquemas definidos en `backend/src/schemas.ts`:
-- `ProductoBodySchema` — nombre, descripcion, precio, imagen, categoria
-- `ProductosQuerySchema` — busqueda, categoria, orden, desde, hasta
-- `LoginSchema` — username, password
-- `PedidoSchema` — cliente, email, direccion, items[]
-- `ComentarioSchema` — autor, contenido
+### Endpoints SOC (Security Operations Center)
 
-### Base de Datos — PostgreSQL + Drizzle ORM
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| GET | `/api/security/stats` | Admin | Métricas de seguridad 24h (fallos, brute, IPs, sesiones, hourly, top IPs) |
+| GET | `/api/security/events` | Admin | Log de eventos (filtros: tipo, limit) |
 
-Schema definido en `backend/src/db/schema.ts` con tipos inferidos automáticamente:
+## Base de Datos
 
-Tablas: `productos`, `pedidos`, `pedido_items`, `usuarios`, `comentarios`
+Tablas: `productos`, `pedidos`, `pedido_items`, `usuarios`, `comentarios`, **`security_events`**
 
 ```bash
-# Comandos Drizzle Kit
-npm run db:generate   # Genera archivos de migración SQL desde el schema
-npm run db:push       # Aplica el schema directamente a la DB (dev)
-npm run db:studio     # Abre GUI visual de la base de datos
+npm run db:generate   # Genera archivos de migración SQL
+npm run db:push       # Aplica schema a la DB (dev)
+npm run db:studio     # GUI visual de la base de datos
 ```
 
-Usuarios de ejemplo:
+### Usuarios de ejemplo
 
 | Username | Password | Rol |
 |----------|----------|-----|
 | admin | admin123 | admin |
 | user | user123 | standard |
 
-> Las contraseñas se almacenan como hashes argon2id, nunca en texto plano.
+> Contraseñas almacenadas como hashes argon2id.
+
+## Seguridad
+
+- **argon2id** — Hashing de contraseñas
+- **Rate limiting** — Login (12 intentos/60s bloqueo), Checkout (10/60s), Comentarios (10/min), General (60/min)
+- **Drizzle ORM** — Queries parametrizadas (sin concatenación SQL)
+- **Zod** — Validación de input en todas las rutas
+- **HTTPS** — TLS 1.2/1.3 terminado en nginx
+- **Tokens criptográficos** — `crypto.randomBytes(32)` (256 bits, TTL 8h)
+- **CORS restringido** — Solo `CORS_ORIGIN` de `.env`
+- **Security headers** — HSTS, X-Frame-Options, CSP, X-Content-Type-Options
+- **Monitorización SOC** — Todos los eventos de seguridad se registran en PostgreSQL
+- **Anti-autofill SOC** — Login del panel SOC con inputs honeypot y `name` no estándar
+
+## Ejecución
+
+### Con Docker (recomendado)
+
+```bash
+cp .env.example .env
+cp backend/.env.example backend/.env
+docker compose up --build -d
+```
+
+| Servicio | URL |
+|----------|-----|
+| Web (HTTPS) | https://localhost |
+| Web (HTTP) | http://localhost:3000 |
+| Backend directo | http://localhost:3001 |
+| PostgreSQL | localhost:5432 |
+
+> El certificado SSL es autofirmado. En producción usar Let's Encrypt.
+
+### Manual
+
+```bash
+cd backend && npm install && npm run dev
+cd frontend && npm install && npm run dev
+```
+
+### Forzar HMR en Docker/Windows
+
+```bash
+# Si Vite no detecta cambios (NTFS → Linux fs)
+docker compose exec frontend sh -c "touch /app/src/components/MiComponente.tsx"
+```
 
 ### Cloudinary (opcional)
-
-Para usar Cloudinary en subida de imágenes (avatares y productos), añadir al `backend/.env`:
 
 ```env
 CLOUDINARY_CLOUD_NAME=tu_cloud_name
@@ -158,86 +246,8 @@ CLOUDINARY_API_KEY=tu_api_key
 CLOUDINARY_API_SECRET=tu_api_secret
 ```
 
-Si las variables no están configuradas, los archivos se guardan localmente:
-- Avatares → `src/avatars/`
-- Imágenes de productos → `src/uploads/`
-
-## Autenticación y RBAC
-
-| Acción | standard | admin |
-|--------|----------|-------|
-| Ver productos | Sí | Sí |
-| Hacer pedidos | Sí | Sí |
-| Panel admin | No | Sí |
-| CRUD productos | No | Sí |
-| Eliminar pedidos | No | Sí |
-
-Flujo: `POST /api/login` → token (256 bits) → `Authorization: <token>` → `POST /api/logout`
-
-TTL de sesión: 8 horas. Limpieza automática cada 15 minutos.
-
-## Seguridad
-
-- **argon2id** — Hashing de contraseñas (PHC winner, async)
-- **Zod** — Validación de input en todas las rutas (esquemas por ruta con @hono/zod-validator)
-- **Drizzle ORM** — Queries parametrizadas por construcción (sin concatenación SQL)
-- **Rate limiting** — Login (12 intentos/bloqueo), Checkout (10/60s), Comentarios (10/min), General (60/min)
-- **HTTPS** — TLS terminado en nginx (TLSv1.2/1.3)
-- **CORS restringido** — Solo `CORS_ORIGIN` de `.env`
-- **Tokens criptográficos** — `crypto.randomBytes(32)` (256 bits)
-- **Security headers** — HSTS, X-Frame-Options, CSP, X-Content-Type-Options, Referrer-Policy
-- **Validación de uploads** — Solo imágenes, límites de tamaño, nombres aleatorios
-- **Sesiones con TTL** — Expiran automáticamente a las 8 horas
-- **33 vulnerabilidades documentadas** — Ver `correcciones_seguridad.md`
-
-## Ejecución
-
-### Con Docker (recomendado)
-
-```bash
-# Copiar variables de entorno
-cp .env.example .env
-cp backend/.env.example backend/.env
-
-# Levantar los 4 servicios
-docker compose up --build -d
-```
-
-| Servicio | URL |
-|----------|-----|
-| Web (HTTPS) | https://localhost |
-| Web (HTTP → redirige) | http://localhost |
-| Frontend directo | http://localhost:3000 |
-| Backend directo | http://localhost:3001 |
-| PostgreSQL | localhost:5432 |
-
-> El certificado SSL es autofirmado (desarrollo). En producción usar Let's Encrypt.
-
-### Manual
-
-```bash
-# Backend (TypeScript con tsx)
-cd backend && npm install && npm run dev
-
-# Frontend
-cd frontend && npm install && npm run dev
-```
-
-Requiere PostgreSQL corriendo en localhost:5432 con las credenciales de `backend/.env`.
-
-### Nota sobre node_modules en Docker
-
-Si añades nuevas dependencias con `npm install` en el host, los contenedores Docker usan volúmenes nombrados para `node_modules`. Para sincronizarlos:
-
-```bash
-# Instalar en el contenedor en ejecución
-docker compose exec backend npm install <paquete>
-docker compose restart backend
-
-# O reconstruir la imagen completa (más lento)
-docker compose up --build -d backend
-```
+Sin estas variables las imágenes se guardan localmente en `src/uploads/` y `src/avatars/`.
 
 ---
 
-*Última actualización: 20/03/2026*
+*Última actualización: 22/03/2026*

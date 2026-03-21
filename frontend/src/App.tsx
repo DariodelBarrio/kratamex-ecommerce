@@ -6,20 +6,26 @@ React 19 + TypeScript + Framer Motion
 =================================================================
 */
 
-import { useState, useMemo, useRef, useEffect } from 'react'
-import { Routes, Route, Link, useSearchParams } from 'react-router-dom'
-import { ShoppingCart, X, Plus, Minus, Check, Search, Package, Truck, Shield, ArrowDown, Trash2, ArrowUp, Heart, LayoutGrid, List, Sun, Moon } from 'lucide-react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { Routes, Route, Link, useSearchParams, useNavigate, Navigate } from 'react-router-dom'
+import { ShoppingCart, X, Plus, Minus, Check, Search, Package, Truck, Shield, ArrowDown, Trash2, ArrowUp, Heart, LayoutGrid, List, Sun, Moon, User, LogOut, ClipboardList, Globe } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import Admin from './components/Admin/Admin'
+import SecurityDashboard from './components/SecurityDashboard'
 import { ProductCard, BrandLogoSmall } from './components/ProductCard'
 import { SkeletonCard } from './components/SkeletonCard'
 import { SecurityBadge } from './components/SecurityBadge'
 import ProductoDetalle from './components/ProductoDetalle'
 import { SplashScreen } from './components/SplashScreen'
 import { ParticleCanvas } from './components/ParticleCanvas'
-import type { Producto, CarritoItem } from './interfaces'
+import Auth from './components/Auth'
+import OrderHistory from './components/OrderHistory'
+import UserProfile from './components/UserProfile'
+import type { Producto, CarritoItem, Usuario } from './interfaces'
+import * as api from './api'
+import { t, getLang, setLang } from './i18n'
 
 // =================================================================
 // ZOD — Validación de formulario de checkout
@@ -89,6 +95,10 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
   const [precioMax, setPrecioMax] = useState('')
   const [toasts, setToasts] = useState<Toast[]>([])
   const [showBackTop, setShowBackTop] = useState(false)
+  const [cuponCodigo, setCuponCodigo] = useState('')
+  const [cuponDescuento, setCuponDescuento] = useState(0)
+  const [cuponError, setCuponError] = useState('')
+  const [filtroEnStock, setFiltroEnStock] = useState(false)
 
   const productosRef = useRef<HTMLElement>(null)
   const [searchParams] = useSearchParams()
@@ -161,30 +171,38 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
 
   const eliminarItem = (id: number) => setCarrito(prev => prev.filter(item => item.id !== id))
 
-  const totalCarrito = carrito.reduce((sum, item) => sum + item.precio * item.cantidad, 0)
+  const subtotalCarrito = carrito.reduce((sum, item) => sum + item.precio * item.cantidad, 0)
+  const envioCarrito = subtotalCarrito >= 100 ? 0 : 5.99
+  const impuestosCarrito = Math.round(subtotalCarrito * 0.21 * 100) / 100
+  const totalCarrito = Math.round((subtotalCarrito - cuponDescuento + impuestosCarrito + envioCarrito) * 100) / 100
   const cantidadItems = carrito.reduce((sum, item) => sum + item.cantidad, 0)
+
+  const aplicarCupon = async () => {
+    setCuponError('')
+    if (!cuponCodigo.trim()) return
+    try {
+      const res = await api.validarCupon(cuponCodigo, subtotalCarrito)
+      setCuponDescuento(res.descuento)
+    } catch (err: any) {
+      setCuponError(err.message)
+      setCuponDescuento(0)
+    }
+  }
 
   // TanStack Query — mutación de checkout
   const checkoutMutation = useMutation({
     mutationFn: (data: typeof formulario) =>
-      fetch('/api/pedidos', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          ...data,
-          items: carrito.map(item => ({ id: item.id, cantidad: item.cantidad })),
-        }),
-      }).then(async r => {
-        if (!r.ok) {
-          const err = await r.json()
-          throw new Error(err.error || 'Error al procesar el pedido')
-        }
-        return r.json()
+      api.postPedido({
+        ...data,
+        items: carrito.map(item => ({ id: item.id, cantidad: item.cantidad })),
+        cupon: cuponCodigo || undefined,
       }),
     onSuccess: () => {
       setCarrito([])
       setCheckoutExitoso(true)
       setFormError('')
+      setCuponCodigo('')
+      setCuponDescuento(0)
     },
     onError: (err: Error) => setFormError(err.message),
   })
@@ -248,6 +266,20 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
           <button className="theme-toggle-btn" onClick={onToggleTema} title={tema === 'dark' ? 'Modo claro' : 'Modo oscuro'}>
             {tema === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
+
+          {(() => {
+            const user = (() => { try { return JSON.parse(localStorage.getItem('kratamex_user') || 'null') } catch { return null } })()
+            return user ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Link to="/mis-pedidos" className="theme-toggle-btn" title="Mis pedidos"><ClipboardList size={16} /></Link>
+                <Link to="/perfil" className="theme-toggle-btn" title="Mi perfil"><User size={16} /></Link>
+              </div>
+            ) : (
+              <Link to="/login" className="theme-toggle-btn" title="Iniciar sesión" style={{ textDecoration: 'none' }}>
+                <User size={16} />
+              </Link>
+            )
+          })()}
 
           <button className="cart-btn" onClick={() => setCarritoAbierto(true)}>
             <ShoppingCart size={17} />
@@ -597,13 +629,52 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
                   </div>
 
                   <div className="cart-footer">
+                    <div className="cart-summary">
+                      <div className="cart-summary-row">
+                        <span>Subtotal</span>
+                        <span>€{subtotalCarrito.toFixed(2)}</span>
+                      </div>
+                      {cuponDescuento > 0 && (
+                        <div className="cart-summary-row" style={{ color: '#22c55e' }}>
+                          <span>Descuento</span>
+                          <span>-€{cuponDescuento.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="cart-summary-row">
+                        <span>IVA (21%)</span>
+                        <span>€{impuestosCarrito.toFixed(2)}</span>
+                      </div>
+                      <div className="cart-summary-row">
+                        <span>Envío</span>
+                        <span>{envioCarrito === 0 ? <span style={{ color: '#22c55e' }}>Gratis</span> : `€${envioCarrito.toFixed(2)}`}</span>
+                      </div>
+                      {subtotalCarrito < 100 && (
+                        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', margin: '2px 0 4px' }}>
+                          Envío gratis a partir de €100
+                        </p>
+                      )}
+                    </div>
                     <div className="cart-total">
                       <span className="cart-total-label">Total</span>
-                      <span className="cart-total-value">${totalCarrito.toFixed(2)}</span>
+                      <span className="cart-total-value">€{totalCarrito.toFixed(2)}</span>
                     </div>
-                    <p className="cart-total-items">
-                      {cantidadItems} producto{cantidadItems !== 1 ? 's' : ''} · IVA incluido
-                    </p>
+
+                    {/* Cupón */}
+                    <div style={{ display: 'flex', gap: '6px', margin: '8px 0' }}>
+                      <input
+                        type="text"
+                        placeholder="Código de cupón"
+                        className="form-input"
+                        style={{ flex: 1, textTransform: 'uppercase' }}
+                        value={cuponCodigo}
+                        onChange={e => setCuponCodigo(e.target.value)}
+                      />
+                      <button className="btn-secondary" style={{ whiteSpace: 'nowrap', padding: '6px 12px', fontSize: '0.75rem' }} onClick={aplicarCupon}>
+                        Aplicar
+                      </button>
+                    </div>
+                    {cuponError && <p style={{ color: '#f87171', fontSize: '0.75rem', margin: '0 0 4px' }}>{cuponError}</p>}
+                    {cuponDescuento > 0 && <p style={{ color: '#22c55e', fontSize: '0.75rem', margin: '0 0 4px' }}>Cupón aplicado: -€{cuponDescuento.toFixed(2)}</p>}
 
                     <p className="checkout-form-label">Datos de envío</p>
                     <div className="checkout-form">
@@ -674,13 +745,20 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
 }
 
 // =================================================================
-// APP — carrito compartido entre páginas
+// APP — carrito compartido entre páginas + auth
 // =================================================================
 function App() {
   const [showSplash, setShowSplash] = useState(true)
   const [tema, setTema] = useState<'dark' | 'light'>(() =>
     (localStorage.getItem('kratamex_tema') as 'dark' | 'light') || 'dark'
   )
+  const [authUser, setAuthUser] = useState<Usuario | null>(() => {
+    try {
+      const saved = localStorage.getItem('kratamex_user')
+      return saved ? JSON.parse(saved) : null
+    } catch { return null }
+  })
+  const [lang, setLangState] = useState(getLang())
 
   useEffect(() => {
     document.documentElement.setAttribute('data-tema', tema)
@@ -688,6 +766,24 @@ function App() {
   }, [tema])
 
   const toggleTema = () => setTema(t => t === 'dark' ? 'light' : 'dark')
+
+  const handleAuth = useCallback((data: { token: string; user: any }) => {
+    localStorage.setItem('kratamex_token', data.token)
+    localStorage.setItem('kratamex_user', JSON.stringify(data.user))
+    setAuthUser(data.user)
+  }, [])
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('kratamex_token')
+    localStorage.removeItem('kratamex_user')
+    setAuthUser(null)
+    fetch('/api/logout', { method: 'POST', headers: { Authorization: localStorage.getItem('kratamex_token') || '' } })
+  }, [])
+
+  const handleLangChange = useCallback((newLang: 'es' | 'en') => {
+    setLang(newLang)
+    setLangState(newLang)
+  }, [])
 
   const [carrito, setCarrito] = useState<CarritoItem[]>(() => {
     try {
@@ -713,6 +809,12 @@ function App() {
 
   const toggleWishlist = (id: number) => {
     setWishlist(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+    // Sync with server if logged in
+    if (authUser) {
+      const isFav = wishlist.includes(id)
+      if (isFav) api.removeFavorito(id).catch(() => {})
+      else api.addFavorito(id).catch(() => {})
+    }
   }
 
   const agregarAlCarrito = (producto: Producto) => {
@@ -751,7 +853,20 @@ function App() {
           onOpenCart={() => setCarritoAbierto(true)}
         />
       } />
+      <Route path="/login" element={
+        authUser ? <Navigate to="/" /> : <Auth onAuth={handleAuth} defaultMode="login" />
+      } />
+      <Route path="/registro" element={
+        authUser ? <Navigate to="/" /> : <Auth onAuth={handleAuth} defaultMode="register" />
+      } />
+      <Route path="/mis-pedidos" element={
+        authUser ? <OrderHistory /> : <Navigate to="/login" />
+      } />
+      <Route path="/perfil" element={
+        authUser ? <UserProfile user={authUser} /> : <Navigate to="/login" />
+      } />
       <Route path="/admin" element={<Admin />} />
+      <Route path="/panel" element={<SecurityDashboard />} />
     </Routes>
     </>
   )

@@ -939,6 +939,169 @@ header::before {
   border-bottom: 1px solid var(--border);
 }
 
+.cart-summary {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.cart-summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  padding: 2px 0;
+}
+
+/* Stock badge */
+.stock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.stock-badge.in-stock { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+.stock-badge.low-stock { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.stock-badge.out-of-stock { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+/* Auth page */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--background);
+}
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+  backdrop-filter: blur(20px);
+}
+.auth-card h2 {
+  text-align: center;
+  margin-bottom: 24px;
+  font-size: 1.5rem;
+}
+.auth-card .form-input {
+  width: 100%;
+  margin-bottom: 12px;
+}
+.auth-card .checkout-btn {
+  width: 100%;
+  margin-top: 8px;
+}
+.auth-toggle {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.auth-toggle a {
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+}
+.auth-toggle a:hover { text-decoration: underline; }
+
+/* Orders page */
+.orders-page {
+  min-height: 100vh;
+  padding: 80px 20px 40px;
+  background: var(--background);
+}
+.orders-page .container { max-width: 800px; margin: 0 auto; }
+.order-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.order-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.order-status.pendiente { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.order-status.confirmado { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+.order-status.enviado { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+.order-status.entregado { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+.order-status.cancelado { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.order-items {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+.order-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+.order-item img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+/* Profile page */
+.profile-page {
+  min-height: 100vh;
+  padding: 80px 20px 40px;
+  background: var(--background);
+}
+.profile-page .container { max-width: 600px; margin: 0 auto; }
+.profile-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+  backdrop-filter: blur(20px);
+}
+.profile-field {
+  margin-bottom: 16px;
+}
+.profile-field label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Rating stars */
+.stars { display: inline-flex; gap: 2px; }
+.star-filled { color: #f59e0b; }
+.star-empty { color: var(--text-subtle); }
+.star-clickable { cursor: pointer; transition: transform 0.15s; }
+.star-clickable:hover { transform: scale(1.2); }
+
 .checkout-form-label {
   font-size: 0.75rem;
   font-weight: 700;

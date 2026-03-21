@@ -1,688 +1,698 @@
-# Documentacion Completa - Tienda Online KRATAMEX
+# Documentación Completa — Tienda Online KRATAMEX
 
-## Indice
+## Índice
 
-1. [Vision General](#vision-general)
+1. [Visión General](#visión-general)
 2. [Arquitectura del Sistema](#arquitectura-del-sistema)
-3. [Frontend - React + TypeScript](#frontend---react--typescript)
-4. [Backend - Node.js + Hono](#backend---nodejs--hono)
-5. [Base de Datos - PostgreSQL](#base-de-datos---postgresql)
+3. [Frontend — React + TypeScript](#frontend--react--typescript)
+4. [Backend — Node.js + Hono](#backend--nodejs--hono)
+5. [Base de Datos — PostgreSQL](#base-de-datos--postgresql)
 6. [API REST](#api-rest)
-7. [Autenticacion y Seguridad](#autenticacion-y-seguridad)
-8. [Despliegue y Docker](#despliegue-y-docker)
-9. [Guia de Desarrollo](#guia-de-desarrollo)
+7. [Panel SOC — Ciberseguridad](#panel-soc--ciberseguridad)
+8. [Autenticación y Seguridad](#autenticación-y-seguridad)
+9. [Despliegue y Docker](#despliegue-y-docker)
+10. [Guía de Desarrollo](#guía-de-desarrollo)
 
 ---
 
-## Vision General
+## Visión General
 
-KRATAMEX es una **tienda online completa** de ordenadores construida con React 19 + Hono + PostgreSQL. Permite navegar el catálogo, agregar al carrito, realizar pedidos y gestionar inventario desde un panel administrativo protegido por RBAC.
+KRATAMEX es una **tienda online completa** de ordenadores y accesorios construida con React 19 + Hono + PostgreSQL. Incluye catálogo con filtros, carrito de compra, checkout, historial de pedidos, perfil de usuario, panel de administración completo y un **panel de operaciones de ciberseguridad (SOC)** para monitorizar la actividad en tiempo real.
 
 ### Características Principales
 
-- **Catálogo de Productos**: Búsqueda, filtros por categoría y ordenamiento por precio
-- **Detalle de Producto**: Página con especificaciones técnicas, precio e IVA, sección de comentarios de clientes
-- **Carrito de Compras**: Agregar, modificar cantidad y eliminar productos
+- **Catálogo**: Búsqueda full-text, filtros por categoría, ordenamiento por precio
+- **Experiencia visual**: Splash screen, partículas animadas, modo oscuro/claro, efecto 3D tilt en tarjetas
+- **Carrito**: Agregar, modificar cantidad, eliminar, cupones, cálculo de IVA (21%), envío gratis
 - **Checkout**: Formulario validado por Zod + validación server-side de precios
-- **Panel Administrativo**: CRUD de productos, gestión de pedidos y dashboard con gráficas (solo admin)
-- **Autenticación RBAC**: Roles `admin` y `standard`, tokens de sesión criptográficos (TTL 8h)
-- **Seguridad**: argon2id, rate limiting, HTTPS, Drizzle ORM (queries parametrizadas), Zod validation, CORS restringido
-- **UI Moderna**: Glassmorphism, Framer Motion, skeleton loading, brand logos SVG
+- **Perfil de usuario**: Avatar editable (Cloudinary o local), nombre, email, dirección, teléfono, idioma (es/en)
+- **Historial de pedidos**: Lista con expand/collapse de items por pedido, estado con badge de color
+- **Panel Admin** (`/admin`): Dashboard con métricas y gráficas, CRUD de productos con subida de imagen, gestión de pedidos, gestión de reseñas
+- **Panel SOC** (`/panel`): Centro de operaciones de ciberseguridad con métricas en tiempo real, gráficas, log de eventos filtrable, auto-refresh cada 15 s
+- **Autenticación RBAC**: Roles `admin` y `standard`, tokens de sesión criptográficos (256 bits, TTL 8h)
+- **Seguridad**: argon2id, rate limiting, Drizzle ORM (queries parametrizadas), Zod, HTTPS, CORS, security headers
 - **Docker**: 4 servicios (frontend, backend, postgres, nginx) con hot-reload
 
-### Tecnologías Utilizadas
+### Stack Tecnológico
 
-| Componente | Tecnología | Versión |
-|------------|------------|---------|
-| **Frontend** | React + TypeScript | 19.2.4 |
-| **Server State** | TanStack Query | 5.x |
-| **Validación cliente** | Zod | 3.x |
-| **Animaciones** | Framer Motion | latest |
-| **Build Tool** | Vite | 5.1.6 |
-| **Iconos** | Lucide React | 0.577.0 |
-| **Gráficas** | Recharts | 3.8.0 |
-| **Routing** | React Router | 6.22.3 |
-| **Backend** | Node.js + Hono | 4.x |
-| **ORM** | Drizzle ORM | 0.44.x |
-| **Validación servidor** | Zod + @hono/zod-validator | 3.x |
-| **Base de Datos** | PostgreSQL | 16-alpine |
-| **Driver DB** | pg (node-postgres) | 8.13.0 |
-| **Hashing** | argon2 (argon2id) | 0.44.0 |
-| **Imágenes** | Cloudinary (fallback local) | 2.x |
-| **Runtime TS** | tsx | 4.x |
-| **Reverse Proxy** | nginx:alpine | latest |
-| **Container** | Docker + Docker Compose | - |
+| Capa | Tecnología | Versión |
+|------|-----------|---------|
+| Frontend | React + TypeScript | 19.x |
+| Server State | TanStack Query | 5.x |
+| Animaciones | Framer Motion | latest |
+| Build Tool | Vite | 8.x |
+| Iconos | Lucide React | latest |
+| Gráficas | Recharts | 3.x |
+| Routing | React Router | 6.x |
+| Validación cliente | Zod | 3.x |
+| Backend | Hono + Node.js | 4.x |
+| ORM | Drizzle ORM | 0.44.x |
+| Validación servidor | Zod + @hono/zod-validator | 3.x |
+| Base de datos | PostgreSQL | 16-alpine |
+| Driver DB | pg (node-postgres) | 8.x |
+| Hashing | argon2 (argon2id) | 0.44.x |
+| Imágenes CDN | Cloudinary (fallback local) | 2.x |
+| Runtime TS | tsx | 4.x |
+| Reverse Proxy | nginx:alpine | latest |
+| Contenedores | Docker + Docker Compose | - |
 
 ---
 
 ## Arquitectura del Sistema
 
 ```
-                        +---------------------+
-  Usuario               |       nginx          |
-  http://localhost  --> |  Puerto 80 -> 301   |
-  https://localhost --> |  Puerto 443 (TLS)   |
-                        +----------+----------+
-                                   |
-                   +---------------+---------------+
-                   v                               v
-         +-----------------+             +-----------------+
-         |    Frontend     |             |    Backend      |
-         |  (React+Vite)   |             |    (Hono)       |
-         |  Puerto: 3000   |             |  Puerto: 3001   |
-         +-----------------+             +--------+--------+
-                                                  |
-                                         +--------v--------+
-                                         |   PostgreSQL     |
-                                         |   Puerto: 5432   |
-                                         +-----------------+
+  Usuario
+  http://localhost   ──►  nginx :80  ──► 301 HTTPS
+  https://localhost  ──►  nginx :443 (TLS 1.2/1.3)
+  http://localhost:3000 ──► Frontend directo (dev)
+
+                           nginx :443
+                           │
+                ┌──────────┴──────────┐
+                │                     │
+         /api/* → :3001         /* → :3000
+                │                     │
+           Backend (Hono)      Frontend (Vite)
+                │
+           PostgreSQL :5432
 ```
+
+### Servicios Docker
+
+| Servicio | Imagen | Puerto | Descripción |
+|---------|--------|--------|-------------|
+| `frontend` | node:22-alpine | 3000 | Vite dev server con HMR |
+| `backend` | node:22-alpine | 3001 | Hono API server con tsx watch |
+| `postgres` | postgres:16-alpine | 5432 | Base de datos |
+| `nginx` | nginx:alpine | 80, 443 | Reverse proxy + TLS |
 
 ### Flujo de red
 
-- **HTTPS (443)**: nginx termina TLS -> enruta `/api/*` al backend, `/` al frontend
-- **HTTP (80)**: nginx redirige 301 -> HTTPS
-- **Puertos directos** (solo desarrollo): frontend:3000, backend:3001, postgres:5432
+- **HTTPS (443)**: nginx termina TLS → enruta `/api/*` al backend, el resto al frontend
+- **HTTP (80)**: nginx redirige 301 → HTTPS
+- **:3000 directo**: útil para desarrollo (evita el certificado autofirmado en Playwright/fetch)
+- **nginx** pasa `X-Forwarded-For` y `X-Real-IP` al backend para detección de IP del cliente
 
 ---
 
-## Frontend - React + TypeScript
+## Frontend — React + TypeScript
 
 ### Estructura de Archivos
 
 ```
-frontend/
-├── src/
-│   ├── components/
-│   │   ├── Admin/
-│   │   │   ├── Admin.tsx              # Panel de administracion
-│   │   │   └── Admin.module.css       # Estilos del panel (CSS Modules)
-│   │   ├── ProductCard.tsx            # Tarjeta de producto con Framer Motion
-│   │   ├── SkeletonCard.tsx           # Skeleton loading placeholder
-│   │   ├── SecurityBadge.tsx          # Indicador TLS en header
-│   │   ├── PasswordStrength.tsx       # Barra de fuerza de contrasena
-│   │   └── OptimizedImage.tsx         # Imagen con lazy loading y fallback
-│   ├── App.tsx              # Componente tienda principal + router
-│   ├── main.tsx             # Punto de entrada con BrowserRouter
-│   ├── index.css            # Estilos globales (Glassmorphism design system)
-│   ├── interfaces.ts        # Interfaces TypeScript
-│   └── utils.ts             # Funciones de utilidad (sanitize)
-├── package.json
-├── vite.config.ts           # Proxy /api, PWA, compresion
-├── index.html
-├── .dockerignore
-└── Dockerfile
+frontend/src/
+├── components/
+│   ├── Admin/
+│   │   ├── Admin.tsx              # Panel de administración completo
+│   │   └── Admin.module.css       # Estilos del panel (CSS Modules)
+│   ├── SecurityDashboard.tsx      # Panel SOC de ciberseguridad
+│   ├── SecurityDashboard.module.css
+│   ├── OrderHistory.tsx           # Historial de pedidos del usuario
+│   ├── UserProfile.tsx            # Perfil editable del usuario
+│   ├── ProductCard.tsx            # Tarjeta de producto
+│   ├── ProductoDetalle.tsx        # Detalle de producto + reseñas
+│   ├── SkeletonCard.tsx           # Skeleton loading
+│   ├── SecurityBadge.tsx          # Badge TLS en navbar
+│   ├── PasswordStrength.tsx       # Barra de fuerza de contraseña
+│   └── OptimizedImage.tsx         # Imagen con lazy loading y fallback
+├── App.tsx                        # Tienda + rutas + navbar
+├── main.tsx                       # BrowserRouter + QueryClientProvider
+├── api.ts                         # fetch wrappers (getUsuario, updatePerfil…)
+├── i18n.ts                        # Internacionalización (es / en)
+├── index.css                      # Variables CSS dark/light mode
+└── interfaces.ts                  # Tipos TypeScript
+```
+
+### Rutas React Router
+
+```tsx
+<Routes>
+  <Route path="/"            element={<Tienda />} />
+  <Route path="/producto/:id" element={<ProductoDetalle />} />
+  <Route path="/login"       element={<Login />} />
+  <Route path="/registro"    element={<Registro />} />
+  <Route path="/perfil"      element={authUser ? <UserProfile /> : <Navigate to="/login" />} />
+  <Route path="/mis-pedidos" element={authUser ? <OrderHistory /> : <Navigate to="/login" />} />
+  <Route path="/admin"       element={<Admin />} />
+  <Route path="/panel"       element={<SecurityDashboard />} />
+</Routes>
 ```
 
 ### Componentes Principales
 
 #### Tienda (`/`)
-Pagina principal con catalogo, busqueda, filtros y carrito.
 
-**Estados principales** (TanStack Query gestiona carga, caché y error):
+Página principal con catálogo, búsqueda, filtros y carrito.
+
 ```typescript
-// Server state con TanStack Query (caché 30s, retry 1, refetch on focus off)
+// Server state — TanStack Query (caché 30s)
 const { data: productos = [], isLoading } = useQuery<Producto[]>({
-  queryKey: ['productos', busqueda, categoriaFiltro, ordenPrecio],
-  queryFn:  () => fetch(`/api/productos?${params}`).then(r => r.json()),
+  queryKey: ['productos', busqueda, categoria, orden],
+  queryFn: () => fetch(`/api/productos?${params}`).then(r => r.json()),
 });
 
-// Mutación de checkout con Zod antes de enviar
-const checkoutMutation = useMutation({
+// Mutación checkout
+const checkout = useMutation({
   mutationFn: (data) => fetch('/api/pedidos', { method: 'POST', body: JSON.stringify(data) }).then(r => r.json()),
-  onSuccess:  () => { setCarrito([]); setCheckoutExitoso(true); },
+  onSuccess: () => { setCarrito([]); setCheckoutExitoso(true); },
 });
-
-// Estado local para carrito (no server state)
-const [carrito, setCarrito] = useState<CarritoItem[]>([])
 ```
 
-**Filtros disponibles**:
-- Busqueda por nombre, descripcion o categoria (ILIKE en PostgreSQL)
-- Filtro por categoria (Portatiles, Gaming, Sobremesa)
-- Ordenamiento por precio asc/desc
+Filtros disponibles:
+- Búsqueda por nombre / descripción / categoría (ILIKE en PostgreSQL)
+- Categoría: Todos, Portátiles, Gaming, Sobremesa
+- Precio: mínimo y máximo
+- Ordenamiento: precio asc/desc
+- Favoritos (localStorage)
+- Vista: cuadrícula / lista
 
-#### ProductCard
-Componente refactorizado con:
-- **Deteccion de marca**: Identifica Apple, Dell, HP, Lenovo, ASUS desde el nombre del producto
-- **Logo SVG**: Wordmark vectorial con colores de marca
-- **Framer Motion**: Entrada escalonada (`initial -> animate`), hover con elevacion (`whileHover`)
-- **Animacion add-to-cart**: Transicion de icono carrito -> check con `AnimatePresence`
-- **BrandLogoSmall**: Version mini para items del carrito
+#### UserProfile (`/perfil`)
 
-#### SkeletonCard
-Placeholder de carga con efecto shimmer animado. Se muestran 8 skeletons mientras los productos cargan.
+Formulario editable con TanStack Query:
+- Avatar: previsualización instantánea, envío como base64
+- Campos: nombre completo, email, dirección, teléfono
+- Selector de idioma (es/en) — aplica `setLang()` al cambiar
+- Toast de confirmación animado con Framer Motion
+- Badge de rol (Admin/Usuario) con color
 
-#### SecurityBadge
-Indicador visual "Secure" con icono Shield y punto pulsante verde. Se muestra en el header junto al logo.
+#### OrderHistory (`/mis-pedidos`)
 
-#### PasswordStrength
-Barra de 5 niveles que evalua en tiempo real:
-- Longitud >= 8 y >= 12 caracteres
-- Mayusculas + minusculas
-- Numeros
-- Caracteres especiales
-
-Colores: rojo (muy debil) -> naranja -> amarillo -> verde claro -> verde (muy fuerte)
+Lista de pedidos del usuario autenticado:
+- Skeleton loading mientras carga
+- Badge de estado con colores (pendiente, confirmado, enviado, entregado, cancelado)
+- Expand/collapse animado por pedido (muestra imagen, nombre, cantidad, precio de cada item)
+- Empty state con icono Package si no hay pedidos
 
 #### Admin (`/admin`)
-Panel protegido por autenticacion con rol `admin`.
 
-**Dashboard**:
-- Metricas: total pedidos, ingresos, ticket medio, clientes unicos, productos en catalogo
-- Grafica de ingresos por dia (AreaChart)
-- Grafica de pedidos por dia (LineChart)
-- Tabla de compras de clientes
+Login propio con rol admin. Cuatro pestañas:
 
-**Gestion de Productos**:
-- CRUD completo sin editar codigo
-- Formulario con campos: nombre, descripcion, precio, categoria
-- **Subida de imagen directa** — area de upload con preview instantaneo (JPG/PNG/WEBP/GIF, max 5MB)
-- En edicion muestra la imagen actual y permite reemplazarla
-- Tabla de productos con miniatura de imagen en cada fila
+**Dashboard**
+- KPIs: total pedidos, ingresos totales, ticket medio, clientes únicos, productos en catálogo
+- AreaChart de ingresos por día
+- LineChart de pedidos por día
+- Tabla de compras de clientes con opción de eliminar pedido
 
-**Gestion de Pedidos**:
-- Listado y eliminacion de pedidos
+**Productos**
+- CRUD completo sin tocar código
+- Formulario: nombre, descripción, precio, categoría
+- Upload drag-and-drop de imagen (JPG/PNG/WEBP, máx. 5 MB) con preview
+- Tabla con miniatura de imagen, categoría, precio, acciones Editar/Eliminar
 
-### UI Design System
+**Pedidos**
+- Tabla de todos los pedidos con estado, total y fecha
+- Eliminación individual
+
+**Reseñas**
+- Listado de todas las valoraciones de clientes
+- Muestra: avatar/inicial del usuario, nombre, producto valorado, puntuación (★★★★★), título y texto
+- Botón de eliminar individual por reseña
+
+### Design System
+
+**Dark / Light mode**: controlado por `data-theme` en `<html>`. Variables CSS en `index.css`:
+
+```css
+[data-theme="dark"]  { --bg: #020617; --card-bg: rgba(30,41,59,.5); --accent: #059669; }
+[data-theme="light"] { --bg: #f1f5f9; --card-bg: #ffffff; --accent: #059669; }
+```
 
 **Glassmorphism**:
 ```css
-.glass-card {
-  background: rgba(30, 41, 59, 0.5);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
+background: rgba(30, 41, 59, 0.5);
+backdrop-filter: blur(20px);
+border: 1px solid rgba(255,255,255,0.06);
 ```
 
-**Gradient Border** (pseudo-elemento con mask-composite):
-```css
-.gradient-border {
-  background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02));
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-}
-```
+**Efecto 3D tilt** en tarjetas de producto: `transform: perspective(800px) rotateX() rotateY()` calculado con el evento `mousemove`.
 
-**Colores principales**:
-- Background: `#020617` (slate-950)
-- Surface: `rgba(30, 41, 59, 0.5)` (glassmorphism)
-- Primary: `#059669` (emerald)
-- Price: `#34d399` (emerald claro)
-- Text: `#f1f5f9`
+**Partículas animadas** en el hero: Canvas 2D con partículas que siguen el cursor y se conectan por líneas.
 
-### Interfaces TypeScript
+**Splash screen**: animación de entrada con el logo de Kratamex al cargar la aplicación.
+
+### Internacionalización (i18n)
 
 ```typescript
-interface Producto {
-  id: number
-  nombre: string
-  descripcion: string
-  precio: number
-  imagen: string
-  categoria: string
-}
-
-interface CarritoItem extends Producto {
-  cantidad: number
-}
+// i18n.ts
+export function t(key: string): string { /* ... */ }
+export function setLang(lang: 'es' | 'en'): void { /* ... */ }
+export function getLang(): 'es' | 'en' { /* ... */ }
 ```
 
-### Configuracion Vite (`vite.config.ts`)
-
-- **Proxy**: `/api` -> `http://localhost:3001`
-- **PWA**: manifest con nombre Kratamex, instalacion offline
-- **Compresion**: gzip y brotli de assets estaticos
-- **Puerto**: 3000
-- **Hot-reload**: CHOKIDAR_USEPOLLING para WSL+Docker
+El idioma se persiste en `localStorage` y se sincroniza con el perfil del usuario en la BD.
 
 ---
 
-## Backend - Node.js + Hono
+## Backend — Node.js + Hono
 
 ### Estructura de Archivos
 
 ```
-backend/
-├── src/
-│   ├── index.ts           # Servidor Hono (rutas, middlewares, seed) — TypeScript
-│   ├── schemas.ts         # Esquemas Zod compartidos entre rutas
-│   ├── db/
-│   │   ├── schema.ts      # Definición de tablas Drizzle ORM con tipos inferidos
-│   │   └── index.ts       # Conexión Drizzle + Pool pg
-│   ├── uploads/           # Imágenes de productos (fallback local)
-│   ├── avatars/           # Avatares de usuarios (fallback local)
-│   └── access.log         # Log de peticiones
-├── drizzle.config.ts      # Configuración Drizzle Kit
-├── tsconfig.json          # Configuración TypeScript
-├── package.json
-├── .env.example
-├── .dockerignore
-└── Dockerfile
+backend/src/
+├── index.ts           # Servidor Hono — rutas, middlewares, logger SOC, seed
+├── schemas.ts         # Esquemas Zod compartidos
+├── db/
+│   ├── schema.ts      # Tablas Drizzle ORM con tipos TypeScript inferidos
+│   └── index.ts       # Conexión Drizzle + Pool pg
+├── uploads/           # Imágenes de productos (fallback local)
+├── avatars/           # Avatares de usuarios (fallback local)
+└── access.log         # Log de accesos HTTP
 ```
 
-### Drizzle ORM — Schema y Queries
+### Middlewares globales
+
+```
+app.use('*')  → Logger de accesos (access.log)
+app.use('*')  → CORS (solo CORS_ORIGIN del .env)
+app.use('*')  → Security headers (HSTS, CSP, X-Frame-Options…)
+app.use('*')  → General rate limiter (60 req/min por IP)
+```
+
+### Middlewares de autenticación
 
 ```typescript
-// src/db/schema.ts — Tablas con tipos TypeScript inferidos
-export const productos = pgTable('productos', {
-  id:          serial('id').primaryKey(),
-  nombre:      text('nombre').notNull(),
-  precio:      real('precio').notNull(),
-  // ...
-});
-
-// Tipos inferidos automáticamente
-export type Producto = typeof productos.$inferSelect;
+authenticate      // Verifica token en header Authorization, rechaza con 401
+requireAdmin      // authenticate + comprueba role === 'admin', rechaza con 403
 ```
+
+### Rate limiters específicos
+
+| Limiter | Límite | Ventana | Ruta |
+|---------|--------|---------|------|
+| `loginRateLimiter` | 12 intentos → bloqueo | 60 s bloqueo | POST /api/login |
+| `checkoutRateLimiter` | 10 pedidos | 60 s | POST /api/pedidos |
+| `comentariosRateLimiter` | 10 comentarios | 60 s | POST /api/productos/:id/comentarios |
+| `generalRateLimiter` | 60 req | 60 s | Todas las rutas |
+
+### Logger de Eventos SOC
 
 ```typescript
-// Queries type-safe con Drizzle
-import { eq, and, ilike, gte, desc } from 'drizzle-orm';
-
-// SELECT con filtros dinámicos
-const rows = await db.select().from(productos)
-  .where(and(ilike(productos.nombre, '%macbook%'), gte(productos.precio, 1000)))
-  .orderBy(desc(productos.precio));
-
-// INSERT con RETURNING
-const [row] = await db.insert(productos)
-  .values({ nombre, precio })
-  .returning({ id: productos.id });
-
-// Transacciones
-const pedidoId = await db.transaction(async (tx) => {
-  const [p] = await tx.insert(pedidos).values({...}).returning({ id: pedidos.id });
-  await tx.insert(pedidoItems).values({...});
-  return p.id;
-});
+async function logSecEvent(tipo: string, data: {
+  ip?: string; username?: string; endpoint?: string;
+  metodo?: string; userAgent?: string; detalles?: string;
+}): Promise<void>
 ```
 
-### Validación con Zod + @hono/zod-validator
+Se llama automáticamente en:
+- `POST /api/login` → `login_ok`, `login_fail`, `brute_force`
+- Middleware `authenticate` → `auth_invalid` (token no encontrado o expirado)
+
+Los eventos se persisten en la tabla `security_events` de PostgreSQL.
+
+### Gestión de sesiones (en memoria)
 
 ```typescript
-// src/schemas.ts
-export const PedidoSchema = z.object({
-  cliente:   z.string().min(1).max(200),
-  email:     z.string().email().max(254),
-  direccion: z.string().min(1).max(500),
-  items:     z.array(z.object({ id: z.number().int().positive(), cantidad: z.number().int().min(1).max(999) })).min(1).max(50),
-});
+const sessions: Record<string, Session> = {};
+const SESSION_TTL = 8 * 60 * 60 * 1000;  // 8 horas
 
-// Aplicado por ruta — Hono devuelve 400 automáticamente si falla
-app.post('/api/pedidos', checkoutRateLimiter, zValidator('json', PedidoSchema), async (c) => {
-  const { cliente, email, direccion, items } = c.req.valid('json'); // tipado automático
-  // ...
-});
-```
-
-### Hono — Patrones principales
-
-```typescript
-// Middleware con contexto tipado
-type Variables = { user: SessionData };
-const app = new Hono<{ Variables: Variables }>();
-
-// Middleware de autenticación
-const authenticate: MiddlewareHandler<{ Variables: Variables }> = async (c, next) => {
-  const token = c.req.header('authorization');
-  c.set('user', sessions[token]);
-  await next();
-};
-
-// Route handler
-app.get('/api/productos/:id', async (c) => {
-  const id = parseInt(c.req.param('id'));
-  const [producto] = await db.select().from(productos).where(eq(productos.id, id));
-  if (!producto) return c.json({ error: 'Producto no encontrado' }, 404);
-  return c.json(producto);
-});
-
-// Arranque con @hono/node-server
-serve({ fetch: app.fetch, port: 3001 }, () =>
-  console.log('Backend Hono corriendo en http://localhost:3001')
-);
-```
-
-### Startup con reintentos
-
-```javascript
-async function waitForDB(maxAttempts = 15, delayMs = 2000) {
-  for (let i = 1; i <= maxAttempts; i++) {
-    try { await pool.query('SELECT 1'); return; }
-    catch (err) {
-      console.log(`PostgreSQL: intento ${i}/${maxAttempts}...`);
-      if (i === maxAttempts) throw err;
-      await new Promise(r => setTimeout(r, delayMs));
-    }
+// Limpieza automática cada 15 minutos
+setInterval(() => {
+  for (const [token, session] of Object.entries(sessions)) {
+    if (Date.now() - session.createdAt > SESSION_TTL) delete sessions[token];
   }
-}
+}, 15 * 60 * 1000);
 ```
 
-### Seguridad implementada
+### Subida de imágenes
 
-- **argon2id**: Contrasenas hasheadas con argon2 (PHC winner, async)
-- **Rate limiting**: 5 intentos fallidos por IP -> bloqueo 15 min en login, 10 pedidos/60s en checkout
-- **Prepared statements**: Parametros `$1, $2...` con pg, prevencion de SQL injection
-- **CORS restringido**: Solo `CORS_ORIGIN` de `.env` (default: `https://localhost`)
-- **Tokens criptograficos**: `crypto.randomBytes(32).toString('hex')` (256 bits)
-- **Validacion de uploads**: Solo jpeg/jpg/png/gif/webp, limite 5MB productos / 2MB avatares
-- **RBAC**: Middleware `authenticate` + `requireAdmin` en rutas protegidas
-- **HTTPS**: TLS terminado en nginx (TLSv1.2 y TLSv1.3)
-- **Security headers**: HSTS, X-Frame-Options, CSP, X-Content-Type-Options, Referrer-Policy
-- **Logging**: Todas las peticiones registradas en `access.log`
+Soporte dual: Cloudinary (prioritario) o sistema de archivos local (fallback).
+
+```typescript
+// Si CLOUDINARY_* están en .env → sube a CDN
+// Si no → guarda en src/uploads/ o src/avatars/
+```
+
+Rutas afectadas: `POST /api/productos/:id/imagen`, `POST /api/usuario/avatar`
 
 ---
 
-## Base de Datos - PostgreSQL
+## Base de Datos — PostgreSQL
 
-### Tablas
+### Schema Drizzle ORM (`backend/src/db/schema.ts`)
 
-#### `productos`
-```sql
-CREATE TABLE IF NOT EXISTS productos (
-  id SERIAL PRIMARY KEY,
-  nombre TEXT NOT NULL,
-  descripcion TEXT,
-  precio REAL NOT NULL,
-  imagen TEXT,
-  categoria TEXT,
-  fecha TIMESTAMP DEFAULT NOW()
-)
+```typescript
+// Tablas principales
+export const productos       = pgTable('productos',       { id, nombre, descripcion, precio, imagen, categoria });
+export const pedidos         = pgTable('pedidos',         { id, cliente, email, direccion, total, estado, fecha });
+export const pedidoItems     = pgTable('pedido_items',    { id, pedidoId, productoId, nombre, precio, cantidad, imagen });
+export const usuarios        = pgTable('usuarios',        { id, username, password, email, nombre, role, avatar, direccion, telefono, idioma });
+export const comentarios     = pgTable('comentarios',     { id, productoId, usuarioId, autor, titulo, contenido, valoracion, fecha });
+export const securityEvents  = pgTable('security_events', { id, tipo, ip, username, endpoint, metodo, userAgent, detalles, fecha });
 ```
 
-#### `pedidos`
-```sql
-CREATE TABLE IF NOT EXISTS pedidos (
-  id SERIAL PRIMARY KEY,
-  cliente TEXT NOT NULL,
-  email TEXT NOT NULL,
-  direccion TEXT NOT NULL,
-  total REAL NOT NULL,
-  fecha TIMESTAMP DEFAULT NOW()
-)
-```
+### Tipos de evento en `security_events`
 
-#### `pedido_items`
-```sql
-CREATE TABLE IF NOT EXISTS pedido_items (
-  id SERIAL PRIMARY KEY,
-  pedido_id INTEGER NOT NULL REFERENCES pedidos(id),
-  producto_id INTEGER NOT NULL REFERENCES productos(id),
-  cantidad INTEGER NOT NULL,
-  precio REAL NOT NULL
-)
-```
+| tipo | Cuándo |
+|------|--------|
+| `login_ok` | Login exitoso |
+| `login_fail` | Credenciales incorrectas |
+| `brute_force` | IP bloqueada tras ≥12 intentos fallidos |
+| `auth_invalid` | Token no encontrado o sesión expirada |
+| `register` | Nuevo usuario registrado |
+| `forbidden` | Acceso denegado por RBAC |
 
-#### `usuarios`
-```sql
-CREATE TABLE IF NOT EXISTS usuarios (
-  id SERIAL PRIMARY KEY,
-  username TEXT NOT NULL UNIQUE,
-  password TEXT NOT NULL,          -- argon2id hash
-  email TEXT,
-  role TEXT DEFAULT 'standard' CHECK(role IN ('admin', 'standard')),
-  avatar TEXT,
-  created_at TIMESTAMP DEFAULT NOW()
-)
+### Comandos Drizzle Kit
+
+```bash
+npm run db:generate   # Genera SQL de migración desde el schema
+npm run db:push       # Aplica el schema directamente a la DB (dev)
+npm run db:studio     # Abre GUI visual de la DB en el navegador
 ```
 
 ### Seed inicial
 
-- **15 ordenadores** de ejemplo (Portatiles, Gaming, Sobremesa)
-- **3 pedidos** de ejemplo con items
-- **2 usuarios** con contrasenas hasheadas con argon2id:
+Al arrancar, el backend crea las tablas (`CREATE TABLE IF NOT EXISTS`) y hace seed de:
+- **15 productos** (6 portátiles, 6 gaming, 3 sobremesa) con imágenes de Unsplash
+- **2 usuarios**: `admin` (argon2id de `admin123`) y `user` (argon2id de `user123`)
+- **Reseñas de ejemplo** en varios productos
+
+---
+
+## API REST
+
+### Endpoints públicos
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/productos` | Lista productos. Query: `busqueda`, `categoria`, `orden`, `desde`, `hasta` |
+| GET | `/api/productos/:id` | Producto por ID |
+| GET | `/api/productos/:id/comentarios` | Reseñas del producto |
+| POST | `/api/productos/:id/comentarios` | Publicar reseña (rate limited) |
+| POST | `/api/pedidos` | Crear pedido con validación de precios server-side |
+| POST | `/api/login` | Autenticar usuario (rate limited) |
+| POST | `/api/registro` | Registrar nuevo usuario |
+| POST | `/api/logout` | Cerrar sesión (invalidar token) |
+
+### Endpoints autenticados (usuario)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/usuario` | Datos del usuario actual |
+| PUT | `/api/usuario/perfil` | Actualizar perfil (nombre, email, avatar, idioma…) |
+| POST | `/api/usuario/avatar` | Subir avatar |
+| GET | `/api/mis-pedidos` | Pedidos del usuario autenticado con items |
+
+### Endpoints admin
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/api/productos` | Crear producto |
+| PUT | `/api/productos/:id` | Actualizar producto |
+| DELETE | `/api/productos/:id` | Eliminar producto |
+| POST | `/api/productos/:id/imagen` | Subir imagen del producto |
+| GET | `/api/admin/pedidos` | Todos los pedidos |
+| DELETE | `/api/admin/pedidos/:id` | Eliminar pedido |
+| GET | `/api/admin/valoraciones` | Todas las reseñas (join producto + usuario) |
+| DELETE | `/api/admin/valoraciones/:id` | Eliminar reseña |
+
+### Endpoints SOC (admin)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/security/stats` | Métricas 24h: totales por tipo, IPs únicas, sesiones activas, top IPs, actividad horaria |
+| GET | `/api/security/events` | Log de eventos. Query: `tipo`, `limit` (default 100) |
+
+### Formato de respuesta `/api/security/stats`
+
+```json
+{
+  "total": 87,
+  "login_fail": 57,
+  "login_ok": 12,
+  "brute_force": 3,
+  "auth_invalid": 11,
+  "unique_ips": 35,
+  "active_sessions": 12,
+  "top_ips": [{ "ip": "120.208.7.30", "count": 13 }],
+  "hourly": [{ "hora": "2026-03-22T00:00:00Z", "tipo": "login_fail", "total": 18 }]
+}
+```
+
+---
+
+## Panel SOC — Ciberseguridad
+
+### Acceso
+
+Ruta: `http://localhost:3000/panel`
+
+Login independiente del panel de admin: requiere usuario con `role = 'admin'`. El formulario tiene protección anti-autofill del navegador:
+
+```tsx
+{/* Honeypot — absorbe el autofill antes de los campos reales */}
+<input type="text"     name="username" style={{ display: 'none' }} tabIndex={-1} readOnly />
+<input type="password" name="password" style={{ display: 'none' }} tabIndex={-1} readOnly />
+
+{/* Campos reales con name no estándar */}
+<input name="soc-user" id="soc-user" autoComplete="off" />
+<input name="soc-pass" id="soc-pass" autoComplete="off" type="password" />
+```
+
+### Componente SecurityDashboard
+
+```typescript
+// Carga datos y auto-refresca cada 15s
+useEffect(() => {
+  if (!authed || !autoRefresh) return;
+  const id = setInterval(() => loadData(token), 15_000);
+  return () => clearInterval(id);
+}, [authed, autoRefresh, token, loadData]);
+```
+
+### Cálculo del nivel de amenaza
+
+```typescript
+const threatLevel =
+  stats.brute_force > 0       ? 'CRÍTICO'
+  : stats.login_fail > 10     ? 'ALTO'
+  : stats.login_fail > 3      ? 'MEDIO'
+  : 'BAJO';
+```
+
+### Simulador de ataques
+
+```bash
+node simulate_attacks.mjs [URL] [ADMIN_PASSWORD]
+# Ejemplo:
+node simulate_attacks.mjs http://localhost:3000 admin123
+```
+
+Secuencia de eventos generados:
+1. **Login exitoso** (`login_ok`) — antes del bloqueo
+2. **18 fallos de login** desde IPs aleatorias con User-Agents variados (Hydra, sqlmap, curl…)
+3. **Brute force** — 13 intentos desde IP fija → dispara `brute_force`
+4. **12 tokens inválidos** — accesos a rutas protegidas con tokens falsos → `auth_invalid`
+5. **Escaneo de rutas** sensibles (/.env, /phpMyAdmin, /wp-admin…) — Nikto simulado
+6. **Segundo brute force** desde otra IP → segundo evento `brute_force`
+
+---
+
+## Autenticación y Seguridad
+
+### Flujo de autenticación
+
+```
+POST /api/login  { username, password }
+  → Verifica con argon2.verify()
+  → Crea token: crypto.randomBytes(32).toString('hex')
+  → Guarda en sessions[token] con createdAt
+  → Responde { token, user: { id, username, role, avatar } }
+
+Petición autenticada:
+  → Header: Authorization: <token>
+  → middleware authenticate() busca en sessions[]
+  → Comprueba TTL (8h)
+  → Pone c.set('user', session)
+```
+
+### RBAC
+
+| Acción | standard | admin |
+|--------|----------|-------|
+| Ver catálogo | Sí | Sí |
+| Hacer pedidos | Sí | Sí |
+| Ver historial propio | Sí | Sí |
+| Editar perfil propio | Sí | Sí |
+| Panel admin | No | Sí |
+| CRUD productos | No | Sí |
+| Eliminar pedidos | No | Sí |
+| Gestionar reseñas | No | Sí |
+| Panel SOC | No | Sí |
+| Ver eventos de seguridad | No | Sí |
+
+### Capas de seguridad
+
+| Capa | Implementación |
+|------|---------------|
+| Contraseñas | argon2id — coste de tiempo/memoria configurable |
+| Tokens | `crypto.randomBytes(32)` — 256 bits de entropía |
+| SQL Injection | Drizzle ORM — queries parametrizadas por construcción |
+| XSS Input | Zod valida y limita todos los campos de entrada |
+| Rate limiting | Por IP, por endpoint, con bloqueo temporal |
+| Brute force | Bloqueo de IP tras 12 fallos por 60 s + log en DB |
+| HTTPS | TLS 1.2/1.3 en nginx con certificado (autofirmado en dev) |
+| Headers | HSTS, X-Frame-Options: DENY, CSP, X-Content-Type-Options: nosniff |
+| CORS | Solo el origen configurado en `CORS_ORIGIN` del `.env` |
+| Uploads | Solo `image/*`, límite 5 MB, nombre aleatorio |
+| Sesiones | TTL 8h, limpieza automática cada 15 min |
+| Monitorización | Todos los eventos de seguridad → tabla `security_events` |
+
+---
+
+## Despliegue y Docker
+
+### docker-compose.yml
+
+```yaml
+services:
+  postgres:   image: postgres:16-alpine
+  backend:    build: ./backend,  ports: [3001:3001]
+  frontend:   build: ./frontend, ports: [3000:3000]
+  nginx:      image: nginx:alpine, ports: [80:80, 443:443]
+```
+
+### Variables de entorno
+
+**Raíz (`.env`)**:
+```env
+POSTGRES_DB=kratamex
+POSTGRES_USER=kratamex
+POSTGRES_PASSWORD=kratamex_pass
+CORS_ORIGIN=https://localhost
+```
+
+**Backend (`backend/.env`)**:
+```env
+DATABASE_URL=postgresql://kratamex:kratamex_pass@postgres:5432/kratamex
+CORS_ORIGIN=https://localhost
+CLOUDINARY_CLOUD_NAME=   # opcional
+CLOUDINARY_API_KEY=      # opcional
+CLOUDINARY_API_SECRET=   # opcional
+```
+
+### Arranque
+
+```bash
+cp .env.example .env
+cp backend/.env.example backend/.env
+
+docker compose up --build -d
+
+# Ver logs
+docker compose logs -f backend
+docker compose logs -f frontend
+```
+
+### Accesos
+
+| Servicio | URL |
+|----------|-----|
+| Tienda HTTPS | https://localhost |
+| Tienda HTTP | http://localhost:3000 |
+| API directa | http://localhost:3001 |
+| PostgreSQL | localhost:5432 |
+
+> El certificado SSL es autofirmado (openssl). En producción reemplazar con Let's Encrypt.
+
+---
+
+## Guía de Desarrollo
+
+### HMR en Docker / Windows
+
+Docker sobre Windows usa NTFS. Los cambios de archivo no propagan eventos `inotify` al contenedor Linux, por lo que Vite/nodemon no detecta cambios automáticamente. Solución:
+
+```bash
+# Forzar recarga de un archivo tras editarlo en el host
+docker compose exec frontend sh -c "touch /app/src/components/MiComponente.tsx"
+docker compose exec backend  sh -c "touch /app/src/index.ts"
+```
+
+Alternativa para el backend:
+
+```bash
+docker compose restart backend
+```
+
+### Dependencias nuevas
+
+```bash
+# Instalar en el contenedor en ejecución (no reconstruye imagen)
+docker compose exec backend npm install <paquete>
+docker compose restart backend
+
+# Reconstruir imagen completa (más lento pero más limpio)
+docker compose up --build -d backend
+```
+
+### Drizzle Studio
+
+```bash
+# GUI visual de la DB (abre en http://local.drizzle.studio)
+cd backend && npm run db:studio
+```
+
+### Simulador de ataques SOC
+
+```bash
+# Genera eventos de seguridad para probar el panel SOC
+node simulate_attacks.mjs http://localhost:3000 admin123
+
+# Personalizar URL si usas otro puerto
+node simulate_attacks.mjs http://localhost:3001 admin123
+```
+
+### Usuarios de ejemplo
 
 | Username | Password | Rol |
 |----------|----------|-----|
 | admin | admin123 | admin |
 | user | user123 | standard |
 
-> Las contrasenas se almacenan como hashes argon2id (`$argon2id$v=19$...`), nunca en texto plano.
+### Estructura de interfaces TypeScript
 
----
+```typescript
+// interfaces.ts
+interface Producto {
+  id: number; nombre: string; descripcion: string;
+  precio: number; imagen: string; categoria: string;
+}
 
-## API REST
+interface Pedido {
+  id: number; cliente: string; email: string; direccion: string;
+  total: number; estado: string; fecha: string;
+  items?: PedidoItem[];
+}
 
-### Endpoints de Productos
+interface PedidoItem {
+  id: number; nombre: string; precio: number;
+  cantidad: number; imagen: string;
+}
 
-| Metodo | Ruta | Auth | Descripcion |
-|--------|------|------|-------------|
-| GET | `/api/productos` | No | Listar productos (filtros: busqueda, categoria, orden) |
-| GET | `/api/productos/:id` | No | Obtener producto por ID |
-| POST | `/api/productos` | Admin | Crear producto |
-| PUT | `/api/productos/:id` | Admin | Actualizar producto |
-| DELETE | `/api/productos/:id` | Admin | Eliminar producto |
-| POST | `/api/productos/:id/imagen` | Admin | Subir imagen del producto (multipart, max 5MB, Cloudinary o local) |
-
-### Endpoints de Pedidos
-
-| Metodo | Ruta | Auth | Descripcion |
-|--------|------|------|-------------|
-| GET | `/api/pedidos` | Admin | Listar todos los pedidos |
-| GET | `/api/pedidos/:id` | Admin | Obtener pedido con items |
-| POST | `/api/pedidos` | No | Crear nuevo pedido (rate limited: 10/60s) |
-
-### Endpoints de Autenticacion
-
-| Metodo | Ruta | Auth | Descripcion |
-|--------|------|------|-------------|
-| POST | `/api/login` | No | Autenticar (rate limited: 5 intentos/15min) |
-| POST | `/api/logout` | Token | Cerrar sesion |
-| GET | `/api/usuario` | Token | Datos del usuario autenticado |
-| POST | `/api/usuario/avatar` | Token | Subir avatar (max 2MB) |
-
-### Endpoints de Admin
-
-| Metodo | Ruta | Auth | Descripcion |
-|--------|------|------|-------------|
-| GET | `/api/admin/pedidos` | Admin | Listar pedidos |
-| DELETE | `/api/admin/pedidos/:id` | Admin | Eliminar pedido |
-
-### Ejemplo: Login
-
-**Request**:
-```json
-POST /api/login
-{ "username": "admin", "password": "admin123" }
-```
-
-**Response OK**:
-```json
-{
-  "success": true,
-  "token": "a3f8c1d2e4b5...",
-  "user": { "id": 1, "username": "admin", "role": "admin" },
-  "message": "Inicio de sesion correcto"
+interface Usuario {
+  id: number; username: string; email: string; nombre: string;
+  role: string; avatar: string | null; direccion: string;
+  telefono: string; idioma: string;
 }
 ```
 
----
+### Añadir un nuevo evento SOC
 
-## Autenticacion y Seguridad
+En `backend/src/index.ts`:
 
-### RBAC (Role-Based Access Control)
+```typescript
+// Llamar a logSecEvent desde cualquier ruta o middleware
+logSecEvent('forbidden', {
+  ip:       getClientIP(c),
+  username: c.get('user')?.username,
+  endpoint: c.req.path,
+  metodo:   c.req.method,
+  detalles: 'Acceso a ruta de admin sin permisos'
+});
+```
 
-| Accion | standard | admin |
-|--------|----------|-------|
-| Ver productos | Si | Si |
-| Hacer pedidos | Si | Si |
-| Ver perfil | Si | Si |
-| Panel admin | No | Si |
-| CRUD productos | No | Si |
-| Eliminar pedidos | No | Si |
-
-### Correcciones de seguridad aplicadas
-
-| ID | Descripcion | Riesgo | Estado |
-|----|-------------|--------|--------|
-| ID-001 | Credenciales hardcodeadas | Critico | Corregido |
-| ID-002 | Broken Access Control en admin | Alto | Corregido |
-| ID-003 | SQL Injection | Medio | Corregido |
-| ID-004 | Sin rate limiting en login | Medio | Corregido |
-| ID-005 | Logging insuficiente | Bajo | Corregido |
-| ID-006 | Validacion de uploads | Alto | Corregido |
-| ID-007 | Contrasenas sin hash | Critico | Corregido |
-| ID-008 | Falta de HTTPS | Critico | Corregido |
-| ID-009 | XSS doble encoding | Medio | Corregido |
-| ID-010 | Broken Access Control en CRUD productos | Critico | Corregido |
-| ID-011 | IDOR en pedidos | Critico | Corregido |
-| ID-012 | Price manipulation en checkout | Critico | Corregido |
-| ID-013 | Information exposure en login | Medio | Corregido |
-| ID-014 | IDOR persistente en GET /api/pedidos | Critico | Corregido |
-| ID-015 | Token de sesion debil | Alto | Corregido |
-| ID-016 | CORS abierto | Alto | Corregido |
-| ID-017 | Enumeracion de IDs de producto | Medio | Corregido |
-| ID-018 | URLs hardcodeadas bypass HTTPS | Critico | Corregido |
-| ID-019 | Sin rate limiting en checkout | Alto | Corregido |
-| ID-020 | nginx sin headers de seguridad | Alto | Corregido |
-| ID-021 | sanitize() en URLs | Medio | Corregido |
-| ID-022 | Security headers ausentes en backend Express | Alto | Corregido |
-| ID-023 | Sesiones sin expiración | Crítico | Corregido |
-| ID-024 | Stored XSS via descripción de producto | Alto | Corregido |
-| ID-025 | Sin límite de body size | Medio | Corregido |
-| ID-026 | Validación de email ausente en checkout | Medio | Corregido |
-| ID-027 | Rate limiting memory leak | Medio | Corregido |
-| ID-028 | File upload — nombres predecibles | Alto | Corregido |
-| ID-029 | Containers Docker corriendo como root | Alto | Corregido |
-| ID-030 | nginx — ciphers débiles y sin rate limiting | Alto | Corregido |
-| ID-031 | Archivos de base de datos en git | Crítico | Corregido |
-| ID-032 | IP spoofing en rate limiting | Medio | Corregido |
-| ID-033 | Static files sin protección dotfiles | Medio | Corregido |
-| ID-034 | Validaciones manuales inconsistentes | Medio | Corregido |
-
-Ver detalle completo en `correcciones_seguridad.md`.
+El evento aparece automáticamente en el panel SOC en el próximo refresh (máx. 15 s).
 
 ---
 
-## Despliegue y Docker
-
-### Servicios (`docker-compose.yml`)
-
-| Servicio | Imagen | Puerto | Descripcion |
-|----------|--------|--------|-------------|
-| postgres | postgres:16-alpine | 5432 | Base de datos |
-| backend | Node 20 Alpine | 3001 | API Express |
-| frontend | Node 20 Alpine | 3000 | Vite dev server |
-| nginx | nginx:alpine | 80, 443 | Reverse proxy HTTPS |
-
-### Volumenes
-
-| Volumen | Uso |
-|---------|-----|
-| `postgres_data` | Datos persistentes de PostgreSQL |
-| `backend_modules` | node_modules del backend (hot-reload) |
-| `frontend_modules` | node_modules del frontend (hot-reload) |
-| `./backend/src` -> `/app/src` | Hot-reload backend (nodemon --legacy-watch) |
-| `./frontend/src` -> `/app/src` | Hot-reload frontend (Vite HMR + polling) |
-
-### Variables de entorno
-
-**Raiz (`.env`)** — Usadas por Docker Compose:
-```
-POSTGRES_DB=kratamex
-POSTGRES_USER=kratamex
-POSTGRES_PASSWORD=kratamex_dev
-```
-
-**Backend (`backend/.env`)** — Usadas por la app:
-```
-ADMIN_USER=admin
-ADMIN_PASS=admin123
-DB_HOST=postgres
-DB_PORT=5432
-DB_NAME=kratamex
-DB_USER=kratamex
-DB_PASSWORD=kratamex_dev
-CORS_ORIGIN=https://localhost
-```
-
-### Comandos
-
-```bash
-# Copiar variables de entorno
-cp .env.example .env
-cp backend/.env.example backend/.env
-
-# Levantar todo
-docker compose up --build -d
-
-# Ver estado
-docker compose ps
-
-# Ver logs
-docker compose logs -f backend
-
-# Rebuild tras cambios en package.json
-docker compose stop frontend
-docker rm kratamex-frontend-1
-docker volume rm kratamex_frontend_modules
-docker compose up -d --build frontend
-
-# Parar
-docker compose down
-```
-
-### URLs de acceso
-
-| Acceso | URL |
-|--------|-----|
-| **Web HTTPS** (recomendado) | https://localhost |
-| HTTP -> redirige a HTTPS | http://localhost |
-| Frontend directo | http://localhost:3000 |
-| Backend API directo | http://localhost:3001 |
-| PostgreSQL | localhost:5432 |
-
-> El certificado SSL es autofirmado (dev). En produccion usar Let's Encrypt.
-
----
-
-## Guia de Desarrollo
-
-### Prerrequisitos
-
-- Node.js 20+
-- Docker + Docker Compose
-- Git
-
-### Instalacion
-
-```bash
-git clone https://github.com/ddelbarriojuan-code/Proyecto_web
-cd Proyecto_web
-
-# Con Docker (recomendado)
-cp .env.example .env
-cp backend/.env.example backend/.env
-docker compose up --build -d
-
-# Manual (requiere PostgreSQL local)
-cd backend && npm install && npm start &
-cd frontend && npm install && npm run dev
-```
-
-### Scripts
-
-**Frontend**:
-- `npm run dev`: Servidor de desarrollo (puerto 3000)
-- `npm run build`: Build de produccion (`tsc && vite build`)
-- `npm test`: Tests con Vitest
-
-**Backend**:
-- `npm start`: Inicia servidor (puerto 3001)
-- `npm run dev`: Desarrollo con nodemon (polling)
-
----
-
-## Estado actual del proyecto
-
-- **Productos de ejemplo**: 15 ordenadores (Portatiles, Gaming, Sobremesa)
-- **Endpoints API**: 15 rutas REST
-- **Tablas DB**: 4 (PostgreSQL)
-- **Correcciones de seguridad**: 21 vulnerabilidades documentadas y corregidas
-- **UI**: Glassmorphism + Framer Motion + Skeleton Loading
-- **Version**: 2.0.0
-
----
-
-*Ultima actualizacion: 20/03/2026 -- v2.1.0*
+*Última actualización: 22/03/2026*

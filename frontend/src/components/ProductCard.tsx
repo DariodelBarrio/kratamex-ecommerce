@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Check, Monitor, Heart } from 'lucide-react';
+import { ShoppingCart, Check, Monitor, Heart, Star } from 'lucide-react';
 import type { Producto } from '../interfaces';
 
 // =================================================================
@@ -32,7 +32,7 @@ export function ProductCard({ producto, onAddToCart, index, isWishlisted = false
 
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (added) return;
+    if (added || producto.stock <= 0) return;
     onAddToCart(producto);
     setAdded(true);
     setTimeout(() => setAdded(false), 1600);
@@ -163,12 +163,31 @@ export function ProductCard({ producto, onAddToCart, index, isWishlisted = false
       {/* Info */}
       <div className="product-info">
         <h3 className="product-name">{producto.nombre}</h3>
+        {producto.rating !== undefined && producto.rating > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, margin: '2px 0' }}>
+            <Star size={12} fill="#f59e0b" color="#f59e0b" />
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{producto.rating.toFixed(1)} ({producto.numValoraciones})</span>
+          </div>
+        )}
         {producto.descripcion && (
           <p className="product-description">{producto.descripcion}</p>
         )}
 
         <div className="product-card-footer">
-          <span className="product-price">${producto.precio.toFixed(2)}</span>
+          <div>
+            <span className="product-price">€{producto.precio.toFixed(2)}</span>
+            {producto.stock !== undefined && (
+              <div style={{ fontSize: '0.65rem', marginTop: 2 }}>
+                {producto.stock > 10 ? (
+                  <span style={{ color: '#10b981' }}>En stock</span>
+                ) : producto.stock > 0 ? (
+                  <span style={{ color: '#f59e0b' }}>Quedan {producto.stock}</span>
+                ) : (
+                  <span style={{ color: '#ef4444' }}>Sin stock</span>
+                )}
+              </div>
+            )}
+          </div>
 
           <motion.button
             className={`add-to-cart ${added ? 'add-to-cart--success' : ''}`}

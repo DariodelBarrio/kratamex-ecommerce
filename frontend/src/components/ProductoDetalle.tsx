@@ -3,11 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, ShoppingCart, Check, Monitor, Package,
-  MessageSquare, Send, User, Tag, ChevronDown, Share2
+  MessageSquare, Send, User, Tag, ChevronDown, Share2, Star
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import type { Producto, Comentario } from '../interfaces'
+import type { Producto, Comentario, Valoracion } from '../interfaces'
+import { StarRating, RatingForm, ValoracionesList } from './StarRating'
 
 interface Props {
   onAddToCart: (producto: Producto) => void
@@ -436,9 +437,38 @@ export default function ProductoDetalle({ onAddToCart, carritoCount, onOpenCart 
             <h1 className="detalle-nombre">{producto.nombre}</h1>
 
             <div className="detalle-precio-row">
-              <span className="detalle-precio">${producto.precio.toFixed(2)}</span>
+              <span className="detalle-precio">€{producto.precio.toFixed(2)}</span>
               <span className="detalle-precio-label">IVA incluido</span>
             </div>
+
+            {/* Rating */}
+            {(producto as any).rating > 0 && (
+              <div style={{ margin: '8px 0' }}>
+                <StarRating rating={(producto as any).rating} count={(producto as any).numValoraciones} />
+              </div>
+            )}
+
+            {/* Stock */}
+            <div style={{ margin: '8px 0' }}>
+              {producto.stock > 10 ? (
+                <span className="stock-badge in-stock">En stock ({producto.stock} uds)</span>
+              ) : producto.stock > 0 ? (
+                <span className="stock-badge low-stock">Últimas {producto.stock} unidades</span>
+              ) : (
+                <span className="stock-badge out-of-stock">Sin stock</span>
+              )}
+            </div>
+
+            {/* Image gallery */}
+            {(producto as any).imagenes?.length > 0 && (
+              <div style={{ display: 'flex', gap: '8px', margin: '12px 0', flexWrap: 'wrap' }}>
+                {(producto as any).imagenes.map((img: string, i: number) => (
+                  <img key={i} src={img} alt={`${producto.nombre} ${i + 1}`}
+                    style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer' }}
+                  />
+                ))}
+              </div>
+            )}
 
             {/* Specs */}
             {specs.length > 0 && (
@@ -472,7 +502,9 @@ export default function ProductoDetalle({ onAddToCart, carritoCount, onOpenCart 
             <motion.button
               className={`detalle-add-btn ${added ? 'detalle-add-btn--success' : ''}`}
               onClick={handleAdd}
+              disabled={producto.stock <= 0}
               whileTap={{ scale: 0.97 }}
+              style={producto.stock <= 0 ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
             >
               <AnimatePresence mode="wait">
                 {added ? (
@@ -509,6 +541,15 @@ export default function ProductoDetalle({ onAddToCart, carritoCount, onOpenCart 
             onAddToCart={onAddToCart}
           />
         )}
+
+        {/* Ratings */}
+        <section style={{ marginTop: 32, marginBottom: 24 }}>
+          <h3 style={{ fontSize: '1.1rem', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Star size={18} /> Valoraciones
+          </h3>
+          <RatingForm productoId={producto.id} />
+          <ValoracionesList productoId={producto.id} />
+        </section>
 
         {/* Comments */}
         <SeccionComentarios productoId={producto.id} />
