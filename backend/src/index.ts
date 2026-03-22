@@ -348,6 +348,8 @@ app.get('/api/productos', generalRateLimiter, zValidator('query', ProductosQuery
     if (hasta !== undefined) conditions.push(lte(productos.precio, hasta) as unknown as ReturnType<typeof sql>);
     if (enStock) conditions.push(sql`${productos.stock} > 0`);
     if (destacado) conditions.push(eq(productos.destacado, true) as unknown as ReturnType<typeof sql>);
+    // Ocultar productos marcados como inactivos
+    conditions.push(sql`${productos.activo} = true`);
 
     const orderBy = orden === 'asc'    ? asc(productos.precio)
                   : orden === 'desc'   ? desc(productos.precio)
@@ -530,6 +532,23 @@ app.delete('/api/productos/:id/galeria/:imgId', authenticate, requireAdmin, asyn
     if (isNaN(imgId)) return c.json({ error: 'ID inválido' }, 400);
     await db.delete(productoImagenes).where(eq(productoImagenes.id, imgId));
     return c.json({ mensaje: 'Imagen eliminada' });
+  } catch (err) {
+    console.error(err);
+    return c.json({ error: 'Error interno del servidor' }, 500);
+  }
+});
+
+app.patch('/api/productos/:id/stock', authenticate, requireAdmin, async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'));
+    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const body = await c.req.json();
+    const updateData: Record<string, unknown> = {};
+    if (body.stock !== undefined) updateData.stock = Math.max(0, parseInt(body.stock) || 0);
+    if (body.activo !== undefined) updateData.activo = Boolean(body.activo);
+    const result = await db.update(productos).set(updateData).where(eq(productos.id, id)).returning({ id: productos.id });
+    if (!result.length) return c.json({ error: 'Producto no encontrado' }, 404);
+    return c.json({ mensaje: 'Stock actualizado' });
   } catch (err) {
     console.error(err);
     return c.json({ error: 'Error interno del servidor' }, 500);

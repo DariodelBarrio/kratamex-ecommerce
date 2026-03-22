@@ -121,6 +121,9 @@ export const putProducto = (id: number, data: any) =>
 export const deleteProducto = (id: number) =>
   request(`/productos/${id}`, { method: 'DELETE' });
 
+export const patchProductoStock = (id: number, data: { stock?: number; activo?: boolean }) =>
+  request(`/productos/${id}/stock`, { method: 'PATCH', body: JSON.stringify(data) });
+
 export const exportPedidosCsv = () =>
   fetch(`${API}/admin/pedidos/csv`, { headers: authHeaders() }).then(r => r.text());
 
