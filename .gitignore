@@ -9,10 +9,14 @@ backend/dist/
 *.log
 npm-debug.log*
 
-# Environment
+# Environment — NUNCA subir archivos con credenciales reales
 .env
 .env.local
 .env.*.local
+.env.production
+.env.staging
+backend/.env
+frontend/.env
 
 # IDE
 .vscode/
