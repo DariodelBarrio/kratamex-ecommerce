@@ -12,6 +12,7 @@ proyecto/
 │   │   │   │   └── Admin.module.css        # Estilos (CSS Modules)
 │   │   │   ├── SecurityDashboard.tsx       # SOC — panel de ciberseguridad
 │   │   │   ├── SecurityDashboard.module.css
+│   │   │   ├── Checkout.tsx                # Pago con Stripe Elements (PaymentElement)
 │   │   │   ├── OrderHistory.tsx            # Historial de pedidos del usuario
 │   │   │   ├── UserProfile.tsx             # Perfil editable del usuario
 │   │   │   ├── ProductCard.tsx             # Tarjeta de producto con Framer Motion
@@ -61,6 +62,7 @@ proyecto/
 - **Lucide React** — Iconos SVG
 - **React Router v6** — Routing SPA
 - **Zod** — Validación de formularios client-side
+- **@stripe/stripe-js** + **@stripe/react-stripe-js** — Stripe Elements (PaymentElement)
 
 ### Backend
 - **Hono** — Framework web ultra-ligero, TypeScript nativo
@@ -70,6 +72,7 @@ proyecto/
 - **PostgreSQL 16** — Base de datos relacional (driver pg)
 - **argon2** — Hashing de contraseñas (argon2id)
 - **Cloudinary** — CDN para imágenes (fallback local)
+- **stripe** — Creación de PaymentIntents y verificación de webhooks
 - **tsx** — Runtime TypeScript con hot-reload
 
 ### Infraestructura
@@ -145,6 +148,8 @@ Simula: fallos de login masivos (IPs variadas), fuerza bruta (IP fija, 13 intent
 | GET | `/api/productos/:id/comentarios` | No | Listar reseñas del producto |
 | POST | `/api/productos/:id/comentarios` | No | Publicar reseña (rate limited: 10/min) |
 | POST | `/api/pedidos` | No | Crear pedido (rate limited: 10/60s) |
+| POST | `/api/pedidos/checkout` | Opcional | Crear pedido + Stripe PaymentIntent → devuelve `clientSecret` |
+| POST | `/api/webhook` | — | Webhook Stripe: `payment_intent.succeeded` → marca pedido como `pagado` |
 | POST | `/api/login` | No | Autenticar (rate limited: 12 intentos/bloqueo 60s) |
 | POST | `/api/registro` | No | Registrar usuario |
 | POST | `/api/logout` | Token | Cerrar sesión |
@@ -247,6 +252,29 @@ CLOUDINARY_API_SECRET=tu_api_secret
 ```
 
 Sin estas variables las imágenes se guardan localmente en `src/uploads/` y `src/avatars/`.
+
+### Stripe (modo test)
+
+1. Obtén tus claves en [dashboard.stripe.com/test/apikeys](https://dashboard.stripe.com/test/apikeys)
+2. Añade en `backend/.env`:
+```env
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...   # solo necesario para verificar webhooks en producción
+```
+3. Añade en `frontend/.env`:
+```env
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
+```
+4. Reconstruye la imagen del frontend: `docker compose build frontend && docker compose up -d`
+
+**Tarjetas de prueba:**
+
+| Número | Resultado |
+|--------|-----------|
+| `4242 4242 4242 4242` | Pago aprobado |
+| `4000 0000 0000 9995` | Fondos insuficientes |
+
+En ambas: fecha futura · CVC `123` · CP `12345`
 
 ---
 

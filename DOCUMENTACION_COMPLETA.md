@@ -8,10 +8,11 @@
 4. [Backend — Node.js + Hono](#backend--nodejs--hono)
 5. [Base de Datos — PostgreSQL](#base-de-datos--postgresql)
 6. [API REST](#api-rest)
-7. [Panel SOC — Ciberseguridad](#panel-soc--ciberseguridad)
-8. [Autenticación y Seguridad](#autenticación-y-seguridad)
-9. [Despliegue y Docker](#despliegue-y-docker)
-10. [Guía de Desarrollo](#guía-de-desarrollo)
+7. [Pagos con Stripe](#pagos-con-stripe)
+8. [Panel SOC — Ciberseguridad](#panel-soc--ciberseguridad)
+9. [Autenticación y Seguridad](#autenticación-y-seguridad)
+10. [Despliegue y Docker](#despliegue-y-docker)
+11. [Guía de Desarrollo](#guía-de-desarrollo)
 
 ---
 
@@ -24,7 +25,7 @@ KRATAMEX es una **tienda online completa** de ordenadores y accesorios construid
 - **Catálogo**: Búsqueda full-text, filtros por categoría, ordenamiento por precio
 - **Experiencia visual**: Splash screen, partículas animadas, modo oscuro/claro, efecto 3D tilt en tarjetas
 - **Carrito**: Agregar, modificar cantidad, eliminar, cupones, cálculo de IVA (21%), envío gratis
-- **Checkout**: Formulario validado por Zod + validación server-side de precios
+- **Checkout con Stripe**: Formulario validado por Zod → PaymentIntent en backend → formulario Stripe Elements (PaymentElement) → webhook marca el pedido como `pagado`
 - **Perfil de usuario**: Avatar editable (Cloudinary o local), nombre, email, dirección, teléfono, idioma (es/en)
 - **Historial de pedidos**: Lista con expand/collapse de items por pedido, estado con badge de color
 - **Panel Admin** (`/admin`): Dashboard con métricas y gráficas, CRUD de productos con subida de imagen, gestión de pedidos, gestión de reseñas
@@ -45,12 +46,14 @@ KRATAMEX es una **tienda online completa** de ordenadores y accesorios construid
 | Gráficas | Recharts | 3.x |
 | Routing | React Router | 6.x |
 | Validación cliente | Zod | 3.x |
+| Pagos | Stripe Elements (@stripe/react-stripe-js) | latest |
 | Backend | Hono + Node.js | 4.x |
 | ORM | Drizzle ORM | 0.44.x |
 | Validación servidor | Zod + @hono/zod-validator | 3.x |
 | Base de datos | PostgreSQL | 16-alpine |
 | Driver DB | pg (node-postgres) | 8.x |
 | Hashing | argon2 (argon2id) | 0.44.x |
+| Pagos (backend) | stripe (PaymentIntents + webhooks) | latest |
 | Imágenes CDN | Cloudinary (fallback local) | 2.x |
 | Runtime TS | tsx | 4.x |
 | Reverse Proxy | nginx:alpine | latest |
@@ -107,6 +110,7 @@ frontend/src/
 │   │   └── Admin.module.css       # Estilos del panel (CSS Modules)
 │   ├── SecurityDashboard.tsx      # Panel SOC de ciberseguridad
 │   ├── SecurityDashboard.module.css
+│   ├── Checkout.tsx               # Formulario de pago Stripe Elements
 │   ├── OrderHistory.tsx           # Historial de pedidos del usuario
 │   ├── UserProfile.tsx            # Perfil editable del usuario
 │   ├── ProductCard.tsx            # Tarjeta de producto
@@ -151,11 +155,14 @@ const { data: productos = [], isLoading } = useQuery<Producto[]>({
   queryFn: () => fetch(`/api/productos?${params}`).then(r => r.json()),
 });
 
-// Mutación checkout
-const checkout = useMutation({
-  mutationFn: (data) => fetch('/api/pedidos', { method: 'POST', body: JSON.stringify(data) }).then(r => r.json()),
-  onSuccess: () => { setCarrito([]); setCheckoutExitoso(true); },
-});
+// Checkout con Stripe — flujo de 2 pasos:
+// 1. handleCheckout() → POST /api/pedidos/checkout → obtiene clientSecret
+// 2. setStripeData({ clientSecret, total }) → muestra <Checkout> con PaymentElement
+// 3. onSuccess → vacía carrito + navega a /mis-pedidos
+const handleCheckout = async () => {
+  const data = await api.crearCheckout({ ...formulario, items, cupon });
+  setStripeData({ clientSecret: data.clientSecret, total: data.total });
+};
 ```
 
 Filtros disponibles:
@@ -379,6 +386,8 @@ Al arrancar, el backend crea las tablas (`CREATE TABLE IF NOT EXISTS`) y hace se
 | GET | `/api/productos/:id/comentarios` | Reseñas del producto |
 | POST | `/api/productos/:id/comentarios` | Publicar reseña (rate limited) |
 | POST | `/api/pedidos` | Crear pedido con validación de precios server-side |
+| POST | `/api/pedidos/checkout` | Crear pedido + Stripe PaymentIntent → `{ clientSecret, pedidoId, total }` |
+| POST | `/api/webhook` | Webhook Stripe (raw body): `payment_intent.succeeded` → estado `pagado` |
 | POST | `/api/login` | Autenticar usuario (rate limited) |
 | POST | `/api/registro` | Registrar nuevo usuario |
 | POST | `/api/logout` | Cerrar sesión (invalidar token) |
@@ -427,6 +436,92 @@ Al arrancar, el backend crea las tablas (`CREATE TABLE IF NOT EXISTS`) y hace se
   "hourly": [{ "hora": "2026-03-22T00:00:00Z", "tipo": "login_fail", "total": 18 }]
 }
 ```
+
+---
+
+## Pagos con Stripe
+
+### Flujo completo
+
+```
+Usuario rellena carrito + datos de envío
+    │
+    ▼
+handleCheckout()
+    │  POST /api/pedidos/checkout  { cliente, email, direccion, items, cupon }
+    ▼
+Backend:
+  1. Valida stock y precios (igual que /api/pedidos)
+  2. Crea pedido en BD con estado = 'pendiente'
+  3. Crea Stripe PaymentIntent con metadata.pedidoId
+  4. Devuelve { clientSecret, pedidoId, total }
+    │
+    ▼
+Frontend muestra <Checkout> (Stripe Elements)
+    │  stripe.confirmPayment({ redirect: 'if_required' })
+    ▼
+Pago aprobado → onSuccess() → vacía carrito → navega a /mis-pedidos
+    │
+    ▼ (asíncrono, servidor)
+Stripe POST /api/webhook  event: payment_intent.succeeded
+    │  verifica firma HMAC con STRIPE_WEBHOOK_SECRET
+    ▼
+Backend actualiza pedido.estado = 'pagado'
+```
+
+### Componente `Checkout.tsx`
+
+```tsx
+// Inicialización única fuera del render
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY)
+
+// Elements envuelve el formulario con el clientSecret
+<Elements stripe={stripePromise} options={{ clientSecret, appearance }}>
+  <PaymentElement />
+  <button onClick={() => stripe.confirmPayment({ redirect: 'if_required' })}>
+    Pagar €{total}
+  </button>
+</Elements>
+```
+
+### Endpoint `POST /api/pedidos/checkout`
+
+Mismo body que `POST /api/pedidos`. Respuesta:
+
+```json
+{ "clientSecret": "pi_..._secret_...", "pedidoId": 42, "total": 127.45 }
+```
+
+El importe se pasa a Stripe en **céntimos** (`Math.round(total * 100)`), divisa `eur`.
+
+### Endpoint `POST /api/webhook`
+
+Lee el body con `c.req.text()` (raw, sin parsear) para que la firma HMAC sea válida.
+Si `STRIPE_WEBHOOK_SECRET` no está configurado, acepta el evento sin verificar (útil en desarrollo local sin Stripe CLI).
+
+### Variables de entorno
+
+| Variable | Dónde | Descripción |
+|----------|-------|-------------|
+| `STRIPE_SECRET_KEY` | `backend/.env` | Clave secreta `sk_test_...` |
+| `STRIPE_WEBHOOK_SECRET` | `backend/.env` | Secret del webhook `whsec_...` |
+| `VITE_STRIPE_PUBLISHABLE_KEY` | `frontend/.env` | Clave pública `pk_test_...` |
+
+### Tarjetas de prueba
+
+| Número de tarjeta | Resultado |
+|-------------------|-----------|
+| `4242 4242 4242 4242` | Pago aprobado |
+| `4000 0000 0000 9995` | Fondos insuficientes (rechazado) |
+
+En ambas: fecha futura · CVC `123` · CP `12345`
+
+### Estados del pedido relacionados
+
+| Estado | Cuándo se asigna |
+|--------|-----------------|
+| `pendiente` | Al crear el pedido en `/api/pedidos/checkout` |
+| `pagado` | Al recibir `payment_intent.succeeded` en el webhook |
 
 ---
 
@@ -565,9 +660,16 @@ CORS_ORIGIN=https://localhost
 ```env
 DATABASE_URL=postgresql://kratamex:kratamex_pass@postgres:5432/kratamex
 CORS_ORIGIN=https://localhost
-CLOUDINARY_CLOUD_NAME=   # opcional
-CLOUDINARY_API_KEY=      # opcional
-CLOUDINARY_API_SECRET=   # opcional
+CLOUDINARY_CLOUD_NAME=      # opcional
+CLOUDINARY_API_KEY=         # opcional
+CLOUDINARY_API_SECRET=      # opcional
+STRIPE_SECRET_KEY=sk_test_... # modo test
+STRIPE_WEBHOOK_SECRET=whsec_... # para verificar webhooks
+```
+
+**Frontend (`frontend/.env`)**:
+```env
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
 ```
 
 ### Arranque
@@ -692,6 +794,16 @@ logSecEvent('forbidden', {
 ```
 
 El evento aparece automáticamente en el panel SOC en el próximo refresh (máx. 15 s).
+
+### Probar Stripe en local (sin webhook)
+
+Para desarrollo local puedes omitir `STRIPE_WEBHOOK_SECRET`. El pedido se creará en estado `pendiente` y el pago funcionará, pero el estado no cambiará a `pagado` automáticamente (el webhook no llega desde fuera). Para probarlo completo usa Stripe CLI:
+
+```bash
+stripe listen --forward-to localhost:3001/api/webhook
+```
+
+Esto imprime un `whsec_...` temporal que puedes usar como `STRIPE_WEBHOOK_SECRET`.
 
 ---
 
