@@ -9,7 +9,7 @@ import { PasswordStrength } from '../PasswordStrength';
 import {
   patchPedidoEstado, getAdminAnalytics, getAdminUsuarios,
   getAdminCupones, postAdminCupon, deleteAdminCupon,
-  exportPedidosCsv, exportProductosCsv,
+  exportPedidosCsv, exportProductosCsv, patchProductoStock,
 } from '../../api';
 
 function Admin() {
@@ -24,7 +24,7 @@ function Admin() {
   const [vista, setVista] = useState<'dashboard' | 'productos' | 'pedidos' | 'reseñas' | 'cupones' | 'usuarios'>('dashboard');
   const [editando, setEditando] = useState<Producto | null>(null);
   const [formProducto, setFormProducto] = useState({
-    nombre: '', descripcion: '', precio: '', imagen: '', categoria: '',
+    nombre: '', descripcion: '', precio: '', imagen: '', categoria: '', stock: '0', activo: true,
   });
 
   const verificarPassword = async () => {
@@ -111,6 +111,8 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
   const [cupones, setCupones] = useState<any[]>([]);
   const [formCupon, setFormCupon] = useState({ codigo: '', tipo: 'porcentaje', valor: '', minCompra: '', maxUsos: '' });
   const [estadoEditando, setEstadoEditando] = useState<number | null>(null);
+  const [stockEditando, setStockEditando] = useState<number | null>(null);
+  const [stockValor, setStockValor] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { cargarDatos(); }, [token]);
@@ -124,6 +126,17 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
     getAdminAnalytics().then(setAnalytics).catch(console.error);
     getAdminUsuarios().then(setUsuarios).catch(console.error);
     getAdminCupones().then(setCupones).catch(console.error);
+  };
+
+  const actualizarStock = async (id: number, nuevoStock: number) => {
+    await patchProductoStock(id, { stock: nuevoStock });
+    setProductos(prev => prev.map((p: Producto) => p.id === id ? { ...p, stock: nuevoStock } : p));
+    setStockEditando(null);
+  };
+
+  const toggleActivo = async (id: number, activo: boolean) => {
+    await patchProductoStock(id, { activo: !activo });
+    setProductos(prev => prev.map((p: Producto) => p.id === id ? { ...p, activo: !activo } : p));
   };
 
   const cambiarEstadoPedido = async (id: number, estado: string) => {
@@ -194,7 +207,7 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
     setGuardando(true);
     setMensajeForm('');
     try {
-      const data = { ...formProducto, precio: parseFloat(formProducto.precio) };
+      const data = { ...formProducto, precio: parseFloat(formProducto.precio), stock: parseInt(formProducto.stock) || 0 };
       const url = editando ? `/api/productos/${editando.id}` : '/api/productos';
       const method = editando ? 'PUT' : 'POST';
       const res = await fetch(url, {
@@ -226,7 +239,7 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
         }
       }
 
-      setFormProducto({ nombre: '', descripcion: '', precio: '', imagen: '', categoria: '' });
+      setFormProducto({ nombre: '', descripcion: '', precio: '', imagen: '', categoria: '', stock: '0', activo: true });
       setImagenFile(null);
       setImagenPreview('');
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -516,6 +529,19 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
                   value={formProducto.precio} onChange={e => setFormProducto({ ...formProducto, precio: e.target.value })} min={0} step={0.01} />
                 <input type="text" placeholder="Categoría" className={styles['form-input']}
                   value={formProducto.categoria} onChange={e => setFormProducto({ ...formProducto, categoria: e.target.value })} />
+                <input type="number" placeholder="Stock (unidades)" className={styles['form-input']}
+                  value={formProducto.stock} onChange={e => setFormProducto({ ...formProducto, stock: e.target.value })} min={0} step={1} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, marginBottom: 4 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14, color: 'var(--text-primary)' }}>
+                  <input type="checkbox" checked={formProducto.activo}
+                    onChange={e => setFormProducto({ ...formProducto, activo: e.target.checked })}
+                    style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                  Producto activo (visible en tienda)
+                </label>
+                {!formProducto.activo && (
+                  <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 600 }}>⚠ Oculto en tienda</span>
+                )}
               </div>
 
               {/* Imagen */}
@@ -572,7 +598,7 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
                 {editando && (
                   <button className={styles['btn-secondary']} onClick={() => {
                     setEditando(null);
-                    setFormProducto({ nombre: '', descripcion: '', precio: '', imagen: '', categoria: '' });
+                    setFormProducto({ nombre: '', descripcion: '', precio: '', imagen: '', categoria: '', stock: '0', activo: true });
                     setImagenFile(null);
                     setImagenPreview('');
                     setMensajeForm('');
@@ -584,11 +610,13 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
             <div className={styles['admin-table']}>
               <table>
                 <thead>
-                  <tr><th>ID</th><th>Imagen</th><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Acciones</th></tr>
+                  <tr><th>ID</th><th>Imagen</th><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Stock</th><th>Estado</th><th>Acciones</th></tr>
                 </thead>
                 <tbody>
-                  {productos.map((p: Producto) => (
-                    <tr key={p.id}>
+                  {productos.map((p: Producto) => {
+                    const stockColor = (p.stock ?? 0) === 0 ? '#ef4444' : (p.stock ?? 0) <= 5 ? '#f59e0b' : '#10b981';
+                    return (
+                    <tr key={p.id} style={{ opacity: p.activo === false ? 0.5 : 1 }}>
                       <td>{p.id}</td>
                       <td>
                         {p.imagen
@@ -598,20 +626,52 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
                       </td>
                       <td>{sanitize(p.nombre)}</td>
                       <td>{sanitize(p.categoria)}</td>
-                      <td>${p.precio.toFixed(2)}</td>
+                      <td>€{p.precio.toFixed(2)}</td>
+                      <td>
+                        {stockEditando === p.id ? (
+                          <input
+                            type="number" min={0} defaultValue={p.stock ?? 0}
+                            value={stockValor}
+                            onChange={e => setStockValor(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') actualizarStock(p.id, parseInt(stockValor) || 0); if (e.key === 'Escape') setStockEditando(null); }}
+                            onBlur={() => actualizarStock(p.id, parseInt(stockValor) || 0)}
+                            autoFocus
+                            style={{ width: 70, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: 13 }}
+                          />
+                        ) : (
+                          <span
+                            onClick={() => { setStockEditando(p.id); setStockValor(String(p.stock ?? 0)); }}
+                            title="Click para editar stock"
+                            style={{ cursor: 'pointer', fontWeight: 700, color: stockColor, padding: '2px 8px', borderRadius: 6, background: `${stockColor}18`, border: `1px solid ${stockColor}33` }}
+                          >
+                            {(p.stock ?? 0) === 0 ? '⊘ Agotado' : p.stock}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          onClick={() => toggleActivo(p.id, p.activo !== false)}
+                          title={p.activo === false ? 'Activar producto' : 'Ocultar producto'}
+                          style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer', background: p.activo === false ? '#ef444422' : '#10b98122', color: p.activo === false ? '#ef4444' : '#10b981' }}
+                        >
+                          {p.activo === false ? 'Oculto' : 'Activo'}
+                        </button>
+                      </td>
                       <td>
                         <button className={styles['btn-edit']} onClick={() => {
                           setEditando(p);
-                          setFormProducto({ nombre: p.nombre, descripcion: p.descripcion, precio: p.precio.toString(), imagen: p.imagen, categoria: p.categoria });
+                          setFormProducto({ nombre: p.nombre, descripcion: p.descripcion, precio: p.precio.toString(), imagen: p.imagen, categoria: p.categoria, stock: String(p.stock ?? 0), activo: p.activo !== false });
                           setImagenFile(null);
                           setImagenPreview(p.imagen || '');
                           if (fileInputRef.current) fileInputRef.current.value = '';
                           setMensajeForm('');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}>Editar</button>
                         <button className={styles['btn-delete']} onClick={() => eliminarProducto(p.id)}>Eliminar</button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
