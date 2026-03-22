@@ -1,0 +1,69 @@
+# CodeRabbit — configuración para Kratamex
+# Documentación: https://docs.coderabbit.ai/guides/configure-coderabbit
+
+language: "es-ES"
+
+reviews:
+  # Revisar cada push a main y en pull requests
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+
+  # Nivel de revisión exhaustivo
+  profile: "assertive"
+
+  # Rutas a ignorar (documentación y configuración de infraestructura)
+  path_filters:
+    - "!**/*.md"
+    - "!docker-compose.yml"
+    - "!docker-compose*.yml"
+    - "!nginx/**"
+    - "!**/*.lock"
+    - "!**/package-lock.json"
+    - "!**/dist/**"
+    - "!**/coverage/**"
+
+  path_instructions:
+    # Backend — máxima atención a seguridad
+    - path: "backend/src/**"
+      instructions: |
+        Revisa exhaustivamente los siguientes aspectos de seguridad:
+        - Autenticación: verifica que todas las rutas protegidas usen el middleware `authenticate`.
+        - Autorización: comprueba que las rutas de admin usen `requireAdmin` y que no haya escalada de privilegios.
+        - Validación de inputs: confirma que todos los endpoints usen zValidator + Zod antes de procesar datos.
+        - Precios y totales: el precio de los productos SIEMPRE debe obtenerse de la base de datos, nunca del body del request.
+        - Inyección SQL: aunque se usa Drizzle ORM, alerta si se usa `sql` template tag con datos del usuario sin sanitizar.
+        - Tokens de sesión: verifica que los tokens se generen con crypto.randomBytes (mínimo 32 bytes) y que se limpien correctamente al hacer logout.
+        - Rate limiting: comprueba que los endpoints sensibles (login, register, checkout) tengan rate limiting activo.
+        - CORS: asegúrate de que CORS_ORIGIN no esté configurado como wildcard (*) en producción.
+        - Contraseñas: deben almacenarse con argon2id, nunca en texto plano ni con algoritmos débiles (md5, sha1).
+        - Logs: no deben registrarse contraseñas, tokens ni datos sensibles.
+
+    # Frontend — seguridad en cliente
+    - path: "frontend/src/**"
+      instructions: |
+        Revisa los siguientes puntos:
+        - XSS: no uses dangerouslySetInnerHTML con datos del usuario.
+        - Tokens: verifica que no se guarden tokens en localStorage si hay alternativas más seguras.
+        - Inputs: confirma que los formularios validen datos antes de enviarlos (Zod en cliente).
+        - Rutas protegidas: las páginas de admin y perfil deben comprobar el rol del usuario.
+        - No expongas variables de entorno sensibles con prefijo VITE_ que no deban ser públicas.
+
+    # Tests — calidad de los mocks
+    - path: "**/__tests__/**"
+      instructions: |
+        - Verifica que los mocks de la DB no permitan que datos reales de producción lleguen a los tests.
+        - Comprueba que se testeen tanto el camino feliz como los casos de error.
+        - Asegúrate de que los tests de autenticación prueben explícitamente los casos 401 y 403.
+
+    # GitHub Actions — hardening del CI
+    - path: ".github/**"
+      instructions: |
+        - Verifica que no se usen secrets en variables de entorno visibles en logs.
+        - Comprueba que las actions usen versiones fijadas (no `@latest`).
+        - Alerta si se usa `npm install` en lugar de `npm ci` (menos reproducible).
+
+chat:
+  auto_reply: true
