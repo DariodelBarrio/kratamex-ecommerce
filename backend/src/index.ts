@@ -1922,20 +1922,24 @@ async function waitForDB(maxAttempts = 15, delayMs = 2000) {
   }
 }
 
-(async () => {
-  try {
-    await waitForDB();
-    await initDB();
-    await seedProductos();
-    await seedUsuarios();
-    await seedPedidos();
-    await seedCupones();
-    await seedCategorias();
-    serve({ fetch: app.fetch, port: PORT }, () =>
-      console.log(`Backend Hono v3 corriendo en http://localhost:${PORT}`)
-    );
-  } catch (err) {
-    console.error('Error al iniciar el backend:', err);
-    process.exit(1);
-  }
-})();
+export { app };
+
+if (process.env.NODE_ENV !== 'test') {
+  (async () => {
+    try {
+      await waitForDB();
+      await initDB();
+      await seedProductos();
+      await seedUsuarios();
+      await seedPedidos();
+      await seedCupones();
+      await seedCategorias();
+      serve({ fetch: app.fetch, port: PORT }, () =>
+        console.log(`Backend Hono v3 corriendo en http://localhost:${PORT}`)
+      );
+    } catch (err) {
+      console.error('Error al iniciar el backend:', err);
+      process.exit(1);
+    }
+  })();
+}
