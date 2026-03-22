@@ -99,6 +99,10 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
   const [cuponDescuento, setCuponDescuento] = useState(0)
   const [cuponError, setCuponError] = useState('')
   const [filtroEnStock, setFiltroEnStock] = useState(false)
+  const [busquedaFocus, setBusquedaFocus] = useState(false)
+  const [busquedaReciente, setBusquedaReciente] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('kratamex_searches') || '[]') } catch { return [] }
+  })
 
   const productosRef = useRef<HTMLElement>(null)
   const [searchParams] = useSearchParams()
@@ -235,6 +239,15 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
     setPrecioMax('')
   }
 
+  const guardarBusqueda = (q: string) => {
+    if (!q.trim()) return
+    setBusquedaReciente(prev => {
+      const next = [q, ...prev.filter(s => s !== q)].slice(0, 6)
+      localStorage.setItem('kratamex_searches', JSON.stringify(next))
+      return next
+    })
+  }
+
   const hayFiltrosActivos = busqueda || categoriaFiltro || ordenPrecio || filtrarFavoritos || precioMin || precioMax
 
   return (
@@ -247,7 +260,7 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
             <SecurityBadge />
           </div>
 
-          <div className="search-bar">
+          <div className="search-bar" style={{ position: 'relative' }}>
             <Search size={15} className="search-icon" />
             <input
               type="text"
@@ -255,11 +268,32 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
               value={busqueda}
               onChange={e => setBusqueda(e.target.value)}
               className="search-input"
+              onFocus={() => setBusquedaFocus(true)}
+              onBlur={() => setTimeout(() => setBusquedaFocus(false), 150)}
+              onKeyDown={e => { if (e.key === 'Enter') guardarBusqueda(busqueda) }}
             />
             {busqueda && (
               <button className="search-clear" onClick={() => setBusqueda('')} aria-label="Limpiar búsqueda">
                 <X size={14} />
               </button>
+            )}
+            {busquedaFocus && busquedaReciente.length > 0 && !busqueda && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 999, overflow: 'hidden', marginTop: 4 }}>
+                <div style={{ padding: '8px 14px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Búsquedas recientes</div>
+                {busquedaReciente.map(s => (
+                  <button key={s} onClick={() => { setBusqueda(s); setBusquedaFocus(false) }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 14, textAlign: 'left' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--hover-bg)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                  >
+                    <Search size={12} style={{ opacity: 0.4, flexShrink: 0 }} /> {s}
+                  </button>
+                ))}
+                <button onClick={() => { setBusquedaReciente([]); localStorage.removeItem('kratamex_searches') }}
+                  style={{ width: '100%', padding: '6px 14px', background: 'none', border: 'none', borderTop: '1px solid var(--border-color)', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 12 }}>
+                  Limpiar historial
+                </button>
+              </div>
             )}
           </div>
 
@@ -867,6 +901,18 @@ function App() {
       } />
       <Route path="/admin" element={<Admin />} />
       <Route path="/panel" element={<SecurityDashboard />} />
+      <Route path="*" element={
+        <div style={{ minHeight: '80vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, padding: 40 }}>
+          <div style={{ fontSize: 96, fontWeight: 900, color: 'var(--accent)', lineHeight: 1 }}>404</div>
+          <h2 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Página no encontrada</h2>
+          <p style={{ color: 'var(--text-secondary)', textAlign: 'center', maxWidth: 400, margin: 0 }}>
+            La página que buscas no existe o fue movida.
+          </p>
+          <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 28px', background: 'var(--accent)', color: '#fff', borderRadius: 10, fontWeight: 600, textDecoration: 'none' }}>
+            ← Volver a la tienda
+          </Link>
+        </div>
+      } />
     </Routes>
     </>
   )

@@ -33,7 +33,7 @@ import {
   ProductoBodySchema, ProductosQuerySchema, LoginSchema, RegisterSchema,
   PedidoSchema, PedidoEstadoSchema, ComentarioSchema, ValoracionSchema,
   CategoriaSchema, CuponSchema, ValidarCuponSchema, PushSubscriptionSchema,
-  PerfilSchema,
+  PerfilSchema, CambiarPasswordSchema,
 } from './schemas';
 
 const PORT = 3001;
@@ -1218,20 +1218,41 @@ app.post('/api/usuario/avatar', authenticate, async (c) => {
   }
 });
 
+app.put('/api/usuario/password', authenticate, zValidator('json', CambiarPasswordSchema), async (c) => {
+  try {
+    const user = c.get('user');
+    const { passwordActual, passwordNueva } = c.req.valid('json');
+    const [row] = await db.select().from(usuarios).where(eq(usuarios.id, user.id));
+    if (!row) return c.json({ error: 'Usuario no encontrado' }, 404);
+    const valida = await argon2.verify(row.password, passwordActual);
+    if (!valida) return c.json({ error: 'Contraseña actual incorrecta' }, 400);
+    const hash = await argon2.hash(passwordNueva);
+    await db.update(usuarios).set({ password: hash }).where(eq(usuarios.id, user.id));
+    return c.json({ mensaje: 'Contraseña actualizada' });
+  } catch (err) {
+    console.error(err);
+    return c.json({ error: 'Error interno del servidor' }, 500);
+  }
+});
+
 // =================================================================
 // RUTAS — ADMIN USERS
 // =================================================================
 app.get('/api/admin/usuarios', authenticate, requireAdmin, async (c) => {
   try {
     const rows = await db.select({
-      id:        usuarios.id,
-      username:  usuarios.username,
-      email:     usuarios.email,
-      nombre:    usuarios.nombre,
-      role:      usuarios.role,
-      avatar:    usuarios.avatar,
-      createdAt: usuarios.createdAt,
-    }).from(usuarios).orderBy(desc(usuarios.createdAt));
+      id:           usuarios.id,
+      username:     usuarios.username,
+      email:        usuarios.email,
+      nombre:       usuarios.nombre,
+      role:         usuarios.role,
+      avatar:       usuarios.avatar,
+      createdAt:    usuarios.createdAt,
+      totalPedidos: sql<number>`COUNT(${pedidos.id})`,
+    }).from(usuarios)
+      .leftJoin(pedidos, eq(pedidos.usuarioId, usuarios.id))
+      .groupBy(usuarios.id)
+      .orderBy(desc(usuarios.createdAt));
     return c.json(rows);
   } catch (err) {
     console.error(err);
