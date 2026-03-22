@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Producto, CarritoItem, Pedido, Usuario, Valoracion, Cupon, CostesCalculo } from '../interfaces';
+import type { Producto, CarritoItem, Pedido, CostesCalculo } from '../interfaces';
 
 describe('Interfaces', () => {
   it('Producto has all required fields', () => {
