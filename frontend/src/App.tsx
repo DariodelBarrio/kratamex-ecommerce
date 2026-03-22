@@ -787,13 +787,26 @@ function App() {
   const [tema, setTema] = useState<'dark' | 'light'>(() =>
     (localStorage.getItem('kratamex_tema') as 'dark' | 'light') || 'dark'
   )
-  const [authUser, setAuthUser] = useState<Usuario | null>(() => {
-    try {
-      const saved = localStorage.getItem('kratamex_user')
-      return saved ? JSON.parse(saved) : null
-    } catch { return null }
-  })
+  const [authUser, setAuthUser] = useState<Usuario | null>(null)
   const [lang, setLangState] = useState(getLang())
+
+  // Validar sesión guardada contra el backend al arrancar
+  useEffect(() => {
+    const token = localStorage.getItem('kratamex_token')
+    const saved = localStorage.getItem('kratamex_user')
+    if (!token || !saved) return
+    fetch('/api/usuario', { headers: { Authorization: token } }).then(r => {
+      if (r.ok) {
+        try { setAuthUser(JSON.parse(saved)) } catch {}
+      } else {
+        localStorage.removeItem('kratamex_token')
+        localStorage.removeItem('kratamex_user')
+      }
+    }).catch(() => {
+      // Sin conexión — restaurar sesión localmente para no romper UX offline
+      try { setAuthUser(JSON.parse(saved)) } catch {}
+    })
+  }, [])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-tema', tema)
