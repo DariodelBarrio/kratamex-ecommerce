@@ -130,18 +130,18 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
 
   const actualizarStock = async (id: number, nuevoStock: number) => {
     await patchProductoStock(id, { stock: nuevoStock });
-    setProductos(prev => prev.map((p: Producto) => p.id === id ? { ...p, stock: nuevoStock } : p));
+    setProductos((prev: Producto[]) => prev.map((p: Producto) => p.id === id ? { ...p, stock: nuevoStock } : p));
     setStockEditando(null);
   };
 
   const toggleActivo = async (id: number, activo: boolean) => {
     await patchProductoStock(id, { activo: !activo });
-    setProductos(prev => prev.map((p: Producto) => p.id === id ? { ...p, activo: !activo } : p));
+    setProductos((prev: Producto[]) => prev.map((p: Producto) => p.id === id ? { ...p, activo: !activo } : p));
   };
 
   const cambiarEstadoPedido = async (id: number, estado: string) => {
     await patchPedidoEstado(id, estado);
-    setPedidos(prev => prev.map((p: any) => p.id === id ? { ...p, estado } : p));
+    setPedidos((prev: any[]) => prev.map((p: any) => p.id === id ? { ...p, estado } : p));
     setEstadoEditando(null);
   };
 

@@ -8,7 +8,7 @@ React 19 + TypeScript + Framer Motion
 
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { Routes, Route, Link, useSearchParams, useNavigate, Navigate } from 'react-router-dom'
-import { ShoppingCart, X, Plus, Minus, Check, Search, Package, Truck, Shield, ArrowDown, Trash2, ArrowUp, Heart, LayoutGrid, List, Sun, Moon, User, LogOut, ClipboardList, Globe } from 'lucide-react'
+import { ShoppingCart, X, Plus, Minus, Check, Search, Package, Truck, Shield, ArrowDown, Trash2, ArrowUp, Heart, LayoutGrid, List, Sun, Moon, User, LogOut, ClipboardList } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { z } from 'zod'
@@ -27,7 +27,6 @@ import OrderHistory from './components/OrderHistory'
 import UserProfile from './components/UserProfile'
 import type { Producto, CarritoItem, Usuario } from './interfaces'
 import * as api from './api'
-import { t, getLang, setLang } from './i18n'
 
 // =================================================================
 // ZOD — Validación de formulario de checkout
@@ -77,9 +76,11 @@ interface TiendaProps {
   onToggleWishlistExterno: (id: number) => void
   tema: 'dark' | 'light'
   onToggleTema: () => void
+  authUser: Usuario | null
+  onLogout: () => void
 }
 
-function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setCarritoAbiertoExterno, wishlistExterno, onToggleWishlistExterno, tema, onToggleTema }: TiendaProps) {
+function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setCarritoAbiertoExterno, wishlistExterno, onToggleWishlistExterno, tema, onToggleTema, authUser, onLogout }: TiendaProps) {
   const carrito = carritoExterno
   const setCarrito = setCarritoExterno
   const carritoAbierto = carritoAbiertoExterno
@@ -100,7 +101,6 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
   const [cuponCodigo, setCuponCodigo] = useState('')
   const [cuponDescuento, setCuponDescuento] = useState(0)
   const [cuponError, setCuponError] = useState('')
-  const [filtroEnStock, setFiltroEnStock] = useState(false)
   const [busquedaFocus, setBusquedaFocus] = useState(false)
   const [busquedaReciente, setBusquedaReciente] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('kratamex_searches') || '[]') } catch { return [] }
@@ -303,19 +303,17 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
             {tema === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
 
-          {(() => {
-            const user = (() => { try { return JSON.parse(localStorage.getItem('kratamex_user') || 'null') } catch { return null } })()
-            return user ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Link to="/mis-pedidos" className="theme-toggle-btn" title="Mis pedidos"><ClipboardList size={16} /></Link>
-                <Link to="/perfil" className="theme-toggle-btn" title="Mi perfil"><User size={16} /></Link>
-              </div>
-            ) : (
-              <Link to="/login" className="theme-toggle-btn" title="Iniciar sesión" style={{ textDecoration: 'none' }}>
-                <User size={16} />
-              </Link>
-            )
-          })()}
+          {authUser ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Link to="/mis-pedidos" className="theme-toggle-btn" title="Mis pedidos"><ClipboardList size={16} /></Link>
+              <Link to="/perfil" className="theme-toggle-btn" title="Mi perfil"><User size={16} /></Link>
+              <button className="theme-toggle-btn" onClick={onLogout} title="Cerrar sesión"><LogOut size={16} /></button>
+            </div>
+          ) : (
+            <Link to="/login" className="theme-toggle-btn" title="Iniciar sesión" style={{ textDecoration: 'none' }}>
+              <User size={16} />
+            </Link>
+          )}
 
           <button className="cart-btn" onClick={() => setCarritoAbierto(true)}>
             <ShoppingCart size={17} />
@@ -788,7 +786,6 @@ function App() {
     (localStorage.getItem('kratamex_tema') as 'dark' | 'light') || 'dark'
   )
   const [authUser, setAuthUser] = useState<Usuario | null>(null)
-  const [lang, setLangState] = useState(getLang())
 
   // Validar sesión guardada contra el backend al arrancar
   useEffect(() => {
@@ -828,10 +825,6 @@ function App() {
     fetch('/api/logout', { method: 'POST', headers: { Authorization: localStorage.getItem('kratamex_token') || '' } })
   }, [])
 
-  const handleLangChange = useCallback((newLang: 'es' | 'en') => {
-    setLang(newLang)
-    setLangState(newLang)
-  }, [])
 
   const [carrito, setCarrito] = useState<CarritoItem[]>(() => {
     try {
@@ -892,6 +885,8 @@ function App() {
           onToggleWishlistExterno={toggleWishlist}
           tema={tema}
           onToggleTema={toggleTema}
+          authUser={authUser}
+          onLogout={handleLogout}
         />
       } />
       <Route path="/producto/:id" element={
