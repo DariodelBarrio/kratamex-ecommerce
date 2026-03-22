@@ -131,6 +131,11 @@ export const PerfilSchema = z.object({
   idioma:    z.enum(['es', 'en']).optional(),
 });
 
+export const CambiarPasswordSchema = z.object({
+  passwordActual: z.string().min(1),
+  passwordNueva:  z.string().min(6, 'Mínimo 6 caracteres').max(100),
+});
+
 // =================================================================
 // Shared types
 // =================================================================

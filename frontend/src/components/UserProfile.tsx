@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { User, Mail, MapPin, Phone, Globe, Camera, Save } from 'lucide-react';
-import { getUsuario, updatePerfil } from '../api';
+import { User, Mail, MapPin, Phone, Globe, Camera, Save, Lock, Eye, EyeOff } from 'lucide-react';
+import { getUsuario, updatePerfil, cambiarPassword } from '../api';
 import { t, setLang, getLang } from '../i18n';
 import type { Usuario } from '../interfaces';
 
@@ -69,6 +69,31 @@ export default function UserProfile({ user }: UserProfileProps) {
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
+  }
+
+  // Password change state
+  const [pwActual, setPwActual] = useState('');
+  const [pwNueva, setPwNueva] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [showPw, setShowPw] = useState(false);
+
+  const { mutate: changePassword, isPending: changingPw } = useMutation({
+    mutationFn: () => cambiarPassword(pwActual, pwNueva),
+    onSuccess: () => {
+      setPwActual(''); setPwNueva(''); setPwConfirm('');
+      setPwError('');
+      showToast('Contraseña actualizada');
+    },
+    onError: (err: Error) => setPwError(err.message),
+  });
+
+  function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwError('');
+    if (pwNueva.length < 6) { setPwError('La nueva contraseña debe tener al menos 6 caracteres'); return; }
+    if (pwNueva !== pwConfirm) { setPwError('Las contraseñas no coinciden'); return; }
+    changePassword();
   }
 
   // Avatar pick
@@ -417,6 +442,41 @@ export default function UserProfile({ user }: UserProfileProps) {
             {isPending ? '...' : t('profile.save')}
           </motion.button>
         </form>
+
+        {/* Password change */}
+        <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--border-color)' }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
+            <Lock size={16} /> Cambiar contraseña
+          </h3>
+          <form onSubmit={handleChangePassword}>
+            <div style={fieldWrapperStyle}>
+              <label style={labelStyle}><Lock size={14} /> Contraseña actual</label>
+              <div style={{ position: 'relative' }}>
+                <input style={inputStyle} type={showPw ? 'text' : 'password'} value={pwActual}
+                  onChange={e => setPwActual(e.target.value)} placeholder="••••••••" autoComplete="current-password" />
+                <button type="button" onClick={() => setShowPw(v => !v)}
+                  style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+            <div style={fieldWrapperStyle}>
+              <label style={labelStyle}><Lock size={14} /> Nueva contraseña</label>
+              <input style={inputStyle} type={showPw ? 'text' : 'password'} value={pwNueva}
+                onChange={e => setPwNueva(e.target.value)} placeholder="Mínimo 6 caracteres" autoComplete="new-password" />
+            </div>
+            <div style={fieldWrapperStyle}>
+              <label style={labelStyle}><Lock size={14} /> Confirmar contraseña</label>
+              <input style={inputStyle} type={showPw ? 'text' : 'password'} value={pwConfirm}
+                onChange={e => setPwConfirm(e.target.value)} placeholder="Repite la contraseña" autoComplete="new-password" />
+            </div>
+            {pwError && <p style={{ color: '#ef4444', fontSize: 13, marginBottom: 12 }}>{pwError}</p>}
+            <motion.button type="submit" style={{ ...btnStyle, background: '#334155', opacity: changingPw ? 0.7 : 1 }}
+              disabled={changingPw} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <Lock size={15} /> {changingPw ? 'Guardando...' : 'Actualizar contraseña'}
+            </motion.button>
+          </form>
+        </div>
       </motion.div>
 
       {/* Toast */}

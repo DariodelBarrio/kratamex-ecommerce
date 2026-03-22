@@ -1,11 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Lock, Eye, EyeOff, Package, TrendingUp, LayoutDashboard, Trash2, ShoppingBag, DollarSign, Users, Upload, X, ImageIcon, Star, MessageSquare } from 'lucide-react';
+import { Lock, Eye, EyeOff, Package, TrendingUp, LayoutDashboard, Trash2, ShoppingBag, DollarSign, Users, Upload, X, ImageIcon, Star, MessageSquare, Tag, Download, AlertCircle, CheckCircle } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import styles from './Admin.module.css';
 import type { Producto } from '../../interfaces';
 import { sanitize } from '../../utils';
 import { PasswordStrength } from '../PasswordStrength';
+import {
+  patchPedidoEstado, getAdminAnalytics, getAdminUsuarios,
+  getAdminCupones, postAdminCupon, deleteAdminCupon,
+  exportPedidosCsv, exportProductosCsv,
+} from '../../api';
 
 function Admin() {
   const [autenticado, setAutenticado] = useState(false);
@@ -16,7 +21,7 @@ function Admin() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [token, setToken] = useState('');
-  const [vista, setVista] = useState<'dashboard' | 'productos' | 'pedidos' | 'reseñas'>('dashboard');
+  const [vista, setVista] = useState<'dashboard' | 'productos' | 'pedidos' | 'reseñas' | 'cupones' | 'usuarios'>('dashboard');
   const [editando, setEditando] = useState<Producto | null>(null);
   const [formProducto, setFormProducto] = useState({
     nombre: '', descripcion: '', precio: '', imagen: '', categoria: '',
@@ -99,6 +104,11 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
   const [guardando, setGuardando] = useState(false);
   const [mensajeForm, setMensajeForm] = useState('');
   const [reseñas, setReseñas] = useState<any[]>([]);
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [usuarios, setUsuarios] = useState<any[]>([]);
+  const [cupones, setCupones] = useState<any[]>([]);
+  const [formCupon, setFormCupon] = useState({ codigo: '', tipo: 'porcentaje', valor: '', minCompra: '', maxUsos: '' });
+  const [estadoEditando, setEstadoEditando] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { cargarDatos(); }, [token]);
@@ -109,6 +119,43 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
       .then(r => r.json()).then(setPedidos).catch(console.error);
     fetch('/api/admin/valoraciones', { headers: { 'Authorization': token } })
       .then(r => r.json()).then(data => { if (Array.isArray(data)) setReseñas(data); }).catch(console.error);
+    getAdminAnalytics().then(setAnalytics).catch(console.error);
+    getAdminUsuarios().then(setUsuarios).catch(console.error);
+    getAdminCupones().then(setCupones).catch(console.error);
+  };
+
+  const cambiarEstadoPedido = async (id: number, estado: string) => {
+    await patchPedidoEstado(id, estado);
+    setPedidos(prev => prev.map((p: any) => p.id === id ? { ...p, estado } : p));
+    setEstadoEditando(null);
+  };
+
+  const crearCupon = async () => {
+    if (!formCupon.codigo || !formCupon.valor) return;
+    await postAdminCupon({
+      codigo: formCupon.codigo.toUpperCase(),
+      tipo: formCupon.tipo,
+      valor: parseFloat(formCupon.valor),
+      minCompra: formCupon.minCompra ? parseFloat(formCupon.minCompra) : 0,
+      maxUsos: formCupon.maxUsos ? parseInt(formCupon.maxUsos) : undefined,
+    });
+    setFormCupon({ codigo: '', tipo: 'porcentaje', valor: '', minCompra: '', maxUsos: '' });
+    getAdminCupones().then(setCupones);
+  };
+
+  const eliminarCupon = async (id: number) => {
+    if (!confirm('¿Eliminar cupón?')) return;
+    await deleteAdminCupon(id);
+    setCupones(prev => prev.filter((c: any) => c.id !== id));
+  };
+
+  const descargarCSV = async (tipo: 'pedidos' | 'productos') => {
+    const csv = tipo === 'pedidos' ? await exportPedidosCsv() : await exportProductosCsv();
+    const blob = new Blob([csv as string], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${tipo}_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
   };
 
   const eliminarPedido = async (id: number) => {
@@ -237,6 +284,14 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
             <MessageSquare size={18} /> Reseñas
             {reseñas.length > 0 && <span style={{ marginLeft: 6, background: '#6366f1', color: '#fff', borderRadius: '99px', fontSize: '0.7rem', padding: '1px 7px' }}>{reseñas.length}</span>}
           </button>
+          <button className={`${styles['tab-btn']} ${vista === 'cupones' ? styles.active : ''}`}
+            onClick={() => setVista('cupones')}>
+            <Tag size={18} /> Cupones
+          </button>
+          <button className={`${styles['tab-btn']} ${vista === 'usuarios' ? styles.active : ''}`}
+            onClick={() => setVista('usuarios')}>
+            <Users size={18} /> Usuarios
+          </button>
         </div>
 
         {/* DASHBOARD */}
@@ -328,6 +383,72 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
                 </div>
               );
             })()}
+
+            {/* Analytics extras */}
+            {analytics && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+                {/* Top productos */}
+                <div className={styles['chart-card']}>
+                  <h4 className={styles['chart-title']}>Top productos más vendidos</h4>
+                  {analytics.topProductos?.length === 0 ? (
+                    <p style={{ color: 'var(--text-light)', padding: '20px 0' }}>Sin datos</p>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <th style={{ textAlign: 'left', padding: '6px 0', color: 'var(--text-secondary)' }}>Producto</th>
+                          <th style={{ textAlign: 'right', padding: '6px 0', color: 'var(--text-secondary)' }}>Vendidos</th>
+                          <th style={{ textAlign: 'right', padding: '6px 0', color: 'var(--text-secondary)' }}>Ingresos</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analytics.topProductos?.slice(0,6).map((p: any) => (
+                          <tr key={p.productoId} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '6px 0' }}>{sanitize(p.nombre)}</td>
+                            <td style={{ textAlign: 'right', padding: '6px 0', color: '#10b981', fontWeight: 600 }}>{p.vendidos}</td>
+                            <td style={{ textAlign: 'right', padding: '6px 0' }}>€{Number(p.ingresos).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+                {/* Stock bajo */}
+                <div className={styles['chart-card']}>
+                  <h4 className={styles['chart-title']}><AlertCircle size={15} style={{ display: 'inline', marginRight: 6, color: '#f59e0b' }} />Stock bajo (≤5 unidades)</h4>
+                  {analytics.stockBajo?.length === 0 ? (
+                    <p style={{ color: '#10b981', padding: '20px 0', display: 'flex', alignItems: 'center', gap: 6 }}><CheckCircle size={15} /> Todo el stock es correcto</p>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <th style={{ textAlign: 'left', padding: '6px 0', color: 'var(--text-secondary)' }}>Producto</th>
+                          <th style={{ textAlign: 'right', padding: '6px 0', color: 'var(--text-secondary)' }}>Stock</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analytics.stockBajo?.map((p: any) => (
+                          <tr key={p.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '6px 0' }}>{sanitize(p.nombre)}</td>
+                            <td style={{ textAlign: 'right', padding: '6px 0', color: p.stock === 0 ? '#ef4444' : '#f59e0b', fontWeight: 700 }}>{p.stock}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Export CSV */}
+            <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
+              <button onClick={() => descargarCSV('pedidos')} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                <Download size={14} /> Exportar pedidos CSV
+              </button>
+              <button onClick={() => descargarCSV('productos')} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                <Download size={14} /> Exportar productos CSV
+              </button>
+            </div>
 
             {/* Tabla de compras */}
             <div className={styles['admin-section']}>
@@ -498,27 +619,60 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
         {/* PEDIDOS */}
         {vista === 'pedidos' && (
           <div className={styles['admin-section']}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              <button onClick={() => descargarCSV('pedidos')} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                <Download size={14} /> Exportar CSV
+              </button>
+            </div>
             <div className={styles['admin-table']}>
               <table>
                 <thead>
-                  <tr><th>ID</th><th>Cliente</th><th>Email</th><th>Dirección</th><th>Total</th><th>Fecha</th><th>Acción</th></tr>
+                  <tr><th>ID</th><th>Cliente</th><th>Email</th><th>Total</th><th>Estado</th><th>Fecha</th><th>Acción</th></tr>
                 </thead>
                 <tbody>
-                  {pedidosRecientes.map((p: any) => (
-                    <tr key={p.id}>
-                      <td>#{p.id}</td>
-                      <td>{sanitize(p.cliente)}</td>
-                      <td>{sanitize(p.email)}</td>
-                      <td>{sanitize(p.direccion)}</td>
-                      <td>${p.total.toFixed(2)}</td>
-                      <td>{new Date(p.fecha).toLocaleDateString('es-ES')}</td>
-                      <td>
-                        <button className={styles['btn-delete']} onClick={() => eliminarPedido(p.id)}>
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {pedidosRecientes.map((p: any) => {
+                    const estadoColors: Record<string, string> = {
+                      pendiente: '#f59e0b', confirmado: '#3b82f6', enviado: '#8b5cf6',
+                      entregado: '#10b981', cancelado: '#ef4444',
+                    };
+                    return (
+                      <tr key={p.id}>
+                        <td>#{p.id}</td>
+                        <td>{sanitize(p.cliente)}</td>
+                        <td style={{ color: 'var(--text-light)' }}>{sanitize(p.email)}</td>
+                        <td><span className={styles['order-total']}>${p.total.toFixed(2)}</span></td>
+                        <td>
+                          {estadoEditando === p.id ? (
+                            <select
+                              defaultValue={p.estado || 'pendiente'}
+                              onChange={e => cambiarEstadoPedido(p.id, e.target.value)}
+                              onBlur={() => setEstadoEditando(null)}
+                              autoFocus
+                              style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: 12 }}
+                            >
+                              {['pendiente','confirmado','enviado','entregado','cancelado'].map(s => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span
+                              onClick={() => setEstadoEditando(p.id)}
+                              title="Click para cambiar estado"
+                              style={{ cursor: 'pointer', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: `${estadoColors[p.estado] || '#94a3b8'}22`, color: estadoColors[p.estado] || '#94a3b8', border: `1px solid ${estadoColors[p.estado] || '#94a3b8'}44` }}
+                            >
+                              {p.estado || 'pendiente'}
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ color: 'var(--text-light)', whiteSpace: 'nowrap' }}>{new Date(p.fecha).toLocaleDateString('es-ES')}</td>
+                        <td>
+                          <button className={styles['btn-delete']} onClick={() => eliminarPedido(p.id)}>
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               {pedidos.length === 0 && <p style={{ padding: '20px', textAlign: 'center' }}>No hay pedidos</p>}
@@ -567,6 +721,89 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
             )}
           </div>
         )}
+        {/* CUPONES */}
+        {vista === 'cupones' && (
+          <div className={styles['admin-section']}>
+            <div className={styles['admin-form']}>
+              <h3>Nuevo cupón</h3>
+              <div className={styles['form-grid']}>
+                <input type="text" placeholder="Código (ej: VERANO20)" className={styles['form-input']}
+                  value={formCupon.codigo} onChange={e => setFormCupon({ ...formCupon, codigo: e.target.value.toUpperCase() })} />
+                <select className={styles['form-input']} value={formCupon.tipo}
+                  onChange={e => setFormCupon({ ...formCupon, tipo: e.target.value })}>
+                  <option value="porcentaje">Porcentaje (%)</option>
+                  <option value="fijo">Descuento fijo (€)</option>
+                </select>
+                <input type="number" placeholder={formCupon.tipo === 'porcentaje' ? 'Valor % (ej: 20)' : 'Valor € (ej: 10)'} className={styles['form-input']}
+                  value={formCupon.valor} onChange={e => setFormCupon({ ...formCupon, valor: e.target.value })} min={0} step={0.01} />
+                <input type="number" placeholder="Compra mínima (€, opcional)" className={styles['form-input']}
+                  value={formCupon.minCompra} onChange={e => setFormCupon({ ...formCupon, minCompra: e.target.value })} min={0} />
+                <input type="number" placeholder="Máx. usos (opcional)" className={styles['form-input']}
+                  value={formCupon.maxUsos} onChange={e => setFormCupon({ ...formCupon, maxUsos: e.target.value })} min={1} />
+              </div>
+              <div className={styles['form-actions']}>
+                <button className={styles['btn-primary']} onClick={crearCupon}>
+                  <Tag size={15} /> Crear cupón
+                </button>
+              </div>
+            </div>
+            <div className={styles['admin-table']}>
+              <table>
+                <thead>
+                  <tr><th>Código</th><th>Tipo</th><th>Valor</th><th>Mín. compra</th><th>Usos</th><th>Estado</th><th>Acciones</th></tr>
+                </thead>
+                <tbody>
+                  {cupones.map((c: any) => (
+                    <tr key={c.id}>
+                      <td><code style={{ background: '#1e293b', padding: '2px 8px', borderRadius: 4, fontSize: 13 }}>{c.codigo}</code></td>
+                      <td>{c.tipo}</td>
+                      <td>{c.tipo === 'porcentaje' ? `${c.valor}%` : `€${c.valor}`}</td>
+                      <td>{c.minCompra ? `€${c.minCompra}` : '—'}</td>
+                      <td>{c.usosActuales ?? 0}{c.maxUsos ? ` / ${c.maxUsos}` : ''}</td>
+                      <td><span style={{ color: c.activo ? '#10b981' : '#ef4444', fontWeight: 600 }}>{c.activo ? 'Activo' : 'Inactivo'}</span></td>
+                      <td><button className={styles['btn-delete']} onClick={() => eliminarCupon(c.id)}><Trash2 size={14} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {cupones.length === 0 && <p style={{ padding: '20px', textAlign: 'center' }}>No hay cupones</p>}
+            </div>
+          </div>
+        )}
+
+        {/* USUARIOS */}
+        {vista === 'usuarios' && (
+          <div className={styles['admin-section']}>
+            <div className={styles['admin-table']}>
+              <table>
+                <thead>
+                  <tr><th>ID</th><th>Usuario</th><th>Nombre</th><th>Email</th><th>Rol</th><th>Pedidos</th><th>Registro</th></tr>
+                </thead>
+                <tbody>
+                  {usuarios.map((u: any) => (
+                    <tr key={u.id}>
+                      <td>{u.id}</td>
+                      <td style={{ fontWeight: 600 }}>{sanitize(u.username)}</td>
+                      <td>{sanitize(u.nombre) || '—'}</td>
+                      <td style={{ color: 'var(--text-light)' }}>{sanitize(u.email) || '—'}</td>
+                      <td>
+                        <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: u.role === 'admin' ? '#ef444422' : '#3b82f622', color: u.role === 'admin' ? '#ef4444' : '#3b82f6' }}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td>{u.totalPedidos ?? 0}</td>
+                      <td style={{ color: 'var(--text-light)', whiteSpace: 'nowrap' }}>
+                        {u.createdAt ? new Date(u.createdAt).toLocaleDateString('es-ES') : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {usuarios.length === 0 && <p style={{ padding: '20px', textAlign: 'center' }}>No hay usuarios</p>}
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

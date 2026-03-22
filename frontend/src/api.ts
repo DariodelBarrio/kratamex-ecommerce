@@ -41,6 +41,9 @@ export const getUsuario = () => request<{ user: any }>('/usuario');
 export const updatePerfil = (data: Record<string, string>) =>
   request('/usuario/perfil', { method: 'PUT', body: JSON.stringify(data) });
 
+export const cambiarPassword = (passwordActual: string, passwordNueva: string) =>
+  request('/usuario/password', { method: 'PUT', body: JSON.stringify({ passwordActual, passwordNueva }) });
+
 // Products
 export const getProductos = (params?: string) =>
   request<any[]>(`/productos${params ? `?${params}` : ''}`);
