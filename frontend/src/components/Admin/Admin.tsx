@@ -39,6 +39,7 @@ function Admin() {
         const data = await response.json();
         setAutenticado(true);
         setToken(data.token);
+        localStorage.setItem('kratamex_token', data.token);
         setError('');
       } else {
         const data = await response.json();
@@ -92,6 +93,7 @@ function Admin() {
     setFormProducto={setFormProducto}
     onLogout={async () => {
       await fetch('/api/logout', { method: 'POST', headers: { 'Authorization': token } });
+      localStorage.removeItem('kratamex_token');
       setAutenticado(false); setUsername(''); setPassword(''); setToken('');
     }} />;
 }
