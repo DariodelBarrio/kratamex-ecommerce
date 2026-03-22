@@ -63,9 +63,6 @@ export const getMisPedidos = () => request<any[]>('/mis-pedidos');
 export const postPedido = (data: any) =>
   request('/pedidos', { method: 'POST', body: JSON.stringify(data) });
 
-export const crearCheckout = (data: any) =>
-  request<{ clientSecret: string; pedidoId: number; total: number }>('/pedidos/checkout', { method: 'POST', body: JSON.stringify(data) });
-
 // Favorites
 export const getFavoritos = () => request<any[]>('/favoritos');
 export const addFavorito = (productoId: number) =>
