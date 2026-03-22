@@ -173,7 +173,7 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
     URL.revokeObjectURL(url);
   };
 
-  const eliminarPedido = async (id: number) => {
+const eliminarPedido = async (id: number) => {
     if (!confirm('¿Eliminar este pedido?')) return;
     await fetch(`/api/admin/pedidos/${id}`, { method: 'DELETE', headers: { 'Authorization': token } });
     cargarDatos();

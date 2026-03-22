@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LogIn, UserPlus, Eye, EyeOff } from 'lucide-react';
 import { login, register } from '../api';
@@ -201,6 +202,12 @@ export default function Auth({ onAuth, defaultMode = 'login' }: AuthProps) {
                     : t('auth.login')}
               </span>
             </motion.button>
+
+            {!isRegister && (
+              <Link to="/forgot-password" style={{ display: 'block', textAlign: 'center', marginTop: 12, color: '#94a3b8', fontSize: '0.82rem', textDecoration: 'none' }}>
+                ¿Olvidaste tu contraseña?
+              </Link>
+            )}
           </form>
 
           {/* Toggle mode */}

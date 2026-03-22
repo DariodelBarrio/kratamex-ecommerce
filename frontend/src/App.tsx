@@ -14,6 +14,8 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { z } from 'zod'
 import Admin from './components/Admin/Admin'
 import SecurityDashboard from './components/SecurityDashboard'
+import ForgotPassword from './components/ForgotPassword'
+import ResetPassword from './components/ResetPassword'
 import { ProductCard, BrandLogoSmall } from './components/ProductCard'
 import { SkeletonCard } from './components/SkeletonCard'
 import { SecurityBadge } from './components/SecurityBadge'
@@ -898,6 +900,8 @@ function App() {
       <Route path="/perfil" element={
         authUser ? <UserProfile user={authUser} /> : <Navigate to="/login" />
       } />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/admin" element={<Admin />} />
       <Route path="/panel" element={<SecurityDashboard />} />
       <Route path="*" element={
