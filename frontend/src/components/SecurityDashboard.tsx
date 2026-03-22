@@ -49,8 +49,10 @@ function fmtDate(d: string) {
 // ================================================================
 // MAIN COMPONENT
 // ================================================================
+const SOC_TOKEN_KEY = 'kratamex_soc_token';
+
 export default function SecurityDashboard() {
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState(() => localStorage.getItem(SOC_TOKEN_KEY) ?? '');
   const [authed, setAuthed] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -63,6 +65,16 @@ export default function SecurityDashboard() {
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+
+  // Restaurar sesión al montar si hay token guardado
+  useEffect(() => {
+    const saved = localStorage.getItem(SOC_TOKEN_KEY);
+    if (!saved) return;
+    fetch('/api/security/stats', { headers: { Authorization: saved } }).then(r => {
+      if (r.ok) { setAuthed(true); }
+      else { localStorage.removeItem(SOC_TOKEN_KEY); setToken(''); }
+    }).catch(() => { /* sin conexión — dejamos el token para reintentar */ });
+  }, []);
 
   const loadData = useCallback(async (tk: string) => {
     setLoading(true);
@@ -103,6 +115,7 @@ export default function SecurityDashboard() {
         setLoginErr(data.error || 'Acceso denegado: se requiere rol admin');
         return;
       }
+      localStorage.setItem(SOC_TOKEN_KEY, data.token);
       setToken(data.token);
       setAuthed(true);
     } catch {
@@ -112,6 +125,7 @@ export default function SecurityDashboard() {
 
   const handleLogout = () => {
     fetch('/api/logout', { method: 'POST', headers: { Authorization: token } });
+    localStorage.removeItem(SOC_TOKEN_KEY);
     setAuthed(false); setToken(''); setUsername(''); setPassword('');
   };
 
