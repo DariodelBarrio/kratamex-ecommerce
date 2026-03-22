@@ -1353,6 +1353,62 @@ app.get('/api/security/stats', authenticate, requireAdmin, async (c) => {
 });
 
 // =================================================================
+// RUTAS — THREAT INTELLIGENCE (VirusTotal)
+// =================================================================
+const vtCache: Record<string, { data: object; cachedAt: number }> = {};
+const VT_CACHE_TTL = 60 * 60 * 1000; // 1h — no quemar cuota en cada refresh
+
+const VALID_IP = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/;
+
+app.get('/api/security/ip/:ip/threat', authenticate, requireAdmin, async (c) => {
+  const ip = c.req.param('ip');
+
+  if (!VALID_IP.test(ip)) return c.json({ error: 'IP inválida' }, 400);
+
+  // Devolver caché si está fresca
+  const cached = vtCache[ip];
+  if (cached && Date.now() - cached.cachedAt < VT_CACHE_TTL) {
+    return c.json({ ...cached.data, cached: true });
+  }
+
+  const apiKey = process.env.VIRUSTOTAL_API_KEY;
+  if (!apiKey) return c.json({ error: 'VIRUSTOTAL_API_KEY no configurada en .env' }, 503);
+
+  try {
+    const res = await fetch(`https://www.virustotal.com/api/v3/ip_addresses/${encodeURIComponent(ip)}`, {
+      headers: { 'x-apikey': apiKey },
+    });
+
+    if (res.status === 404) return c.json({ error: 'IP no encontrada en VirusTotal' }, 404);
+    if (res.status === 429) return c.json({ error: 'Límite de API VirusTotal alcanzado. Intenta en 1 minuto.' }, 429);
+    if (!res.ok) return c.json({ error: `Error VirusTotal: HTTP ${res.status}` }, 502);
+
+    const vt = await res.json() as Record<string, any>;
+    const attrs = vt.data?.attributes ?? {};
+    const stats = attrs.last_analysis_stats ?? {};
+
+    const result = {
+      ip,
+      malicious:  Number(stats.malicious  ?? 0),
+      suspicious: Number(stats.suspicious ?? 0),
+      harmless:   Number(stats.harmless   ?? 0),
+      undetected: Number(stats.undetected ?? 0),
+      reputation: Number(attrs.reputation ?? 0),
+      country:    attrs.country   ?? null,
+      as_owner:   attrs.as_owner  ?? null,
+      network:    attrs.network   ?? null,
+      cached: false,
+    };
+
+    vtCache[ip] = { data: result, cachedAt: Date.now() };
+    return c.json(result);
+  } catch (err) {
+    console.error('VirusTotal error:', err);
+    return c.json({ error: 'Error consultando VirusTotal' }, 502);
+  }
+});
+
+// =================================================================
 // RUTAS — ADMIN VALORACIONES (reseñas)
 // =================================================================
 app.get('/api/admin/valoraciones', authenticate, requireAdmin, async (c) => {

@@ -6,6 +6,9 @@
 proyecto/
 ├── frontend/              # React 19 + TypeScript + Vite
 │   ├── src/
+│   │   ├── test/
+│   │   │   ├── PasswordStrength.test.tsx  # Tests del componente PasswordStrength
+│   │   │   └── ProductCard.test.tsx       # Tests del componente ProductCard
 │   │   ├── components/
 │   │   │   ├── Admin/
 │   │   │   │   ├── Admin.tsx               # Panel de administración
@@ -31,14 +34,20 @@ proyecto/
 │   └── Dockerfile
 ├── backend/               # API REST con Hono + Drizzle ORM + PostgreSQL
 │   ├── src/
+│   │   ├── __tests__/
+│   │   │   └── api.test.ts    # Tests de integración (Vitest + Hono app.request)
 │   │   ├── index.ts       # Servidor Hono, rutas, middlewares, seed, logger SOC
 │   │   ├── schemas.ts     # Esquemas de validación Zod
 │   │   └── db/
 │   │       ├── schema.ts  # Schema Drizzle ORM (tablas con tipos TypeScript)
 │   │       └── index.ts   # Conexión Drizzle + Pool pg
 │   ├── drizzle.config.ts
+│   ├── vitest.config.ts
 │   ├── package.json
 │   └── Dockerfile
+├── .github/
+│   └── workflows/
+│       └── ci.yml         # GitHub Actions CI (typecheck + tests)
 ├── nginx/                 # Reverse proxy HTTPS
 │   ├── nginx.conf
 │   └── certs/
@@ -72,10 +81,13 @@ proyecto/
 - **Cloudinary** — CDN para imágenes (fallback local)
 - **tsx** — Runtime TypeScript con hot-reload
 
-### Infraestructura
+### Infraestructura y Testing
 - **Docker Compose** — Orquestación de 4 servicios
 - **nginx:alpine** — Reverse proxy con TLS 1.2/1.3
 - **postgres:16-alpine** — Base de datos
+- **Vitest** — Tests unitarios y de integración (frontend y backend)
+- **@testing-library/react** — Renderizado de componentes en jsdom
+- **GitHub Actions** — CI automático en cada push a `main`
 
 ## Páginas y Rutas
 
@@ -226,6 +238,42 @@ npm run db:studio     # GUI visual de la base de datos
 - **Monitorización SOC** — Todos los eventos de seguridad se registran en PostgreSQL
 - **Anti-autofill SOC** — Login del panel SOC con inputs honeypot y `name` no estándar
 
+## Tests
+
+### Frontend (Vitest + @testing-library/react)
+
+```bash
+cd frontend && npm run test:run
+```
+
+| Archivo | Tests |
+|---------|-------|
+| `src/test/PasswordStrength.test.tsx` | Vacía → null, "Muy débil", "Débil", "Fuerte" |
+| `src/test/ProductCard.test.tsx` | Nombre, precio formateado, badge "En stock" |
+
+### Backend (Vitest + Hono app.request)
+
+```bash
+cd backend && npm test
+```
+
+| Test | Descripción |
+|------|-------------|
+| `GET /api/health` | Devuelve `{ status: "ok" }` |
+| `GET /api/productos` | Devuelve array (con DB mockeada) |
+| `POST /api/login` con credenciales incorrectas | Devuelve 401 |
+| `GET /api/admin/pedidos` sin token | Devuelve 401 |
+
+> El backend no necesita PostgreSQL para los tests: la DB se mockea con Vitest.
+
+### CI (GitHub Actions)
+
+En cada push a `main` se ejecutan automáticamente:
+1. `test-frontend` — typecheck TypeScript + Vitest
+2. `test-backend` — typecheck TypeScript + Vitest
+
+---
+
 ## Ejecución
 
 ### Con Docker (recomendado)
@@ -271,4 +319,4 @@ Sin estas variables las imágenes se guardan localmente en `src/uploads/` y `src
 
 ---
 
-*Última actualización: 22/03/2026*
+*Última actualización: 22/03/2026 — v2.1 (tests + CI)*

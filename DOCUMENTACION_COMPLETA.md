@@ -11,7 +11,8 @@
 7. [Panel SOC — Ciberseguridad](#panel-soc--ciberseguridad)
 8. [Autenticación y Seguridad](#autenticación-y-seguridad)
 9. [Despliegue y Docker](#despliegue-y-docker)
-10. [Guía de Desarrollo](#guía-de-desarrollo)
+10. [Tests y CI/CD](#tests-y-cicd)
+11. [Guía de Desarrollo](#guía-de-desarrollo)
 
 ---
 
@@ -117,6 +118,9 @@ frontend/src/
 │   ├── SecurityBadge.tsx          # Badge TLS en navbar
 │   ├── PasswordStrength.tsx       # Barra de fuerza de contraseña
 │   └── OptimizedImage.tsx         # Imagen con lazy loading y fallback
+├── test/
+│   ├── PasswordStrength.test.tsx  # Tests del componente PasswordStrength (4 casos)
+│   └── ProductCard.test.tsx       # Tests del componente ProductCard (3 casos)
 ├── App.tsx                        # Tienda + rutas + navbar
 ├── main.tsx                       # BrowserRouter + QueryClientProvider
 ├── api.ts                         # fetch wrappers (getUsuario, updatePerfil…)
@@ -273,15 +277,19 @@ El idioma se persiste en `localStorage` y se sincroniza con el perfil del usuari
 ### Estructura de Archivos
 
 ```
-backend/src/
-├── index.ts           # Servidor Hono — rutas, middlewares, logger SOC, seed
-├── schemas.ts         # Esquemas Zod compartidos
-├── db/
-│   ├── schema.ts      # Tablas Drizzle ORM con tipos TypeScript inferidos
-│   └── index.ts       # Conexión Drizzle + Pool pg
-├── uploads/           # Imágenes de productos (fallback local)
-├── avatars/           # Avatares de usuarios (fallback local)
-└── access.log         # Log de accesos HTTP
+backend/
+├── src/
+│   ├── __tests__/
+│   │   └── api.test.ts    # Tests de integración API (4 tests, DB mockeada)
+│   ├── index.ts           # Servidor Hono — rutas, middlewares, logger SOC, seed
+│   ├── schemas.ts         # Esquemas Zod compartidos
+│   ├── db/
+│   │   ├── schema.ts      # Tablas Drizzle ORM con tipos TypeScript inferidos
+│   │   └── index.ts       # Conexión Drizzle + Pool pg
+│   ├── uploads/           # Imágenes de productos (fallback local)
+│   ├── avatars/           # Avatares de usuarios (fallback local)
+│   └── access.log         # Log de accesos HTTP
+└── vitest.config.ts       # Configuración Vitest (entorno node, glob __tests__)
 ```
 
 ### Middlewares globales
@@ -689,6 +697,106 @@ docker compose logs -f frontend
 | PostgreSQL | localhost:5432 |
 
 > El certificado SSL es autofirmado (openssl). En producción reemplazar con Let's Encrypt.
+
+---
+
+## Tests y CI/CD
+
+### Arquitectura de tests
+
+El proyecto usa **Vitest** tanto en frontend como en backend, sin necesidad de base de datos ni servidor real durante los tests.
+
+#### Backend — tests de integración
+
+Los tests usan `app.request()` de Hono para hacer peticiones HTTP directas a la app sin levantar un servidor TCP. La DB se mockea completamente con `vi.mock('../db/index')`.
+
+```typescript
+// Patrón de mock para Drizzle (cadena de métodos + thenable)
+function makeChain(value = []) {
+  const p = Promise.resolve(value);
+  const q = { then: p.then.bind(p), catch: p.catch.bind(p) };
+  for (const m of ['from','where','orderBy','limit','offset',...]) {
+    q[m] = vi.fn(() => q);   // cada método devuelve la misma cadena
+  }
+  return q;
+}
+```
+
+Módulos mockeados: `../db/index` (Drizzle + Pool), `argon2`, `stripe`, `cloudinary`, `fs`.
+
+El backend exporta `app` y guarda el arranque del servidor bajo `NODE_ENV !== 'test'`:
+
+```typescript
+export { app };
+
+if (process.env.NODE_ENV !== 'test') {
+  (async () => {
+    await waitForDB();
+    await initDB();
+    serve({ fetch: app.fetch, port: PORT }, ...);
+  })();
+}
+```
+
+**Tests disponibles** (`backend/src/__tests__/api.test.ts`):
+
+| Test | Resultado esperado |
+|------|--------------------|
+| `GET /api/health` | 200 `{ status: "ok" }` |
+| `GET /api/productos` | 200, body es array |
+| `POST /api/login` credenciales incorrectas | 401 `{ error: "Credenciales incorrectas" }` |
+| `GET /api/admin/pedidos` sin token | 401 `{ error: /autenticado/i }` |
+
+```bash
+cd backend && npm test        # ejecutar una vez
+cd backend && npm run test:watch  # modo watch
+```
+
+#### Frontend — tests de componentes
+
+Tests en jsdom con `@testing-library/react`. Los componentes con animaciones (Framer Motion) se mockean para evitar errores en el entorno de test.
+
+```typescript
+vi.mock('framer-motion', () => ({
+  motion: {
+    div:    (props) => <div    {...props} />,
+    button: (props) => <button {...props} />,
+    span:   (props) => <span   {...props} />,
+  },
+  AnimatePresence: ({ children }) => <>{children}</>,
+}));
+```
+
+**Tests disponibles**:
+
+| Archivo | Tests |
+|---------|-------|
+| `PasswordStrength.test.tsx` | contraseña vacía → null \| "abc" → Muy débil \| "abcdefg1" → Débil \| "MiPass123!" → Fuerte |
+| `ProductCard.test.tsx` | nombre visible \| precio "€999.99" \| badge "En stock" |
+
+```bash
+cd frontend && npm run test:run    # ejecutar una vez
+cd frontend && npm run test:watch  # modo watch
+```
+
+### GitHub Actions CI
+
+`.github/workflows/ci.yml` — se ejecuta en cada push y PR a `main`:
+
+```yaml
+jobs:
+  test-frontend:
+    - npm ci --legacy-peer-deps
+    - npx tsc --noEmit          # typecheck
+    - npm run test:run          # vitest
+
+  test-backend:
+    - npm ci
+    - npx tsc --noEmit          # typecheck
+    - npm test                  # vitest
+```
+
+> No requiere PostgreSQL ni Docker en CI: toda la BD se mockea en los tests de backend.
 
 ---
 

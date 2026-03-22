@@ -1,5 +1,48 @@
 # Correcciones de Seguridad
 
+## Resumen de Vulnerabilidades
+
+| ID | Título | Nivel | Estado |
+|---|---|---|---|
+| ID-001 | Credenciales hardcodeadas en código fuente | 🔴 Crítico | ✅ Corregido |
+| ID-002 | Broken Access Control — Panel Admin | 🟠 Alto | ✅ Corregido |
+| ID-003 | SQL Injection en búsqueda de productos | 🟡 Medio | ✅ Corregido |
+| ID-004 | Sin rate limiting en login (fuerza bruta) | 🟡 Medio | ✅ Corregido |
+| ID-005 | Logging insuficiente | 🟢 Bajo | ✅ Corregido |
+| ID-006 | File upload sin validación de tipo | 🟠 Alto | ✅ Corregido |
+| ID-007 | Contraseñas en texto plano → argon2id | 🔴 Crítico | ✅ Corregido |
+| ID-008 | Sin HTTPS → nginx + TLS | 🔴 Crítico | ✅ Corregido |
+| ID-009 | XSS por doble encoding en onChange | 🟡 Medio | ✅ Corregido |
+| ID-010 | CRUD productos sin autenticación | 🔴 Crítico | ✅ Corregido |
+| ID-011 | IDOR en pedidos — PII expuesta | 🔴 Crítico | ✅ Corregido |
+| ID-012 | Price manipulation en checkout | 🔴 Crítico | ✅ Corregido |
+| ID-013 | Information exposure en login (intentos_restantes) | 🟡 Medio | ✅ Corregido |
+| ID-014 | IDOR persistente — requireAdmin omitido | 🔴 Crítico | ✅ Corregido |
+| ID-015 | Token de sesión débil con Math.random() | 🟠 Alto | ✅ Corregido |
+| ID-016 | CORS completamente abierto | 🟠 Alto | ✅ Corregido |
+| ID-017 | Information exposure — enumeración de IDs | 🟡 Medio | ✅ Corregido |
+| ID-018 | URLs hardcodeadas bypassan HTTPS | 🔴 Crítico | ✅ Corregido |
+| ID-019 | Sin rate limiting en checkout — Order Flood | 🟠 Alto | ✅ Corregido |
+| ID-020 | nginx sin security headers | 🟠 Alto | ✅ Corregido |
+| ID-021 | sanitize() aplicado a URLs rompe links | 🟡 Medio | ✅ Corregido |
+| ID-022 | Security headers ausentes en backend | 🟠 Alto | ✅ Corregido |
+| ID-023 | Sesiones sin expiración — session hijacking permanente | 🔴 Crítico | ✅ Corregido |
+| ID-024 | Stored XSS vía descripción de producto | 🟠 Alto | ✅ Corregido |
+| ID-025 | Sin límite de body size — DoS por payload masivo | 🟡 Medio | ✅ Corregido |
+| ID-026 | Validación de email ausente en checkout | 🟡 Medio | ✅ Corregido |
+| ID-027 | Rate limiting memory leak | 🟡 Medio | ✅ Corregido |
+| ID-028 | File upload — nombres predecibles y validación débil | 🟠 Alto | ✅ Corregido |
+| ID-029 | Containers Docker corriendo como root | 🟠 Alto | ✅ Corregido |
+| ID-030 | nginx — ciphers débiles y sin rate limiting | 🟠 Alto | ✅ Corregido |
+| ID-031 | Archivos de base de datos en git | 🔴 Crítico | ✅ Corregido |
+| ID-032 | IP spoofing en rate limiting (trust proxy) | 🟡 Medio | ✅ Corregido |
+| ID-033 | Static files serving sin protección dotfiles | 🟡 Medio | ✅ Corregido |
+| ID-034 | Validaciones manuales inconsistentes → Zod | 🟡 Medio | ✅ Corregido |
+| ID-035 | CSP misconfiguration — Google Fonts bloqueadas | 🟡 Medio | ✅ Corregido |
+| ID-036 | Sesiones y rate limits en memoria RAM — pérdida en restart | 🟠 Alto | ⚠️ Conocido |
+
+---
+
 ## [ID-001] Hardcoded Credentials en Código Fuente
 **Fecha:** 18/03/2026
 **Nivel de Riesgo:** 🔴 Crítico
@@ -881,3 +924,91 @@ Beneficios de seguridad adicionales:
 
 ### 4. Commits relacionados
 - `d1bed9c` - feat: migrate to Hono + Drizzle ORM + TanStack Query + Zod
+
+---
+
+## [ID-035] CSP Misconfiguration — Google Fonts Bloqueadas
+**Fecha:** 22/03/2026
+**Nivel de Riesgo:** 🟡 Medio
+
+### 1. Descripción del fallo
+El header `Content-Security-Policy` en nginx incluía `font-src 'self' https://fonts.gstatic.com` pero omitía `https://fonts.googleapis.com` en `style-src`. El frontend carga las fuentes Inter y JetBrains Mono mediante `@import url('https://fonts.googleapis.com/...')` en los ficheros CSS. Al no estar permitido ese origen en `style-src`, los navegadores bloqueaban silenciosamente las hojas de estilo externas, degradando la tipografía de toda la aplicación.
+
+### 2. Impacto
+- La fuente Inter (interfaz principal) y JetBrains Mono (panel SOC) no se cargan
+- El navegador hace fallback a la fuente del sistema sin avisar al usuario
+- Error silencioso: no produce un fallo visible pero sí una violación de CSP en la consola del desarrollador
+
+### 3. Diagnóstico
+```
+# En la consola del navegador:
+Refused to load the stylesheet 'https://fonts.googleapis.com/css2?...'
+because it violates the following Content Security Policy directive:
+"style-src 'self' 'unsafe-inline'"
+```
+
+### 4. Solución (Parche)
+Añadido `https://fonts.googleapis.com` a la directiva `style-src` en `nginx/nginx.conf`:
+
+```nginx
+# ❌ Antes:
+add_header Content-Security-Policy "... style-src 'self' 'unsafe-inline'; ..." always;
+
+# ✅ Después:
+add_header Content-Security-Policy "... style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; ..." always;
+```
+
+> **Nota**: `fonts.gstatic.com` ya estaba en `font-src` (carga los archivos `.woff2`). El problema era solo la hoja de estilo CSS inicial que sirve `fonts.googleapis.com`.
+
+---
+
+## [ID-036] Sesiones y Rate Limits en Memoria RAM — Pérdida en Restart
+**Fecha:** 22/03/2026
+**Nivel de Riesgo:** 🟠 Alto
+**Estado:** ⚠️ Conocido — pendiente de corrección
+
+### 1. Descripción del fallo
+Las sesiones de usuario y los contadores de rate limiting se almacenan en objetos JavaScript en memoria (`const sessions = {}`, `const loginAttempts = {}`). Al reiniciar el servidor (deployment, crash, Docker restart), toda esta información se pierde:
+
+- Todos los usuarios autenticados quedan deslogueados
+- Los bloqueos de IP por fuerza bruta se resetean
+
+### 2. Impacto
+- **Bypass de rate limiting**: un atacante que provoque un crash del servidor (vía DoS o error) elimina sus propios bloqueos activos y puede reanudar un ataque de fuerza bruta desde cero
+- **DoS de sesiones**: un restart forzado deja a todos los usuarios sin sesión simultáneamente
+- **No escalable**: en un entorno con múltiples instancias del backend, cada instancia tiene su propio `sessions = {}`, haciendo imposible el balanceo de carga
+
+### 3. PoC del impacto
+```bash
+# 1. Atacante genera 11 intentos de login fallidos → queda bloqueado
+# 2. Atacante envía un payload malformado que causa un error 500 y restart del proceso
+# 3. loginAttempts = {} → bloqueo eliminado → puede continuar el ataque
+```
+
+### 4. Solución prevista
+Persistir sesiones y contadores de rate limiting en PostgreSQL (ya disponible en el stack):
+
+```sql
+-- Tabla de sesiones persistentes
+CREATE TABLE sessions (
+  token      TEXT PRIMARY KEY,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+  role       TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+-- Tabla de intentos de login por IP
+CREATE TABLE login_attempts (
+  ip           TEXT PRIMARY KEY,
+  count        INTEGER DEFAULT 0,
+  blocked_until TIMESTAMPTZ,
+  last_attempt TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+Alternativa: usar **Redis** como store de sesiones para mayor rendimiento (O(1) en lecturas).
+
+### 5. Mitigación actual
+- TTL de 8 horas por sesión reduce la ventana de exposición (ID-023)
+- El rate limiting de nginx actúa como primera línea independiente del proceso Node.js

@@ -277,7 +277,7 @@
 }
 
 .ipRank  { color: var(--soc-muted); font-size: 0.6rem; width: 22px; flex-shrink: 0; }
-.ipAddr  { flex: 1; color: var(--soc-text-hi); font-size: 0.72rem; }
+.ipAddr  { flex: 1; color: var(--soc-text-hi); font-size: 0.72rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ipBar   {
   width: 48px;
   height: 3px;
@@ -630,6 +630,159 @@
 }
 
 .loginBack:hover { color: var(--soc-text); }
+
+/* ── VIRUSTOTAL THREAT INTELLIGENCE ───────────────────────────── */
+.ipEntry {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.vtBtn {
+  background: transparent;
+  border: 1px solid rgba(99,102,241,0.3);
+  color: #818cf8;
+  padding: 2px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.55rem;
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.vtBtn:hover:not(:disabled) {
+  background: rgba(99,102,241,0.12);
+  border-color: #818cf8;
+  box-shadow: 0 0 8px rgba(99,102,241,0.25);
+}
+
+.vtBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.vtBtnDone {
+  border-color: rgba(99,102,241,0.5);
+}
+
+.vtRow {
+  padding: 4px 8px 6px 38px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.025);
+}
+
+.vtResult {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.vtBadge {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.vtMalicious {
+  background: rgba(239,68,68,0.15);
+  color: #f87171;
+  border-color: rgba(239,68,68,0.4);
+  box-shadow: 0 0 8px rgba(239,68,68,0.2);
+  animation: pulse-red 2s ease-in-out infinite;
+}
+
+.vtSuspicious {
+  background: rgba(245,158,11,0.12);
+  color: #fbbf24;
+  border-color: rgba(245,158,11,0.3);
+}
+
+.vtWarn {
+  background: rgba(234,179,8,0.1);
+  color: #facc15;
+  border-color: rgba(234,179,8,0.25);
+}
+
+.vtClean {
+  background: rgba(16,185,129,0.1);
+  color: #34d399;
+  border-color: rgba(16,185,129,0.25);
+}
+
+.vtMeta {
+  font-size: 0.58rem;
+  color: var(--soc-muted);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vtCached {
+  font-size: 0.52rem;
+  color: rgba(125,145,165,0.5);
+  letter-spacing: 0.5px;
+}
+
+.vtLoading {
+  font-size: 0.58rem;
+  color: var(--soc-muted);
+  letter-spacing: 1px;
+  animation: blink 1s ease-in-out infinite;
+}
+
+.vtErr {
+  font-size: 0.58rem;
+  color: #f87171;
+  letter-spacing: 0.5px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* IP clickable en el log */
+.ipClickable {
+  background: none;
+  border: none;
+  color: var(--soc-cyan);
+  font-family: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
+}
+
+.ipClickable:hover {
+  color: #67e8f9;
+  text-shadow: 0 0 8px rgba(34,211,238,0.4);
+}
+
+.vtInline {
+  display: block;
+  margin-top: 3px;
+}
 
 /* ── RESPONSIVE ────────────────────────────────────────────────── */
 @media (max-width: 1000px) {
