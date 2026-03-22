@@ -28,7 +28,7 @@ import { db, pool } from './db/index';
 import {
   productos, pedidos, pedidoItems, usuarios, comentarios,
   categorias, valoraciones, favoritos, cupones, productoImagenes,
-  pushSubscriptions, securityEvents,
+  pushSubscriptions, securityEvents, blockedIps,
 } from './db/schema';
 import {
   ProductoBodySchema, ProductosQuerySchema, LoginSchema, RegisterSchema,
@@ -116,6 +116,37 @@ setInterval(() => {
 }, 15 * 60 * 1000);
 
 // =================================================================
+// BLOCKED IPs (in-memory cache synced from DB every 60s)
+// =================================================================
+let blockedIpSet    = new Set<string>();
+let blockedIpCacheTs = 0;
+const BLOCKED_CACHE_TTL = 60_000;
+
+async function refreshBlockedCache() {
+  try {
+    const now = new Date();
+    const rows = await db.select({ ip: blockedIps.ip }).from(blockedIps)
+      .where(sql`${blockedIps.bloqueadoHasta} IS NULL OR ${blockedIps.bloqueadoHasta} > ${now}`);
+    blockedIpSet = new Set(rows.map(r => r.ip));
+    blockedIpCacheTs = Date.now();
+  } catch {}
+}
+
+async function autoBlockIp(ip: string, motivo: string) {
+  if (!ip || ip === 'unknown') return;
+  try {
+    const hasta = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await pool.query(
+      `INSERT INTO blocked_ips (ip, motivo, bloqueado_hasta)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (ip) DO UPDATE SET motivo = $2, bloqueado_hasta = $3, created_at = NOW()`,
+      [ip, motivo, hasta.toISOString()]
+    );
+    blockedIpSet.add(ip);
+  } catch {}
+}
+
+// =================================================================
 // RATE LIMITING
 // =================================================================
 type RateLimitRecord = { count: number; windowStart: number };
@@ -191,6 +222,17 @@ app.use('*', cors({
 app.use('*', async (c, next) => {
   const entry = `[${new Date().toISOString()}] ${getClientIP(c)} - ${c.req.method} ${c.req.url}\n`;
   appendLog(entry);
+  await next();
+});
+
+// --- IP Block middleware ---
+app.use('*', async (c, next) => {
+  if (Date.now() - blockedIpCacheTs > BLOCKED_CACHE_TTL) await refreshBlockedCache();
+  const ip = getClientIP(c);
+  if (blockedIpSet.has(ip)) {
+    logSecEvent('blocked_request', { ip, endpoint: c.req.path, metodo: c.req.method, userAgent: c.req.header('user-agent'), detalles: 'IP bloqueada' });
+    return c.json({ error: 'Acceso denegado' }, 403);
+  }
   await next();
 });
 
@@ -1163,6 +1205,7 @@ app.post('/api/login', loginRateLimiter, zValidator('json', LoginSchema), async 
       loginAttempts[ip].blockedUntil = Date.now() + BLOCK_DURATION;
       appendLog(`[${new Date().toISOString()}] BLOQUEADO ip=${ip}\n`);
       logSecEvent('brute_force', { ip, username, endpoint: '/api/login', metodo: 'POST', userAgent: c.req.header('user-agent'), detalles: `Bloqueado tras ${MAX_ATTEMPTS} intentos` });
+      autoBlockIp(ip, `brute_force login (${MAX_ATTEMPTS} intentos fallidos)`);
     }
   }
 
@@ -1407,6 +1450,101 @@ app.get('/api/security/ip/:ip/threat', authenticate, requireAdmin, async (c) => 
     return c.json({ error: 'Error consultando VirusTotal' }, 502);
   }
 });
+
+// =================================================================
+// RUTAS — BLOCKED IPs (SOC)
+// =================================================================
+app.get('/api/security/blocked-ips', authenticate, requireAdmin, async (c) => {
+  try {
+    const rows = await db.select().from(blockedIps).orderBy(desc(blockedIps.createdAt));
+    return c.json(rows);
+  } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
+});
+
+app.post('/api/security/blocked-ips', authenticate, requireAdmin, async (c) => {
+  try {
+    const body = await c.req.json();
+    const ip = String(body.ip || '').trim();
+    const motivo = String(body.motivo || 'manual').slice(0, 200);
+    const horas  = Math.min(Number(body.horas || 24), 8760);
+    if (!VALID_IP.test(ip)) return c.json({ error: 'IP inválida' }, 400);
+    const hasta = horas > 0 ? new Date(Date.now() + horas * 60 * 60 * 1000) : null;
+    await pool.query(
+      `INSERT INTO blocked_ips (ip, motivo, bloqueado_hasta)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (ip) DO UPDATE SET motivo = $2, bloqueado_hasta = $3, created_at = NOW()`,
+      [ip, motivo, hasta?.toISOString() ?? null]
+    );
+    blockedIpSet.add(ip);
+    logSecEvent('blocked_request', { ip, detalles: `Bloqueada manualmente: ${motivo}` });
+    return c.json({ ok: true });
+  } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
+});
+
+app.delete('/api/security/blocked-ips/:ip', authenticate, requireAdmin, async (c) => {
+  const ip = decodeURIComponent(c.req.param('ip'));
+  try {
+    await db.delete(blockedIps).where(eq(blockedIps.ip, ip));
+    blockedIpSet.delete(ip);
+    return c.json({ ok: true });
+  } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
+});
+
+// =================================================================
+// RUTAS — SOC EXPORT (CSV / JSON)
+// =================================================================
+app.get('/api/security/events/export', authenticate, requireAdmin, async (c) => {
+  const format = c.req.query('format') === 'csv' ? 'csv' : 'json';
+  const limit  = Math.min(Number(c.req.query('limit') || 1000), 5000);
+  try {
+    const rows = await db.select().from(securityEvents)
+      .orderBy(desc(securityEvents.fecha))
+      .limit(limit);
+
+    if (format === 'csv') {
+      const header = 'id,tipo,ip,username,endpoint,metodo,user_agent,detalles,fecha';
+      const escape = (v: unknown) => {
+        if (v == null) return '';
+        const s = String(v).replace(/"/g, '""');
+        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;
+      };
+      const lines = rows.map(r =>
+        [r.id, r.tipo, r.ip, r.username, r.endpoint, r.metodo, r.userAgent, r.detalles, r.fecha?.toISOString()].map(escape).join(',')
+      );
+      return new Response([header, ...lines].join('\n'), {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="soc-events-${new Date().toISOString().slice(0,10)}.csv"`,
+        },
+      });
+    }
+
+    return new Response(JSON.stringify(rows, null, 2), {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename="soc-events-${new Date().toISOString().slice(0,10)}.json"`,
+      },
+    });
+  } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
+});
+
+// =================================================================
+// RUTAS — HONEYPOT (trampa para bots / scanners)
+// =================================================================
+const HONEYPOT_PATHS = [
+  '/wp-login.php', '/wp-admin', '/wp-config.php', '/xmlrpc.php',
+  '/.env', '/.git/config', '/.htaccess',
+  '/admin.php', '/phpmyadmin', '/config.php', '/login.php',
+  '/shell.php', '/backup.sql', '/db.sql',
+];
+for (const hpath of HONEYPOT_PATHS) {
+  app.all(hpath, async (c) => {
+    const ip = getClientIP(c);
+    logSecEvent('honeypot', { ip, endpoint: hpath, metodo: c.req.method, userAgent: c.req.header('user-agent'), detalles: `Honeypot activado: ${hpath}` });
+    autoBlockIp(ip, `honeypot: ${hpath}`);
+    return c.json({ error: 'Not Found' }, 404);
+  });
+}
 
 // =================================================================
 // RUTAS — ADMIN VALORACIONES (reseñas)
@@ -1818,6 +1956,13 @@ async function initDB() {
       user_agent  TEXT,
       detalles    TEXT,
       fecha       TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS blocked_ips (
+      id              SERIAL PRIMARY KEY,
+      ip              TEXT NOT NULL UNIQUE,
+      motivo          TEXT,
+      bloqueado_hasta TIMESTAMPTZ,
+      created_at      TIMESTAMPTZ DEFAULT NOW()
     );
   `);
 

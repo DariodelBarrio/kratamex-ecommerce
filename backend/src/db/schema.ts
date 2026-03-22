@@ -158,7 +158,7 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
 // =================================================================
 export const securityEvents = pgTable('security_events', {
   id:        serial('id').primaryKey(),
-  tipo:      text('tipo').notNull(), // login_ok | login_fail | auth_invalid | forbidden | brute_force | register
+  tipo:      text('tipo').notNull(), // login_ok | login_fail | auth_invalid | forbidden | brute_force | register | honeypot | blocked_request
   ip:        text('ip'),
   username:  text('username'),
   endpoint:  text('endpoint'),
@@ -166,6 +166,17 @@ export const securityEvents = pgTable('security_events', {
   userAgent: text('user_agent'),
   detalles:  text('detalles'),
   fecha:     timestamp('fecha', { withTimezone: true }).defaultNow(),
+});
+
+// =================================================================
+// BLOCKED IPs (auto-block + manual)
+// =================================================================
+export const blockedIps = pgTable('blocked_ips', {
+  id:            serial('id').primaryKey(),
+  ip:            text('ip').notNull().unique(),
+  motivo:        text('motivo'),
+  bloqueadoHasta: timestamp('bloqueado_hasta', { withTimezone: true }),
+  createdAt:     timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
 // =================================================================
@@ -182,3 +193,4 @@ export type Favorito      = typeof favoritos.$inferSelect;
 export type Cupon         = typeof cupones.$inferSelect;
 export type ProductoImagen = typeof productoImagenes.$inferSelect;
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type BlockedIp        = typeof blockedIps.$inferSelect;
