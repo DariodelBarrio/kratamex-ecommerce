@@ -6,7 +6,7 @@ import { z } from 'zod';
 export const ProductoBodySchema = z.object({
   nombre:      z.string().min(1, 'Nombre requerido').max(200),
   descripcion: z.string().max(1000).optional().default(''),
-  precio:      z.number({ required_error: 'Precio requerido' }).min(0).max(999999),
+  precio:      z.number().min(0).max(999999),
   imagen:      z.string().max(500).optional().default(''),
   categoria:   z.string().max(50).optional().default(''),
   stock:       z.number().int().min(0).optional().default(0),
