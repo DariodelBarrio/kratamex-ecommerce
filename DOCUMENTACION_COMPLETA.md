@@ -8,31 +8,32 @@
 4. [Backend — Node.js + Hono](#backend--nodejs--hono)
 5. [Base de Datos — PostgreSQL](#base-de-datos--postgresql)
 6. [API REST](#api-rest)
-7. [Pagos con Stripe](#pagos-con-stripe)
-8. [Panel SOC — Ciberseguridad](#panel-soc--ciberseguridad)
-9. [Autenticación y Seguridad](#autenticación-y-seguridad)
-10. [Despliegue y Docker](#despliegue-y-docker)
-11. [Guía de Desarrollo](#guía-de-desarrollo)
+7. [Panel SOC — Ciberseguridad](#panel-soc--ciberseguridad)
+8. [Autenticación y Seguridad](#autenticación-y-seguridad)
+9. [Despliegue y Docker](#despliegue-y-docker)
+10. [Guía de Desarrollo](#guía-de-desarrollo)
 
 ---
 
 ## Visión General
 
-KRATAMEX es una **tienda online completa** de ordenadores y accesorios construida con React 19 + Hono + PostgreSQL. Incluye catálogo con filtros, carrito de compra, checkout, historial de pedidos, perfil de usuario, panel de administración completo y un **panel de operaciones de ciberseguridad (SOC)** para monitorizar la actividad en tiempo real.
+KRATAMEX es una **tienda online completa** de ordenadores y accesorios construida con React 19 + Hono + PostgreSQL. Incluye catálogo con filtros, carrito de compra, checkout, historial de pedidos, perfil de usuario con cambio de contraseña, panel de administración completo y un **panel de operaciones de ciberseguridad (SOC)** para monitorizar la actividad en tiempo real.
 
 ### Características Principales
 
-- **Catálogo**: Búsqueda full-text, filtros por categoría, ordenamiento por precio
+- **Catálogo**: Búsqueda full-text, filtros por categoría/precio/stock, ordenamiento, vista cuadrícula/lista
+- **Búsquedas recientes**: historial de búsquedas guardado en localStorage con dropdown al hacer foco
 - **Experiencia visual**: Splash screen, partículas animadas, modo oscuro/claro, efecto 3D tilt en tarjetas
-- **Carrito**: Agregar, modificar cantidad, eliminar, cupones, cálculo de IVA (21%), envío gratis
-- **Checkout con Stripe**: Formulario validado por Zod → PaymentIntent en backend → formulario Stripe Elements (PaymentElement) → webhook marca el pedido como `pagado`
-- **Perfil de usuario**: Avatar editable (Cloudinary o local), nombre, email, dirección, teléfono, idioma (es/en)
+- **Carrito**: Agregar, modificar cantidad (input editable), eliminar, cupones de descuento, cálculo de IVA (21%), envío gratis a partir de €100
+- **Checkout directo**: Formulario validado por Zod → POST `/api/pedidos` → redirige a `/mis-pedidos`
+- **Perfil de usuario**: Avatar editable (Cloudinary o local), nombre, email, dirección, teléfono, idioma (es/en), **cambio de contraseña** con verificación de la actual
 - **Historial de pedidos**: Lista con expand/collapse de items por pedido, estado con badge de color
-- **Panel Admin** (`/admin`): Dashboard con métricas y gráficas, CRUD de productos con subida de imagen, gestión de pedidos, gestión de reseñas
+- **Panel Admin** (`/admin`): Dashboard con métricas y gráficas, CRUD de productos (con stock y visibilidad), gestión de pedidos con cambio de estado inline, gestión de reseñas, CRUD de cupones, listado de usuarios, exportación CSV
 - **Panel SOC** (`/panel`): Centro de operaciones de ciberseguridad con métricas en tiempo real, gráficas, log de eventos filtrable, auto-refresh cada 15 s
 - **Autenticación RBAC**: Roles `admin` y `standard`, tokens de sesión criptográficos (256 bits, TTL 8h)
 - **Seguridad**: argon2id, rate limiting, Drizzle ORM (queries parametrizadas), Zod, HTTPS, CORS, security headers
 - **Docker**: 4 servicios (frontend, backend, postgres, nginx) con hot-reload
+- **Página 404**: Ruta catch-all con enlace de vuelta a la tienda
 
 ### Stack Tecnológico
 
@@ -46,14 +47,12 @@ KRATAMEX es una **tienda online completa** de ordenadores y accesorios construid
 | Gráficas | Recharts | 3.x |
 | Routing | React Router | 6.x |
 | Validación cliente | Zod | 3.x |
-| Pagos | Stripe Elements (@stripe/react-stripe-js) | latest |
 | Backend | Hono + Node.js | 4.x |
 | ORM | Drizzle ORM | 0.44.x |
 | Validación servidor | Zod + @hono/zod-validator | 3.x |
 | Base de datos | PostgreSQL | 16-alpine |
 | Driver DB | pg (node-postgres) | 8.x |
 | Hashing | argon2 (argon2id) | 0.44.x |
-| Pagos (backend) | stripe (PaymentIntents + webhooks) | latest |
 | Imágenes CDN | Cloudinary (fallback local) | 2.x |
 | Runtime TS | tsx | 4.x |
 | Reverse Proxy | nginx:alpine | latest |
@@ -91,7 +90,7 @@ KRATAMEX es una **tienda online completa** de ordenadores y accesorios construid
 
 ### Flujo de red
 
-- **HTTPS (443)**: nginx termina TLS → enruta `/api/*` al backend, el resto al frontend
+- **HTTPS (443)**: nginx termina TLS → enruta `/api/*`, `/uploads/*` y `/avatars/*` al backend, el resto al frontend
 - **HTTP (80)**: nginx redirige 301 → HTTPS
 - **:3000 directo**: útil para desarrollo (evita el certificado autofirmado en Playwright/fetch)
 - **nginx** pasa `X-Forwarded-For` y `X-Real-IP` al backend para detección de IP del cliente
@@ -106,13 +105,12 @@ KRATAMEX es una **tienda online completa** de ordenadores y accesorios construid
 frontend/src/
 ├── components/
 │   ├── Admin/
-│   │   ├── Admin.tsx              # Panel de administración completo
+│   │   ├── Admin.tsx              # Panel de administración completo (6 pestañas)
 │   │   └── Admin.module.css       # Estilos del panel (CSS Modules)
 │   ├── SecurityDashboard.tsx      # Panel SOC de ciberseguridad
 │   ├── SecurityDashboard.module.css
-│   ├── Checkout.tsx               # Formulario de pago Stripe Elements
 │   ├── OrderHistory.tsx           # Historial de pedidos del usuario
-│   ├── UserProfile.tsx            # Perfil editable del usuario
+│   ├── UserProfile.tsx            # Perfil editable + cambio de contraseña
 │   ├── ProductCard.tsx            # Tarjeta de producto
 │   ├── ProductoDetalle.tsx        # Detalle de producto + reseñas
 │   ├── SkeletonCard.tsx           # Skeleton loading
@@ -131,14 +129,15 @@ frontend/src/
 
 ```tsx
 <Routes>
-  <Route path="/"            element={<Tienda />} />
+  <Route path="/"             element={<Tienda />} />
   <Route path="/producto/:id" element={<ProductoDetalle />} />
-  <Route path="/login"       element={<Login />} />
-  <Route path="/registro"    element={<Registro />} />
-  <Route path="/perfil"      element={authUser ? <UserProfile /> : <Navigate to="/login" />} />
-  <Route path="/mis-pedidos" element={authUser ? <OrderHistory /> : <Navigate to="/login" />} />
-  <Route path="/admin"       element={<Admin />} />
-  <Route path="/panel"       element={<SecurityDashboard />} />
+  <Route path="/login"        element={<Auth mode="login" />} />
+  <Route path="/registro"     element={<Auth mode="register" />} />
+  <Route path="/perfil"       element={authUser ? <UserProfile /> : <Navigate to="/login" />} />
+  <Route path="/mis-pedidos"  element={authUser ? <OrderHistory /> : <Navigate to="/login" />} />
+  <Route path="/admin"        element={<Admin />} />
+  <Route path="/panel"        element={<SecurityDashboard />} />
+  <Route path="*"             element={<Pagina404 />} />
 </Routes>
 ```
 
@@ -155,23 +154,25 @@ const { data: productos = [], isLoading } = useQuery<Producto[]>({
   queryFn: () => fetch(`/api/productos?${params}`).then(r => r.json()),
 });
 
-// Checkout con Stripe — flujo de 2 pasos:
-// 1. handleCheckout() → POST /api/pedidos/checkout → obtiene clientSecret
-// 2. setStripeData({ clientSecret, total }) → muestra <Checkout> con PaymentElement
-// 3. onSuccess → vacía carrito + navega a /mis-pedidos
-const handleCheckout = async () => {
-  const data = await api.crearCheckout({ ...formulario, items, cupon });
-  setStripeData({ clientSecret: data.clientSecret, total: data.total });
-};
+// Checkout directo — useMutation + postPedido
+const checkoutMutation = useMutation({
+  mutationFn: () => api.postPedido({ ...formulario, items, cupon }),
+  onSuccess: () => { vaciarCarrito(); navigate('/mis-pedidos'); },
+});
 ```
 
 Filtros disponibles:
 - Búsqueda por nombre / descripción / categoría (ILIKE en PostgreSQL)
-- Categoría: Todos, Portátiles, Gaming, Sobremesa
+- Categoría: Todos, Portátiles, Gaming, Sobremesa (+ cualquier categoría dinámica)
 - Precio: mínimo y máximo
 - Ordenamiento: precio asc/desc
-- Favoritos (localStorage)
+- Favoritos (localStorage + sincronización servidor si está logueado)
 - Vista: cuadrícula / lista
+
+Funcionalidades adicionales:
+- **Búsquedas recientes**: Al hacer foco en el buscador sin texto aparece un dropdown con el historial (últimas 6 búsquedas, guardadas en `localStorage.kratamex_searches`). Botón para limpiar historial.
+- **Cantidad editable en carrito**: input numérico directo en el carrito (además de botones +/−), respeta el límite de stock.
+- **Cupón de descuento**: campo en el carrito → POST `/api/cupones/validar` → descuento aplicado al total.
 
 #### UserProfile (`/perfil`)
 
@@ -181,6 +182,7 @@ Formulario editable con TanStack Query:
 - Selector de idioma (es/en) — aplica `setLang()` al cambiar
 - Toast de confirmación animado con Framer Motion
 - Badge de rol (Admin/Usuario) con color
+- **Cambio de contraseña**: sección separada con contraseña actual (verificada con argon2 en servidor), nueva contraseña (mín. 6 caracteres), confirmación. Toggle mostrar/ocultar contraseña.
 
 #### OrderHistory (`/mis-pedidos`)
 
@@ -192,36 +194,52 @@ Lista de pedidos del usuario autenticado:
 
 #### Admin (`/admin`)
 
-Login propio con rol admin. Cuatro pestañas:
+Login propio con rol admin (token guardado en `localStorage` para persistir entre recargas). Seis pestañas:
 
 **Dashboard**
 - KPIs: total pedidos, ingresos totales, ticket medio, clientes únicos, productos en catálogo
-- AreaChart de ingresos por día
+- AreaChart de ingresos por día (Recharts)
 - LineChart de pedidos por día
-- Tabla de compras de clientes con opción de eliminar pedido
+- Tabla "Top productos más vendidos" (nombre, unidades vendidas, ingresos)
+- Alerta "Stock bajo (≤5 unidades)" con listado de productos afectados
+- Botones de exportación CSV (pedidos y productos)
 
 **Productos**
 - CRUD completo sin tocar código
-- Formulario: nombre, descripción, precio, categoría
+- Formulario: nombre, descripción, precio, categoría, SKU, stock inicial, destacado, activo
 - Upload drag-and-drop de imagen (JPG/PNG/WEBP, máx. 5 MB) con preview
-- Tabla con miniatura de imagen, categoría, precio, acciones Editar/Eliminar
+- Tabla con miniatura, categoría, precio, stock (badge de color), estado activo/oculto, acciones
+- **Stock inline**: clic en el badge de stock → input → Enter/blur guarda vía `PATCH /api/productos/:id/stock`
+- **Toggle visibilidad**: botón "Activo / Oculto" por producto (productos ocultos aparecen con opacidad reducida)
+- Badge de stock: 🟢 verde (>10), 🟡 naranja (≤5), 🔴 rojo (0 / Agotado)
 
 **Pedidos**
-- Tabla de todos los pedidos con estado, total y fecha
+- Tabla de todos los pedidos con cliente, email, total, estado y fecha
+- **Cambio de estado inline**: clic en el badge de estado → select con todos los estados posibles → guarda vía `PATCH /api/pedidos/:id/estado`
 - Eliminación individual
+- Botón exportar CSV
 
 **Reseñas**
 - Listado de todas las valoraciones de clientes
-- Muestra: avatar/inicial del usuario, nombre, producto valorado, puntuación (★★★★★), título y texto
+- Muestra: inicial del usuario, nombre, producto valorado, puntuación (★★★★★), título y texto
 - Botón de eliminar individual por reseña
+
+**Cupones**
+- Formulario para crear cupones: código, tipo (porcentaje / importe fijo), valor, compra mínima, usos máximos, fecha inicio, fecha fin, activo
+- Tabla con todos los cupones: código, tipo, valor, usos actuales / máximos, estado (activo/inactivo)
+- Botón eliminar por cupón
+
+**Usuarios**
+- Tabla de todos los usuarios registrados
+- Muestra: ID, username, nombre, email, rol (badge de color), total de pedidos, fecha de registro
 
 ### Design System
 
-**Dark / Light mode**: controlado por `data-theme` en `<html>`. Variables CSS en `index.css`:
+**Dark / Light mode**: controlado por `data-tema` en `<html>`. Variables CSS en `index.css`:
 
 ```css
-[data-theme="dark"]  { --bg: #020617; --card-bg: rgba(30,41,59,.5); --accent: #059669; }
-[data-theme="light"] { --bg: #f1f5f9; --card-bg: #ffffff; --accent: #059669; }
+[data-tema="dark"]  { --bg: #020617; --card-bg: rgba(30,41,59,.5); --accent: #059669; }
+[data-tema="light"] { --bg: #f1f5f9; --card-bg: #ffffff; --accent: #059669; }
 ```
 
 **Glassmorphism**:
@@ -338,14 +356,24 @@ Rutas afectadas: `POST /api/productos/:id/imagen`, `POST /api/usuario/avatar`
 ### Schema Drizzle ORM (`backend/src/db/schema.ts`)
 
 ```typescript
-// Tablas principales
-export const productos       = pgTable('productos',       { id, nombre, descripcion, precio, imagen, categoria });
-export const pedidos         = pgTable('pedidos',         { id, cliente, email, direccion, total, estado, fecha });
-export const pedidoItems     = pgTable('pedido_items',    { id, pedidoId, productoId, nombre, precio, cantidad, imagen });
-export const usuarios        = pgTable('usuarios',        { id, username, password, email, nombre, role, avatar, direccion, telefono, idioma });
-export const comentarios     = pgTable('comentarios',     { id, productoId, usuarioId, autor, titulo, contenido, valoracion, fecha });
-export const securityEvents  = pgTable('security_events', { id, tipo, ip, username, endpoint, metodo, userAgent, detalles, fecha });
+export const productos       = pgTable('productos',        { id, nombre, descripcion, precio, imagen, categoria, stock, sku, destacado, activo });
+export const pedidos         = pgTable('pedidos',          { id, cliente, email, direccion, total, estado, notas, fecha });
+export const pedidoItems     = pgTable('pedido_items',     { id, pedidoId, productoId, nombre, precio, cantidad, imagen });
+export const usuarios        = pgTable('usuarios',         { id, username, password, email, nombre, role, avatar, direccion, telefono, idioma });
+export const comentarios     = pgTable('comentarios',      { id, productoId, usuarioId, autor, titulo, contenido, valoracion, fecha });
+export const cupones         = pgTable('cupones',          { id, codigo, tipo, valor, minCompra, maxUsos, usos, activo, fechaInicio, fechaFin });
+export const favoritos       = pgTable('favoritos',        { id, usuarioId, productoId });
+export const securityEvents  = pgTable('security_events',  { id, tipo, ip, username, endpoint, metodo, userAgent, detalles, fecha });
 ```
+
+### Campos relevantes de `productos`
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `stock` | integer | Unidades disponibles (0 = agotado) |
+| `sku` | varchar | Referencia interna del producto |
+| `destacado` | boolean | Aparece primero en el catálogo |
+| `activo` | boolean | `false` = oculto en la tienda (solo visible en admin) |
 
 ### Tipos de evento en `security_events`
 
@@ -381,16 +409,16 @@ Al arrancar, el backend crea las tablas (`CREATE TABLE IF NOT EXISTS`) y hace se
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| GET | `/api/productos` | Lista productos. Query: `busqueda`, `categoria`, `orden`, `desde`, `hasta` |
+| GET | `/api/productos` | Lista productos. Query: `busqueda`, `categoria`, `orden`, `desde`, `hasta`, `enStock`, `destacado` |
 | GET | `/api/productos/:id` | Producto por ID |
-| GET | `/api/productos/:id/comentarios` | Reseñas del producto |
-| POST | `/api/productos/:id/comentarios` | Publicar reseña (rate limited) |
+| GET | `/api/productos/:id/valoraciones` | Reseñas del producto |
+| POST | `/api/productos/:id/valoraciones` | Publicar reseña (rate limited, requiere token) |
 | POST | `/api/pedidos` | Crear pedido con validación de precios server-side |
-| POST | `/api/pedidos/checkout` | Crear pedido + Stripe PaymentIntent → `{ clientSecret, pedidoId, total }` |
-| POST | `/api/webhook` | Webhook Stripe (raw body): `payment_intent.succeeded` → estado `pagado` |
 | POST | `/api/login` | Autenticar usuario (rate limited) |
-| POST | `/api/registro` | Registrar nuevo usuario |
+| POST | `/api/register` | Registrar nuevo usuario |
 | POST | `/api/logout` | Cerrar sesión (invalidar token) |
+| GET | `/api/categorias` | Listar categorías |
+| POST | `/api/cupones/validar` | Validar cupón y calcular descuento |
 
 ### Endpoints autenticados (usuario)
 
@@ -398,8 +426,12 @@ Al arrancar, el backend crea las tablas (`CREATE TABLE IF NOT EXISTS`) y hace se
 |--------|------|-------------|
 | GET | `/api/usuario` | Datos del usuario actual |
 | PUT | `/api/usuario/perfil` | Actualizar perfil (nombre, email, avatar, idioma…) |
+| PUT | `/api/usuario/password` | Cambiar contraseña (verifica la actual con argon2) |
 | POST | `/api/usuario/avatar` | Subir avatar |
 | GET | `/api/mis-pedidos` | Pedidos del usuario autenticado con items |
+| GET | `/api/favoritos` | Favoritos del usuario |
+| POST | `/api/favoritos/:id` | Añadir producto a favoritos |
+| DELETE | `/api/favoritos/:id` | Eliminar producto de favoritos |
 
 ### Endpoints admin
 
@@ -408,11 +440,23 @@ Al arrancar, el backend crea las tablas (`CREATE TABLE IF NOT EXISTS`) y hace se
 | POST | `/api/productos` | Crear producto |
 | PUT | `/api/productos/:id` | Actualizar producto |
 | DELETE | `/api/productos/:id` | Eliminar producto |
+| PATCH | `/api/productos/:id/stock` | Actualizar stock y/o campo `activo` |
 | POST | `/api/productos/:id/imagen` | Subir imagen del producto |
 | GET | `/api/admin/pedidos` | Todos los pedidos |
 | DELETE | `/api/admin/pedidos/:id` | Eliminar pedido |
+| PATCH | `/api/pedidos/:id/estado` | Cambiar estado del pedido (+ notas opcionales) |
+| GET | `/api/admin/pedidos/csv` | Exportar todos los pedidos en CSV |
 | GET | `/api/admin/valoraciones` | Todas las reseñas (join producto + usuario) |
 | DELETE | `/api/admin/valoraciones/:id` | Eliminar reseña |
+| GET | `/api/admin/analytics` | Métricas dashboard: KPIs, gráficas, top productos, stock bajo |
+| GET | `/api/admin/usuarios` | Listado de usuarios con `totalPedidos` via JOIN |
+| GET | `/api/admin/cupones` | Listado de todos los cupones |
+| POST | `/api/admin/cupones` | Crear cupón |
+| DELETE | `/api/admin/cupones/:id` | Eliminar cupón |
+| GET | `/api/admin/productos/csv` | Exportar todos los productos en CSV |
+| POST | `/api/categorias` | Crear categoría |
+| PUT | `/api/categorias/:id` | Actualizar categoría |
+| DELETE | `/api/categorias/:id` | Eliminar categoría |
 
 ### Endpoints SOC (admin)
 
@@ -437,91 +481,29 @@ Al arrancar, el backend crea las tablas (`CREATE TABLE IF NOT EXISTS`) y hace se
 }
 ```
 
----
-
-## Pagos con Stripe
-
-### Flujo completo
+### Flujo de checkout
 
 ```
-Usuario rellena carrito + datos de envío
+Usuario rellena carrito + datos de envío (nombre, email, dirección)
     │
     ▼
-handleCheckout()
-    │  POST /api/pedidos/checkout  { cliente, email, direccion, items, cupon }
+Validación Zod client-side (CheckoutSchema)
+    │
+    ▼
+checkoutMutation.mutate()
+    │  POST /api/pedidos  { cliente, email, direccion, items, cupon }
     ▼
 Backend:
-  1. Valida stock y precios (igual que /api/pedidos)
-  2. Crea pedido en BD con estado = 'pendiente'
-  3. Crea Stripe PaymentIntent con metadata.pedidoId
-  4. Devuelve { clientSecret, pedidoId, total }
+  1. Valida schema Zod (PedidoSchema)
+  2. Verifica stock de cada producto
+  3. Recalcula precios server-side (no confía en el cliente)
+  4. Aplica descuento del cupón si existe
+  5. Crea pedido + items en BD con estado = 'pendiente'
+  6. Devuelve { pedidoId, total }
     │
     ▼
-Frontend muestra <Checkout> (Stripe Elements)
-    │  stripe.confirmPayment({ redirect: 'if_required' })
-    ▼
-Pago aprobado → onSuccess() → vacía carrito → navega a /mis-pedidos
-    │
-    ▼ (asíncrono, servidor)
-Stripe POST /api/webhook  event: payment_intent.succeeded
-    │  verifica firma HMAC con STRIPE_WEBHOOK_SECRET
-    ▼
-Backend actualiza pedido.estado = 'pagado'
+onSuccess → vacía carrito → navega a /mis-pedidos
 ```
-
-### Componente `Checkout.tsx`
-
-```tsx
-// Inicialización única fuera del render
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY)
-
-// Elements envuelve el formulario con el clientSecret
-<Elements stripe={stripePromise} options={{ clientSecret, appearance }}>
-  <PaymentElement />
-  <button onClick={() => stripe.confirmPayment({ redirect: 'if_required' })}>
-    Pagar €{total}
-  </button>
-</Elements>
-```
-
-### Endpoint `POST /api/pedidos/checkout`
-
-Mismo body que `POST /api/pedidos`. Respuesta:
-
-```json
-{ "clientSecret": "pi_..._secret_...", "pedidoId": 42, "total": 127.45 }
-```
-
-El importe se pasa a Stripe en **céntimos** (`Math.round(total * 100)`), divisa `eur`.
-
-### Endpoint `POST /api/webhook`
-
-Lee el body con `c.req.text()` (raw, sin parsear) para que la firma HMAC sea válida.
-Si `STRIPE_WEBHOOK_SECRET` no está configurado, acepta el evento sin verificar (útil en desarrollo local sin Stripe CLI).
-
-### Variables de entorno
-
-| Variable | Dónde | Descripción |
-|----------|-------|-------------|
-| `STRIPE_SECRET_KEY` | `backend/.env` | Clave secreta `sk_test_...` |
-| `STRIPE_WEBHOOK_SECRET` | `backend/.env` | Secret del webhook `whsec_...` |
-| `VITE_STRIPE_PUBLISHABLE_KEY` | `frontend/.env` | Clave pública `pk_test_...` |
-
-### Tarjetas de prueba
-
-| Número de tarjeta | Resultado |
-|-------------------|-----------|
-| `4242 4242 4242 4242` | Pago aprobado |
-| `4000 0000 0000 9995` | Fondos insuficientes (rechazado) |
-
-En ambas: fecha futura · CVC `123` · CP `12345`
-
-### Estados del pedido relacionados
-
-| Estado | Cuándo se asigna |
-|--------|-----------------|
-| `pendiente` | Al crear el pedido en `/api/pedidos/checkout` |
-| `pagado` | Al recibir `payment_intent.succeeded` en el webhook |
 
 ---
 
@@ -600,6 +582,18 @@ Petición autenticada:
   → Pone c.set('user', session)
 ```
 
+### Cambio de contraseña
+
+```
+PUT /api/usuario/password  { passwordActual, passwordNueva }
+  → authenticate()
+  → Busca usuario en BD
+  → argon2.verify(passwordActual, hash almacenado)
+  → argon2.hash(passwordNueva)
+  → Actualiza hash en BD
+  → Responde { ok: true }
+```
+
 ### RBAC
 
 | Acción | standard | admin |
@@ -608,10 +602,17 @@ Petición autenticada:
 | Hacer pedidos | Sí | Sí |
 | Ver historial propio | Sí | Sí |
 | Editar perfil propio | Sí | Sí |
+| Cambiar contraseña | Sí | Sí |
+| Gestionar favoritos | Sí | Sí |
 | Panel admin | No | Sí |
 | CRUD productos | No | Sí |
+| Gestión de stock | No | Sí |
 | Eliminar pedidos | No | Sí |
+| Cambiar estado pedidos | No | Sí |
 | Gestionar reseñas | No | Sí |
+| Gestionar cupones | No | Sí |
+| Ver usuarios | No | Sí |
+| Exportar CSV | No | Sí |
 | Panel SOC | No | Sí |
 | Ver eventos de seguridad | No | Sí |
 
@@ -663,13 +664,6 @@ CORS_ORIGIN=https://localhost
 CLOUDINARY_CLOUD_NAME=      # opcional
 CLOUDINARY_API_KEY=         # opcional
 CLOUDINARY_API_SECRET=      # opcional
-STRIPE_SECRET_KEY=sk_test_... # modo test
-STRIPE_WEBHOOK_SECRET=whsec_... # para verificar webhooks
-```
-
-**Frontend (`frontend/.env`)**:
-```env
-VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
 ```
 
 ### Arranque
@@ -716,6 +710,8 @@ Alternativa para el backend:
 docker compose restart backend
 ```
 
+> **Nota**: `vite.config.ts` NO está montado como volumen. Cualquier cambio requiere reconstruir la imagen: `docker compose up --build -d frontend`
+
 ### Dependencias nuevas
 
 ```bash
@@ -758,11 +754,12 @@ node simulate_attacks.mjs http://localhost:3001 admin123
 interface Producto {
   id: number; nombre: string; descripcion: string;
   precio: number; imagen: string; categoria: string;
+  stock: number; activo: boolean; destacado: boolean;
 }
 
 interface Pedido {
   id: number; cliente: string; email: string; direccion: string;
-  total: number; estado: string; fecha: string;
+  total: number; estado: string; notas?: string; fecha: string;
   items?: PedidoItem[];
 }
 
@@ -794,16 +791,6 @@ logSecEvent('forbidden', {
 ```
 
 El evento aparece automáticamente en el panel SOC en el próximo refresh (máx. 15 s).
-
-### Probar Stripe en local (sin webhook)
-
-Para desarrollo local puedes omitir `STRIPE_WEBHOOK_SECRET`. El pedido se creará en estado `pendiente` y el pago funcionará, pero el estado no cambiará a `pagado` automáticamente (el webhook no llega desde fuera). Para probarlo completo usa Stripe CLI:
-
-```bash
-stripe listen --forward-to localhost:3001/api/webhook
-```
-
-Esto imprime un `whsec_...` temporal que puedes usar como `STRIPE_WEBHOOK_SECRET`.
 
 ---
 
