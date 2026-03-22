@@ -22,13 +22,14 @@ import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import argon2 from 'argon2';
+import nodemailer from 'nodemailer';
 import { v2 as cloudinary } from 'cloudinary';
 
 import { db, pool } from './db/index';
 import {
   productos, pedidos, pedidoItems, usuarios, comentarios,
   categorias, valoraciones, favoritos, cupones, productoImagenes,
-  pushSubscriptions, securityEvents, blockedIps,
+  pushSubscriptions, securityEvents, blockedIps, passwordResetTokens,
 } from './db/schema';
 import {
   ProductoBodySchema, ProductosQuerySchema, LoginSchema, RegisterSchema,
@@ -68,6 +69,38 @@ async function uploadToCloudinary(buffer: Buffer, folder: string): Promise<strin
         (err, result) => (err ? reject(err) : resolve(result!.secure_url))
       )
       .end(buffer);
+  });
+}
+
+// =================================================================
+// EMAIL (nodemailer — Gmail SMTP)
+// =================================================================
+const mailer = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_FROM,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+async function sendResetEmail(to: string, token: string) {
+  const link = `${process.env.CORS_ORIGIN || 'https://localhost'}/reset-password?token=${token}`;
+  await mailer.sendMail({
+    from: `"Kratamex" <${process.env.EMAIL_FROM}>`,
+    to,
+    subject: 'Recuperación de contraseña — Kratamex',
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;background:#f8fafc;border-radius:12px">
+        <h2 style="color:#1e293b;margin-bottom:8px">Recupera tu contraseña</h2>
+        <p style="color:#475569;margin-bottom:24px">Has solicitado restablecer tu contraseña en Kratamex. Haz clic en el botón para continuar:</p>
+        <a href="${link}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600">
+          Restablecer contraseña
+        </a>
+        <p style="color:#94a3b8;font-size:13px;margin-top:24px">Este enlace caduca en <strong>1 hora</strong>. Si no solicitaste este cambio, ignora este email.</p>
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+        <p style="color:#cbd5e1;font-size:12px">Kratamex · Tienda online</p>
+      </div>
+    `,
   });
 }
 
@@ -1821,6 +1854,61 @@ app.get('/api/calcular-costes', (c) => {
 });
 
 // =================================================================
+// RUTAS — RECUPERACIÓN DE CONTRASEÑA
+// =================================================================
+app.post('/api/forgot-password', generalRateLimiter, async (c) => {
+  const { email } = await c.req.json().catch(() => ({}));
+  if (!email || typeof email !== 'string') return c.json({ error: 'Email requerido' }, 400);
+
+  // Respuesta siempre igual para no revelar si el email existe (anti-enumeración)
+  const ok = { ok: true, message: 'Si ese email existe, recibirás un enlace en breve.' };
+
+  try {
+    const [user] = await db.select({ id: usuarios.id, email: usuarios.email })
+      .from(usuarios).where(eq(usuarios.email, email.toLowerCase().trim()));
+    if (!user?.email) return c.json(ok); // email no registrado — respuesta idéntica
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
+
+    await db.insert(passwordResetTokens).values({ usuarioId: user.id, token, expiresAt });
+    await sendResetEmail(user.email, token);
+
+    return c.json(ok);
+  } catch (err) {
+    console.error('forgot-password error:', err);
+    return c.json(ok); // no revelar error interno
+  }
+});
+
+app.post('/api/reset-password', async (c) => {
+  const { token, password } = await c.req.json().catch(() => ({}));
+  if (!token || !password || typeof token !== 'string' || typeof password !== 'string')
+    return c.json({ error: 'Token y contraseña requeridos' }, 400);
+  if (password.length < 8)
+    return c.json({ error: 'La contraseña debe tener al menos 8 caracteres' }, 400);
+
+  try {
+    const now = new Date();
+    const [record] = await db.select().from(passwordResetTokens)
+      .where(eq(passwordResetTokens.token, token));
+
+    if (!record) return c.json({ error: 'Enlace inválido o expirado' }, 400);
+    if (record.usedAt) return c.json({ error: 'Este enlace ya fue utilizado' }, 400);
+    if (record.expiresAt < now) return c.json({ error: 'El enlace ha expirado. Solicita uno nuevo.' }, 400);
+
+    const hash = await argon2.hash(password);
+    await db.update(usuarios).set({ password: hash }).where(eq(usuarios.id, record.usuarioId));
+    await db.update(passwordResetTokens).set({ usedAt: now }).where(eq(passwordResetTokens.id, record.id));
+
+    return c.json({ ok: true, message: 'Contraseña actualizada correctamente' });
+  } catch (err) {
+    console.error('reset-password error:', err);
+    return c.json({ error: 'Error interno' }, 500);
+  }
+});
+
+// =================================================================
 // ERROR HANDLER
 // =================================================================
 app.onError((err, c) => {
@@ -1963,6 +2051,14 @@ async function initDB() {
       motivo          TEXT,
       bloqueado_hasta TIMESTAMPTZ,
       created_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id          SERIAL PRIMARY KEY,
+      usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      token       TEXT NOT NULL UNIQUE,
+      expires_at  TIMESTAMPTZ NOT NULL,
+      used_at     TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ DEFAULT NOW()
     );
   `);
 

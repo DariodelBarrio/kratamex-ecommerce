@@ -169,6 +169,18 @@ export const securityEvents = pgTable('security_events', {
 });
 
 // =================================================================
+// PASSWORD RESET TOKENS
+// =================================================================
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+  id:        serial('id').primaryKey(),
+  usuarioId: integer('usuario_id').notNull().references(() => usuarios.id, { onDelete: 'cascade' }),
+  token:     text('token').notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt:    timestamp('used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// =================================================================
 // BLOCKED IPs (auto-block + manual)
 // =================================================================
 export const blockedIps = pgTable('blocked_ips', {
