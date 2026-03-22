@@ -6,35 +6,91 @@ on:
   pull_request:
     branches: [main]
 
+# ──────────────────────────────────────────────────────────────────
+# FRONTEND
+# ──────────────────────────────────────────────────────────────────
 jobs:
   test-frontend:
+    name: Frontend — typecheck + tests + coverage
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - run: npm ci --legacy-peer-deps
-      - run: npx tsc --noEmit
-      - run: npm run test:run
 
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Tests + coverage
+        id: test
+        run: npm run test:coverage
+
+      - name: Job Summary
+        if: always()
+        run: |
+          STATUS="${{ steps.test.outcome }}"
+          if [ "$STATUS" = "success" ]; then
+            echo "## ✅ Frontend — tests y cobertura OK" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Frontend — tests o cobertura fallaron" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          node $GITHUB_WORKSPACE/.github/scripts/coverage-summary.js \
+            coverage/coverage-summary.json \
+            "Frontend" \
+            "$STATUS" >> $GITHUB_STEP_SUMMARY
+
+# ──────────────────────────────────────────────────────────────────
+# BACKEND
+# ──────────────────────────────────────────────────────────────────
   test-backend:
+    name: Backend — typecheck + tests + coverage
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: backend/package-lock.json
-      - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npm test
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Tests + coverage
+        id: test
+        run: npm run test:coverage
+
+      - name: Job Summary
+        if: always()
+        run: |
+          STATUS="${{ steps.test.outcome }}"
+          if [ "$STATUS" = "success" ]; then
+            echo "## ✅ Backend — tests y cobertura OK" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Backend — tests o cobertura fallaron" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          node $GITHUB_WORKSPACE/.github/scripts/coverage-summary.js \
+            coverage/coverage-summary.json \
+            "Backend" \
+            "$STATUS" >> $GITHUB_STEP_SUMMARY
