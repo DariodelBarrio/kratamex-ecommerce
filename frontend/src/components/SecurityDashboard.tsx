@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, AlertTriangle, CheckCircle, XCircle, Activity, Users, Wifi, Lock, RefreshCw, LogOut, Terminal, Eye, EyeOff, Globe, Search } from 'lucide-react';
+import { Shield, AlertTriangle, CheckCircle, XCircle, Activity, Users, Wifi, Lock, RefreshCw, LogOut, Terminal, Eye, EyeOff, Globe, Search, Download, Ban, Trash2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import styles from './SecurityDashboard.module.css';
 
@@ -33,6 +33,14 @@ interface VtResult {
 
 type VtState = VtResult | 'loading' | 'error' | { error: string };
 
+interface BlockedIp {
+  id: number;
+  ip: string;
+  motivo: string | null;
+  bloqueadoHasta: string | null;
+  createdAt: string;
+}
+
 interface SecStats {
   total: number;
   login_fail: number;
@@ -46,12 +54,14 @@ interface SecStats {
 }
 
 const TIPO_CONFIG: Record<string, { label: string; cls: string; icon: string }> = {
-  login_ok:     { label: 'LOGIN OK',      cls: 'ev-ok',      icon: '✓' },
-  login_fail:   { label: 'LOGIN FAIL',    cls: 'ev-fail',    icon: '✗' },
-  brute_force:  { label: 'BRUTE FORCE',   cls: 'ev-critical', icon: '⚠' },
-  auth_invalid: { label: 'AUTH INVALID',  cls: 'ev-warn',    icon: '!' },
-  register:     { label: 'REGISTER',      cls: 'ev-info',    icon: '→' },
-  forbidden:    { label: 'FORBIDDEN',     cls: 'ev-warn',    icon: '⛔' },
+  login_ok:        { label: 'LOGIN OK',       cls: 'ev-ok',       icon: '✓' },
+  login_fail:      { label: 'LOGIN FAIL',     cls: 'ev-fail',     icon: '✗' },
+  brute_force:     { label: 'BRUTE FORCE',    cls: 'ev-critical', icon: '⚠' },
+  auth_invalid:    { label: 'AUTH INVALID',   cls: 'ev-warn',     icon: '!' },
+  register:        { label: 'REGISTER',       cls: 'ev-info',     icon: '→' },
+  forbidden:       { label: 'FORBIDDEN',      cls: 'ev-warn',     icon: '⛔' },
+  honeypot:        { label: 'HONEYPOT',       cls: 'ev-critical', icon: '🍯' },
+  blocked_request: { label: 'BLOCKED',        cls: 'ev-fail',     icon: '🚫' },
 };
 
 function fmtTime(d: string) {
@@ -81,6 +91,10 @@ export default function SecurityDashboard() {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [vtResults, setVtResults] = useState<Record<string, VtState>>({});
+  const [blockedList, setBlockedList] = useState<BlockedIp[]>([]);
+  const [blockIpInput, setBlockIpInput] = useState('');
+  const [blockMotivo, setBlockMotivo] = useState('');
+  const [blockLoading, setBlockLoading] = useState(false);
 
   // Restaurar sesión al montar si hay token guardado
   useEffect(() => {
@@ -125,16 +139,60 @@ export default function SecurityDashboard() {
     }
   }, [token, vtResults]);
 
+  const loadBlockedIps = useCallback(async (tk: string) => {
+    try {
+      const res = await fetch('/api/security/blocked-ips', { headers: { Authorization: tk } });
+      if (res.ok) setBlockedList(await res.json());
+    } catch {}
+  }, []);
+
+  const handleBlockIp = async () => {
+    const ip = blockIpInput.trim();
+    if (!ip) return;
+    setBlockLoading(true);
+    try {
+      const res = await fetch('/api/security/blocked-ips', {
+        method: 'POST',
+        headers: { Authorization: token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip, motivo: blockMotivo || 'manual', horas: 24 }),
+      });
+      if (res.ok) { setBlockIpInput(''); setBlockMotivo(''); loadBlockedIps(token); }
+    } finally { setBlockLoading(false); }
+  };
+
+  const handleUnblockIp = async (ip: string) => {
+    await fetch(`/api/security/blocked-ips/${encodeURIComponent(ip)}`, {
+      method: 'DELETE', headers: { Authorization: token },
+    });
+    loadBlockedIps(token);
+  };
+
+  const exportEvents = (format: 'csv' | 'json') => {
+    const a = document.createElement('a');
+    a.href = `/api/security/events/export?format=${format}&limit=1000`;
+    // Passing auth via URL not ideal — use fetch + blob instead
+    fetch(a.href, { headers: { Authorization: token } })
+      .then(r => r.blob())
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        a.href = url;
+        a.download = `soc-events-${new Date().toISOString().slice(0,10)}.${format}`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+  };
+
   useEffect(() => {
     if (!authed) return;
     loadData(token);
-  }, [authed, tipoFiltro, token, loadData]);
+    loadBlockedIps(token);
+  }, [authed, tipoFiltro, token, loadData, loadBlockedIps]);
 
   useEffect(() => {
     if (!authed || !autoRefresh) return;
-    const id = setInterval(() => loadData(token), 15000);
+    const id = setInterval(() => { loadData(token); loadBlockedIps(token); }, 15000);
     return () => clearInterval(id);
-  }, [authed, autoRefresh, token, loadData]);
+  }, [authed, autoRefresh, token, loadData, loadBlockedIps]);
 
   const handleLogin = async () => {
     setLoginErr('');
@@ -424,18 +482,70 @@ export default function SecurityDashboard() {
           </div>
         </div>
 
+        {/* BLOCKED IPs PANEL */}
+        <div className={styles.panel}>
+          <div className={styles.panelTitle}>
+            <Ban size={14} /> IPs BLOQUEADAS
+            <span className={styles.blockedCount}>{blockedList.length}</span>
+          </div>
+          <div className={styles.blockForm}>
+            <input
+              className={styles.blockInput}
+              placeholder="IP a bloquear (ej: 1.2.3.4)"
+              value={blockIpInput}
+              onChange={e => setBlockIpInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleBlockIp()}
+            />
+            <input
+              className={styles.blockInput}
+              placeholder="Motivo (opcional)"
+              value={blockMotivo}
+              onChange={e => setBlockMotivo(e.target.value)}
+            />
+            <button className={styles.blockBtn} onClick={handleBlockIp} disabled={blockLoading || !blockIpInput.trim()}>
+              <Ban size={12} /> Bloquear 24h
+            </button>
+          </div>
+          <div className={styles.blockedTable}>
+            {blockedList.length === 0 ? (
+              <div className={styles.emptyLog}>Sin IPs bloqueadas</div>
+            ) : blockedList.map(b => (
+              <div key={b.id} className={styles.blockedRow}>
+                <span className={styles.blockedIp}>{b.ip}</span>
+                <span className={styles.blockedMotivo}>{b.motivo ?? '—'}</span>
+                <span className={styles.blockedHasta}>
+                  {b.bloqueadoHasta
+                    ? `hasta ${new Date(b.bloqueadoHasta).toLocaleString('es-ES')}`
+                    : 'permanente'}
+                </span>
+                <button className={styles.unblockBtn} onClick={() => handleUnblockIp(b.ip)} title="Desbloquear">
+                  <Trash2 size={11} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* EVENT LOG */}
         <div className={styles.panel}>
           <div className={styles.panelTitle}>
             <Terminal size={14} /> LOG DE EVENTOS
             <div className={styles.filterRow}>
-              {['', 'login_fail', 'login_ok', 'brute_force', 'auth_invalid'].map(t => (
+              {['', 'login_fail', 'login_ok', 'brute_force', 'auth_invalid', 'honeypot', 'blocked_request'].map(t => (
                 <button key={t}
                   className={`${styles.filterBtn} ${tipoFiltro === t ? styles.filterBtnActive : ''}`}
                   onClick={() => setTipoFiltro(t)}>
                   {t === '' ? 'TODOS' : (TIPO_CONFIG[t]?.label ?? t.toUpperCase())}
                 </button>
               ))}
+            </div>
+            <div className={styles.exportRow}>
+              <button className={styles.exportBtn} onClick={() => exportEvents('csv')} title="Exportar CSV">
+                <Download size={12} /> CSV
+              </button>
+              <button className={styles.exportBtn} onClick={() => exportEvents('json')} title="Exportar JSON">
+                <Download size={12} /> JSON
+              </button>
             </div>
           </div>
           <div className={styles.logTable}>

@@ -784,6 +784,158 @@
   margin-top: 3px;
 }
 
+/* ── BLOCKED IPs PANEL ─────────────────────────────────────────── */
+.blockedCount {
+  margin-left: 8px;
+  background: rgba(239,68,68,0.15);
+  color: #f87171;
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 0.6rem;
+  font-weight: 700;
+}
+
+.blockForm {
+  display: flex;
+  gap: 8px;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  flex-wrap: wrap;
+}
+
+.blockInput {
+  flex: 1;
+  min-width: 140px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(0,230,120,0.12);
+  border-radius: 5px;
+  color: var(--soc-text-hi);
+  font-family: inherit;
+  font-size: 0.7rem;
+  padding: 5px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.blockInput:focus { border-color: rgba(0,230,120,0.35); }
+
+.blockBtn {
+  background: rgba(239,68,68,0.12);
+  border: 1px solid rgba(239,68,68,0.3);
+  color: #f87171;
+  padding: 5px 14px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.blockBtn:hover:not(:disabled) {
+  background: rgba(239,68,68,0.2);
+  box-shadow: 0 0 10px rgba(239,68,68,0.2);
+}
+
+.blockBtn:disabled { opacity: 0.5; cursor: default; }
+
+.blockedTable {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.blockedRow {
+  display: grid;
+  grid-template-columns: 140px 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 7px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  font-size: 0.68rem;
+  transition: background 0.1s;
+}
+
+.blockedRow:hover { background: rgba(255,255,255,0.02); }
+
+.blockedIp {
+  color: #f87171;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.blockedMotivo {
+  color: var(--soc-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.blockedHasta {
+  color: var(--soc-text);
+  font-size: 0.62rem;
+  white-space: nowrap;
+}
+
+.unblockBtn {
+  background: transparent;
+  border: 1px solid rgba(239,68,68,0.2);
+  color: rgba(239,68,68,0.5);
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.unblockBtn:hover {
+  border-color: rgba(239,68,68,0.5);
+  color: #f87171;
+  background: rgba(239,68,68,0.1);
+}
+
+/* ── EXPORT BUTTONS ─────────────────────────────────────────────── */
+.exportRow {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.exportBtn {
+  background: rgba(0,232,122,0.06);
+  border: 1px solid rgba(0,232,122,0.2);
+  color: var(--soc-green);
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.exportBtn:hover {
+  background: rgba(0,232,122,0.12);
+  box-shadow: 0 0 8px rgba(0,232,122,0.15);
+}
+
 /* ── RESPONSIVE ────────────────────────────────────────────────── */
 @media (max-width: 1000px) {
   .midRow { grid-template-columns: 1fr; }
