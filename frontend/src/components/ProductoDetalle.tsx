@@ -3,196 +3,16 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, ShoppingCart, Check, Monitor, Package,
-  MessageSquare, Send, User, Tag, ChevronDown, Share2, Star
+  Tag, ChevronDown, Share2, Star
 } from 'lucide-react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { z } from 'zod'
-import type { Producto, Comentario, Valoracion } from '../interfaces'
+import { useQuery } from '@tanstack/react-query'
+import type { Producto } from '../interfaces'
 import { StarRating, RatingForm, ValoracionesList } from './StarRating'
 
 interface Props {
   onAddToCart: (producto: Producto) => void
   carritoCount: number
   onOpenCart: () => void
-}
-
-// =================================================================
-// ZOD — Validación del formulario de comentario
-// =================================================================
-const ComentarioSchema = z.object({
-  autor:     z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(100),
-  contenido: z.string().min(5, 'El comentario debe tener al menos 5 caracteres').max(1000),
-})
-
-// =================================================================
-// COMMENT SECTION
-// =================================================================
-function SeccionComentarios({ productoId }: { productoId: number }) {
-  const queryClient = useQueryClient()
-  const [autor, setAutor] = useState('')
-  const [contenido, setContenido] = useState('')
-  const [formError, setFormError] = useState('')
-
-  // TanStack Query — carga de comentarios con caché
-  const { data: comentarios = [], isLoading: loadingComentarios } = useQuery<Comentario[]>({
-    queryKey: ['comentarios', productoId],
-    queryFn:  () => fetch(`/api/productos/${productoId}/comentarios`).then(r => r.json()),
-  })
-
-  // TanStack Query — mutación para enviar comentario
-  const mutation = useMutation({
-    mutationFn: (data: { autor: string; contenido: string }) =>
-      fetch(`/api/productos/${productoId}/comentarios`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(data),
-      }).then(async r => {
-        if (!r.ok) {
-          const err = await r.json()
-          throw new Error(err.error || 'Error al enviar el comentario')
-        }
-        return r.json() as Promise<Comentario>
-      }),
-    onSuccess: (nuevo) => {
-      // Actualización optimista: insertar al inicio de la lista en caché
-      queryClient.setQueryData<Comentario[]>(['comentarios', productoId], prev =>
-        prev ? [nuevo, ...prev] : [nuevo]
-      )
-      setAutor('')
-      setContenido('')
-      setFormError('')
-    },
-    onError: (err: Error) => setFormError(err.message),
-  })
-
-  const handleEnviar = () => {
-    setFormError('')
-    const result = ComentarioSchema.safeParse({ autor: autor.trim(), contenido: contenido.trim() })
-    if (!result.success) {
-      setFormError(result.error.issues[0].message)
-      return
-    }
-    mutation.mutate(result.data)
-  }
-
-  const formatFecha = (fecha: string) =>
-    new Date(fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })
-
-  const iniciales = (nombre: string) =>
-    nombre.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-
-  return (
-    <section className="detalle-comentarios">
-      <div className="detalle-comentarios-header">
-        <div className="detalle-section-label">
-          <MessageSquare size={16} />
-          Opiniones de clientes
-        </div>
-        <span className="detalle-comentarios-count">
-          {comentarios.length} comentario{comentarios.length !== 1 ? 's' : ''}
-        </span>
-      </div>
-
-      {/* Form */}
-      <div className="comentario-form">
-        <h3 className="comentario-form-title">Deja tu opinión</h3>
-        <div className="comentario-form-fields">
-          <div className="comentario-input-wrap">
-            <User size={14} className="comentario-input-icon" />
-            <input
-              type="text"
-              placeholder="Tu nombre"
-              value={autor}
-              maxLength={100}
-              onChange={e => setAutor(e.target.value)}
-              className="comentario-input"
-            />
-          </div>
-          <textarea
-            placeholder="Comparte tu experiencia con este producto..."
-            value={contenido}
-            maxLength={1000}
-            onChange={e => setContenido(e.target.value)}
-            className="comentario-textarea"
-            rows={4}
-          />
-          <div className="comentario-form-footer">
-            <span className="comentario-chars">{contenido.length}/1000</span>
-            <div className="comentario-form-actions">
-              {formError && <span className="comentario-error">{formError}</span>}
-              <AnimatePresence mode="wait">
-                {mutation.isSuccess ? (
-                  <motion.span
-                    key="exito"
-                    className="comentario-exito"
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0 }}
-                  >
-                    <Check size={14} /> Comentario publicado
-                  </motion.span>
-                ) : (
-                  <motion.button
-                    key="btn"
-                    className="comentario-submit"
-                    onClick={handleEnviar}
-                    disabled={mutation.isPending}
-                    whileTap={{ scale: 0.97 }}
-                  >
-                    {mutation.isPending ? 'Enviando...' : <><Send size={14} /> Publicar</>}
-                  </motion.button>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Comments list */}
-      <div className="comentarios-lista">
-        {loadingComentarios ? (
-          <div className="comentarios-loading">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="comentario-skeleton">
-                <div className="skeleton-line" style={{ width: 40, height: 40, borderRadius: '50%' }} />
-                <div style={{ flex: 1 }}>
-                  <div className="skeleton-line" style={{ width: '30%', height: 13, marginBottom: 8 }} />
-                  <div className="skeleton-line" style={{ width: '100%', height: 11, marginBottom: 5 }} />
-                  <div className="skeleton-line" style={{ width: '70%', height: 11 }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : comentarios.length === 0 ? (
-          <div className="comentarios-empty">
-            <MessageSquare size={36} style={{ opacity: 0.15 }} />
-            <p>Sé el primero en opinar sobre este producto</p>
-          </div>
-        ) : (
-          <AnimatePresence>
-            {comentarios.map((c, i) => (
-              <motion.div
-                key={c.id}
-                className="comentario-item"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04 }}
-              >
-                <div className="comentario-avatar">{iniciales(c.autor)}</div>
-                <div className="comentario-body">
-                  <div className="comentario-meta">
-                    <span className="comentario-autor">{c.autor}</span>
-                    <span className="comentario-fecha">{formatFecha(c.fecha)}</span>
-                  </div>
-                  <p className="comentario-contenido">{c.contenido}</p>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        )}
-      </div>
-    </section>
-  )
 }
 
 // =================================================================
@@ -551,8 +371,6 @@ export default function ProductoDetalle({ onAddToCart, carritoCount, onOpenCart 
           <ValoracionesList productoId={producto.id} />
         </section>
 
-        {/* Comments */}
-        <SeccionComentarios productoId={producto.id} />
       </motion.div>
 
       <footer className="store-footer" style={{ marginTop: 0 }}>
