@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, AlertTriangle, CheckCircle, XCircle, Activity, Users, Wifi, Lock, RefreshCw, LogOut, Terminal, Eye, EyeOff, Globe } from 'lucide-react';
+import { Shield, AlertTriangle, CheckCircle, XCircle, Activity, Users, Wifi, Lock, RefreshCw, LogOut, Terminal, Eye, EyeOff, Globe, Search } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import styles from './SecurityDashboard.module.css';
 
@@ -17,6 +17,21 @@ interface SecEvent {
   detalles: string | null;
   fecha: string;
 }
+
+interface VtResult {
+  ip: string;
+  malicious:  number;
+  suspicious: number;
+  harmless:   number;
+  undetected: number;
+  reputation: number;
+  country:    string | null;
+  as_owner:   string | null;
+  network:    string | null;
+  cached:     boolean;
+}
+
+type VtState = VtResult | 'loading' | 'error' | { error: string };
 
 interface SecStats {
   total: number;
@@ -65,6 +80,7 @@ export default function SecurityDashboard() {
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [vtResults, setVtResults] = useState<Record<string, VtState>>({});
 
   // Restaurar sesión al montar si hay token guardado
   useEffect(() => {
@@ -90,6 +106,24 @@ export default function SecurityDashboard() {
       setLoading(false);
     }
   }, [tipoFiltro]);
+
+  const checkVT = useCallback(async (ip: string) => {
+    if (vtResults[ip] === 'loading') return;
+    setVtResults(prev => ({ ...prev, [ip]: 'loading' }));
+    try {
+      const res = await fetch(`/api/security/ip/${encodeURIComponent(ip)}/threat`, {
+        headers: { Authorization: token },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setVtResults(prev => ({ ...prev, [ip]: { error: data.error ?? 'Error desconocido' } }));
+        return;
+      }
+      setVtResults(prev => ({ ...prev, [ip]: data as VtResult }));
+    } catch {
+      setVtResults(prev => ({ ...prev, [ip]: 'error' }));
+    }
+  }, [token, vtResults]);
 
   useEffect(() => {
     if (!authed) return;
@@ -195,6 +229,32 @@ export default function SecurityDashboard() {
     if (r.tipo === 'auth_invalid') hourlyMap[k].invalid += r.total;
   });
   const chartData = Object.values(hourlyMap);
+
+  function renderVtBadge(ip: string) {
+    const vt = vtResults[ip];
+    if (!vt) return null;
+    if (vt === 'loading') return <span className={styles.vtLoading}>consultando...</span>;
+    if (vt === 'error')   return <span className={styles.vtErr}>error</span>;
+    if ('error' in vt)    return <span className={styles.vtErr}>{(vt as { error: string }).error}</span>;
+    const r = vt as VtResult;
+    const total = r.malicious + r.suspicious + r.harmless + r.undetected;
+    const cls = r.malicious > 0 ? styles.vtMalicious
+               : r.suspicious > 0 ? styles.vtSuspicious
+               : r.reputation < -10 ? styles.vtWarn
+               : styles.vtClean;
+    const label = r.malicious > 0 ? `⚠ MALICIOUS ${r.malicious}/${total}`
+                : r.suspicious > 0 ? `~ SUSPICIOUS ${r.suspicious}/${total}`
+                : r.reputation < -10 ? `REP ${r.reputation}`
+                : `✓ CLEAN`;
+    return (
+      <span className={styles.vtResult}>
+        <span className={`${styles.vtBadge} ${cls}`}>{label}</span>
+        {r.country  && <span className={styles.vtMeta}>{r.country}</span>}
+        {r.as_owner && <span className={styles.vtMeta} title={r.network ?? ''}>{r.as_owner.slice(0, 22)}</span>}
+        {r.cached   && <span className={styles.vtCached}>↩ caché</span>}
+      </span>
+    );
+  }
 
   const threatLevel = (stats?.brute_force ?? 0) > 0 ? 'CRÍTICO'
     : (stats?.login_fail ?? 0) > 10 ? 'ALTO'
@@ -334,14 +394,26 @@ export default function SecurityDashboard() {
                 {stats.top_ips.map((r, i) => {
                   const max = stats.top_ips[0].count;
                   const pct = Math.round((r.count / max) * 100);
+                  const vtBadge = renderVtBadge(r.ip);
                   return (
-                    <div key={r.ip} className={styles.ipRow}>
-                      <span className={styles.ipRank}>#{i+1}</span>
-                      <span className={styles.ipAddr}>{r.ip}</span>
-                      <div className={styles.ipBar}>
-                        <div className={styles.ipBarFill} style={{ width: `${pct}%` }} />
+                    <div key={r.ip} className={styles.ipEntry}>
+                      <div className={styles.ipRow}>
+                        <span className={styles.ipRank}>#{i+1}</span>
+                        <span className={styles.ipAddr}>{r.ip}</span>
+                        <div className={styles.ipBar}>
+                          <div className={styles.ipBarFill} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className={styles.ipCount}>{r.count} ev.</span>
+                        <button
+                          className={`${styles.vtBtn} ${vtResults[r.ip] ? styles.vtBtnDone : ''}`}
+                          onClick={() => checkVT(r.ip)}
+                          title="Consultar VirusTotal Threat Intelligence"
+                          disabled={vtResults[r.ip] === 'loading'}
+                        >
+                          <Search size={10} /> VT
+                        </button>
                       </div>
-                      <span className={styles.ipCount}>{r.count} ev.</span>
+                      {vtBadge && <div className={styles.vtRow}>{vtBadge}</div>}
                     </div>
                   );
                 })}
@@ -368,18 +440,25 @@ export default function SecurityDashboard() {
           </div>
           <div className={styles.logTable}>
             <div className={styles.logHeader}>
-              <span>TIEMPO</span><span>TIPO</span><span>IP</span><span>USUARIO</span><span>ENDPOINT</span><span>DETALLES</span>
+              <span>TIEMPO</span><span>TIPO</span><span>IP / THREAT INTEL</span><span>USUARIO</span><span>ENDPOINT</span><span>DETALLES</span>
             </div>
             {events.length === 0 ? (
               <div className={styles.emptyLog}>No hay eventos registrados aún</div>
             ) : (
               events.map(ev => {
                 const cfg = TIPO_CONFIG[ev.tipo] ?? { label: ev.tipo.toUpperCase(), cls: 'ev-info', icon: '·' };
+                const vtBadge = ev.ip ? renderVtBadge(ev.ip) : null;
                 return (
                   <div key={ev.id} className={`${styles.logRow} ${styles[cfg.cls]}`}>
                     <span className={styles.logTime}>{fmtDate(ev.fecha)} {fmtTime(ev.fecha)}</span>
                     <span className={`${styles.logBadge} ${styles[cfg.cls]}`}>{cfg.icon} {cfg.label}</span>
-                    <span className={styles.logIp}>{ev.ip ?? '—'}</span>
+                    <span className={styles.logIp}>
+                      {ev.ip
+                        ? <button className={styles.ipClickable} onClick={() => checkVT(ev.ip!)} title="Consultar VirusTotal">{ev.ip}</button>
+                        : '—'
+                      }
+                      {vtBadge && <span className={styles.vtInline}>{vtBadge}</span>}
+                    </span>
                     <span className={styles.logUser}>{ev.username ?? '—'}</span>
                     <span className={styles.logEndpoint}>{ev.metodo && ev.endpoint ? `${ev.metodo} ${ev.endpoint}` : '—'}</span>
                     <span className={styles.logDetails}>{ev.detalles ?? '—'}</span>
