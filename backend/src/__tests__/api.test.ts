@@ -43,7 +43,7 @@ vi.mock('../db/index', () => ({
 vi.mock('argon2', () => ({
   default: {
     hash:   vi.fn().mockResolvedValue('$argon2id$mock'),
-    verify: vi.fn().mockResolvedValue(false), // falla por defecto
+    verify: vi.fn().mockResolvedValue(false),
   },
 }));
 
@@ -78,9 +78,9 @@ vi.mock('fs', async (importOriginal) => {
 });
 
 // ── importamos los mocks para manipularlos en cada test ──
-import { db }  from '../db/index';
-import argon2  from 'argon2';
-import { app } from '../index';
+import { db, pool } from '../db/index';
+import argon2       from 'argon2';
+import { app }      from '../index';
 
 // =================================================================
 // Fixtures de usuario
@@ -97,11 +97,25 @@ const STD_USER = {
 };
 
 // =================================================================
+// Helper: hace login y devuelve el token de sesión
+// =================================================================
+async function loginAs(user: typeof ADMIN_USER | typeof STD_USER): Promise<string> {
+  vi.mocked(db.select).mockReturnValueOnce(makeChain([user]) as never);
+  vi.mocked(argon2.verify).mockResolvedValueOnce(true);
+  const res  = await app.request('/api/login', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ username: user.username, password: 'testpass' }),
+  });
+  const json = await res.json() as { token: string };
+  return json.token;
+}
+
+// =================================================================
 // Tests
 // =================================================================
 describe('Backend API', () => {
   beforeEach(() => {
-    // Restaura el comportamiento por defecto antes de cada test
     vi.mocked(db.select).mockImplementation(() => makeChain() as never);
     vi.mocked(argon2.verify).mockResolvedValue(false);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -110,7 +124,7 @@ describe('Backend API', () => {
     );
   });
 
-  // ── Básicos ─────────────────────────────────────────────────────
+  // ── Rutas públicas ───────────────────────────────────────────────
   it('GET /api/health → 200 con { status: "ok" }', async () => {
     const res  = await app.request('/api/health');
     expect(res.status).toBe(200);
@@ -121,13 +135,34 @@ describe('Backend API', () => {
   it('GET /api/productos → 200 y devuelve array', async () => {
     const res  = await app.request('/api/productos');
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(Array.isArray(body)).toBe(true);
+    expect(Array.isArray(await res.json())).toBe(true);
+  });
+
+  it('GET /api/categorias → 200 y devuelve array', async () => {
+    const res  = await app.request('/api/categorias');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(await res.json())).toBe(true);
+  });
+
+  it('GET /api/calcular-costes → IVA y envío estándar cuando subtotal < 100', async () => {
+    const res  = await app.request('/api/calcular-costes?subtotal=50');
+    expect(res.status).toBe(200);
+    const body = await res.json() as { subtotal: number; impuestos: number; envio: number; total: number };
+    expect(body.subtotal).toBeCloseTo(50, 2);
+    expect(body.impuestos).toBeCloseTo(10.5, 2);   // 50 × 21%
+    expect(body.envio).toBeCloseTo(5.99, 2);
+    expect(body.total).toBeCloseTo(66.49, 2);
+  });
+
+  it('GET /api/calcular-costes → envío gratis cuando subtotal ≥ 100', async () => {
+    const res  = await app.request('/api/calcular-costes?subtotal=100');
+    expect(res.status).toBe(200);
+    const body = await res.json() as { envio: number };
+    expect(body.envio).toBe(0);
   });
 
   // ── Login ───────────────────────────────────────────────────────
   it('POST /api/login con credenciales incorrectas → 401', async () => {
-    // db.select devuelve [] → usuario no existe → 401
     const res  = await app.request('/api/login', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -154,6 +189,31 @@ describe('Backend API', () => {
     expect(body.token.length).toBeGreaterThan(10);
   });
 
+  it('POST /api/login → 429 tras 12 intentos fallidos (rate limiting)', async () => {
+    // IP exclusiva para este test (nunca usada en otro test)
+    const RATE_IP = '10.0.1.99';
+    const headers = { 'Content-Type': 'application/json', 'x-forwarded-for': RATE_IP };
+    const body    = JSON.stringify({ username: 'brute', password: 'wrong' });
+
+    // autoBlockIp usa pool.query (raw SQL) para persistir el bloqueo y luego hace
+    // blockedIpSet.add(ip). Si pool.query falla, el add no ocurre y el siguiente
+    // intento llega al loginRateLimiter (que devuelve 429) en vez del global IP
+    // block (que devuelve 403).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (pool.query as any).mockRejectedValueOnce(new Error('DB unavailable'));
+
+    // 12 intentos fallidos — db.select devuelve [] → usuario no existe → 401
+    for (let i = 0; i < 12; i++) {
+      await app.request('/api/login', { method: 'POST', headers, body });
+    }
+
+    // El intento 13 no llega al handler: loginRateLimiter detecta blockedUntil → 429
+    const res  = await app.request('/api/login', { method: 'POST', headers, body });
+    expect(res.status).toBe(429);
+    const json = await res.json() as { error: string };
+    expect(json.error).toMatch(/intentos|bloqueado|tarde/i);
+  });
+
   // ── Register ────────────────────────────────────────────────────
   it('POST /api/register con email inválido → 400', async () => {
     const res = await app.request('/api/register', {
@@ -162,6 +222,43 @@ describe('Backend API', () => {
       body:    JSON.stringify({ username: 'newuser', password: 'pass1234', email: 'no-es-un-email' }),
     });
     expect(res.status).toBe(400);
+  });
+
+  // ── Sesión ──────────────────────────────────────────────────────
+  it('GET /api/usuario con token válido → 200 con datos del usuario', async () => {
+    const token = await loginAs(STD_USER);
+    const res   = await app.request('/api/usuario', { headers: { authorization: token } });
+    expect(res.status).toBe(200);
+    const body  = await res.json() as { user: { username: string; role: string } };
+    expect(body.user.username).toBe(STD_USER.username);
+    expect(body.user.role).toBe('standard');
+  });
+
+  it('GET /api/usuario sin token → 401', async () => {
+    const res = await app.request('/api/usuario');
+    expect(res.status).toBe(401);
+  });
+
+  it('POST /api/logout con token → 200', async () => {
+    const token = await loginAs(STD_USER);
+    const res   = await app.request('/api/logout', {
+      method:  'POST',
+      headers: { authorization: token },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it('POST /api/logout sin token → 200 (idempotente)', async () => {
+    const res = await app.request('/api/logout', { method: 'POST' });
+    expect(res.status).toBe(200);
+  });
+
+  // ── Rutas autenticadas de usuario ────────────────────────────────
+  it('GET /api/mis-pedidos con token de usuario → 200 y array', async () => {
+    const token = await loginAs(STD_USER);
+    const res   = await app.request('/api/mis-pedidos', { headers: { authorization: token } });
+    expect(res.status).toBe(200);
+    expect(Array.isArray(await res.json())).toBe(true);
   });
 
   // ── Autorización admin ──────────────────────────────────────────
@@ -173,36 +270,69 @@ describe('Backend API', () => {
   });
 
   it('GET /api/admin/pedidos con token de usuario standard → 403', async () => {
-    // 1. Hacemos login como usuario estándar para obtener un token real en la sesión
-    vi.mocked(db.select).mockReturnValueOnce(makeChain([STD_USER]) as never);
-    vi.mocked(argon2.verify).mockResolvedValueOnce(true);
+    const token = await loginAs(STD_USER);
+    const res   = await app.request('/api/admin/pedidos', { headers: { authorization: token } });
+    expect(res.status).toBe(403);
+    const body  = await res.json() as { error: string };
+    expect(body.error).toMatch(/administrador/i);
+  });
 
-    const loginRes = await app.request('/api/login', {
+  it('GET /api/admin/pedidos con token de admin → 200', async () => {
+    const token = await loginAs(ADMIN_USER);
+    const res   = await app.request('/api/admin/pedidos', { headers: { authorization: token } });
+    expect(res.status).toBe(200);
+    expect(Array.isArray(await res.json())).toBe(true);
+  });
+
+  it('GET /api/admin/usuarios con token de admin → 200', async () => {
+    const token = await loginAs(ADMIN_USER);
+    const res   = await app.request('/api/admin/usuarios', { headers: { authorization: token } });
+    expect(res.status).toBe(200);
+    expect(Array.isArray(await res.json())).toBe(true);
+  });
+
+  it('GET /api/security/events con token de admin → 200', async () => {
+    const token = await loginAs(ADMIN_USER);
+    const res   = await app.request('/api/security/events', { headers: { authorization: token } });
+    expect(res.status).toBe(200);
+  });
+
+  it('GET /api/security/blocked-ips con token de admin → 200', async () => {
+    const token = await loginAs(ADMIN_USER);
+    const res   = await app.request('/api/security/blocked-ips', { headers: { authorization: token } });
+    expect(res.status).toBe(200);
+  });
+
+  // ── Recuperación de contraseña ───────────────────────────────────
+  it('POST /api/forgot-password sin email → 400', async () => {
+    const res = await app.request('/api/forgot-password', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ username: 'user1', password: 'pass1234' }),
+      body:    JSON.stringify({}),
     });
-    expect(loginRes.status).toBe(200);
-    const { token } = await loginRes.json() as { token: string };
+    expect(res.status).toBe(400);
+  });
 
-    // 2. Accedemos a la ruta de admin con ese token → debe responder 403
-    const res  = await app.request('/api/admin/pedidos', {
-      headers: { authorization: token },
+  it('POST /api/forgot-password con email no registrado → 200 (anti-enumeración)', async () => {
+    // db.select devuelve [] → email no existe, pero la respuesta es 200 igual
+    const res  = await app.request('/api/forgot-password', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email: 'noexiste@example.com' }),
     });
-    expect(res.status).toBe(403);
-    const body = await res.json() as { error: string };
-    expect(body.error).toMatch(/administrador/i);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { ok: boolean; message: string };
+    expect(body.ok).toBe(true);
+    expect(body.message).toBeTruthy();
   });
 
   // ── Seguridad de precios ────────────────────────────────────────
   it('POST /api/pedidos — el total se calcula con el precio de la BD, no del body', async () => {
-    // Precio real en BD: 10.00 €
     const mockProduct = { id: 1, precio: 10.00, stock: 100, nombre: 'Producto Test' };
 
-    // tx.select: primera llamada devuelve el producto; el resto devuelve [] (sin cupón)
     const txSelect = vi.fn()
-      .mockReturnValueOnce(makeChain([mockProduct]))
-      .mockReturnValue(makeChain([]));
+      .mockReturnValueOnce(makeChain([mockProduct]))  // lookup del producto
+      .mockReturnValue(makeChain([]));                // lookup de cupón → sin cupón
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (vi.mocked(db.transaction) as any).mockImplementationOnce(
@@ -212,22 +342,19 @@ describe('Backend API', () => {
     const res = await app.request('/api/pedidos', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      // Aunque un cliente malintencionado envíe un campo "precio", Zod lo elimina del schema.
-      // El total siempre debe venir de la BD.
-      body: JSON.stringify({
+      body:    JSON.stringify({
         cliente:   'Cliente Test',
         email:     'cliente@test.com',
         direccion: 'Calle Test 1',
-        items:     [{ id: 1, cantidad: 2, precio: 999 }], // precio ignorado
+        items:     [{ id: 1, cantidad: 2, precio: 999 }], // precio ignorado por Zod
       }),
     });
 
     expect(res.status).toBe(200);
     const body = await res.json() as { subtotal: number; total: number };
-
     // subtotal = precio_BD (10.00) × cantidad (2) = 20.00
     expect(body.subtotal).toBeCloseTo(20.00, 2);
-    // total = subtotal (20) + IVA 21% (4.20) + envío (5.99, porque subtotal < 100) = 30.19
+    // total = 20.00 + IVA 21% (4.20) + envío (5.99) = 30.19
     expect(body.total).toBeCloseTo(30.19, 2);
   });
 });
