@@ -10,7 +10,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { Routes, Route, Link, useSearchParams, useNavigate, Navigate } from 'react-router-dom'
 import { ShoppingCart, X, Plus, Minus, Check, Search, Package, Truck, Shield, ArrowDown, Trash2, ArrowUp, Heart, LayoutGrid, List, Sun, Moon, User, LogOut, ClipboardList, Globe } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { z } from 'zod'
 import Admin from './components/Admin/Admin'
 import SecurityDashboard from './components/SecurityDashboard'
@@ -83,7 +83,7 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
   const carritoAbierto = carritoAbiertoExterno
   const setCarritoAbierto = setCarritoAbiertoExterno
 
-  const [checkoutExitoso, setCheckoutExitoso] = useState(false)
+  const navigate = useNavigate()
   const [busqueda, setBusqueda] = useState('')
   const [categoriaFiltro, setCategoriaFiltro] = useState('')
   const [ordenPrecio, setOrdenPrecio] = useState<'asc' | 'desc' | ''>('')
@@ -169,7 +169,13 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
 
   const actualizarCantidad = (id: number, delta: number) => {
     setCarrito(prev =>
-      prev.map(item => item.id === id ? { ...item, cantidad: Math.max(1, item.cantidad + delta) } : item)
+      prev.map(item => item.id === id ? { ...item, cantidad: Math.max(1, Math.min(item.cantidad + delta, item.stock)) } : item)
+    )
+  }
+
+  const setCantidad = (id: number, cantidad: number) => {
+    setCarrito(prev =>
+      prev.map(item => item.id === id ? { ...item, cantidad: Math.max(1, Math.min(cantidad, item.stock)) } : item)
     )
   }
 
@@ -193,37 +199,31 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
     }
   }
 
-  // TanStack Query — mutación de checkout
   const checkoutMutation = useMutation({
-    mutationFn: (data: typeof formulario) =>
-      api.postPedido({
-        ...data,
-        items: carrito.map(item => ({ id: item.id, cantidad: item.cantidad })),
-        cupon: cuponCodigo || undefined,
-      }),
+    mutationFn: () => api.postPedido({
+      ...formulario,
+      items: carrito.map(item => ({ id: item.id, cantidad: item.cantidad })),
+      cupon: cuponCodigo || undefined,
+    }),
     onSuccess: () => {
       setCarrito([])
-      setCheckoutExitoso(true)
-      setFormError('')
       setCuponCodigo('')
       setCuponDescuento(0)
+      setCarritoAbierto(false)
+      navigate('/mis-pedidos')
     },
-    onError: (err: Error) => setFormError(err.message),
+    onError: (err: any) => setFormError(err.message),
   })
 
   const handleCheckout = () => {
     setFormError('')
     const result = CheckoutSchema.safeParse(formulario)
-    if (!result.success) {
-      setFormError(result.error.issues[0].message)
-      return
-    }
-    checkoutMutation.mutate(formulario)
+    if (!result.success) { setFormError(result.error.issues[0].message); return }
+    checkoutMutation.mutate()
   }
 
   const cerrarCarrito = () => {
     setCarritoAbierto(false)
-    setTimeout(() => setCheckoutExitoso(false), 300)
   }
 
   const scrollToProductos = () => {
@@ -598,21 +598,7 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
                 </button>
               </div>
 
-              {checkoutExitoso ? (
-                <motion.div
-                  className="success-message"
-                  initial={{ scale: 0.85, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: 'spring', damping: 18 }}
-                >
-                  <div className="success-icon-wrap">
-                    <Check size={32} />
-                  </div>
-                  <h2 className="success-title">¡Pedido Realizado!</h2>
-                  <p className="success-text">Gracias por tu compra. Te enviaremos un correo de confirmación en breve.</p>
-                </motion.div>
-
-              ) : carrito.length === 0 ? (
+              {carrito.length === 0 ? (
                 <div className="empty-cart">
                   <div className="empty-cart-icon"><ShoppingCart size={52} /></div>
                   <h3>Carrito vacío</h3>
@@ -645,11 +631,24 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
                               )}
                             </div>
                             <div className="cart-item-quantity">
-                              <button className="qty-btn" onClick={() => actualizarCantidad(item.id, -1)}>
+                              <button className="qty-btn" onClick={() => actualizarCantidad(item.id, -1)} disabled={item.cantidad <= 1}>
                                 <Minus size={12} />
                               </button>
-                              <span className="qty-num">{item.cantidad}</span>
-                              <button className="qty-btn" onClick={() => actualizarCantidad(item.id, 1)}>
+                              <input
+                                key={`qty-${item.id}-${item.cantidad}`}
+                                type="number"
+                                className="qty-num"
+                                defaultValue={item.cantidad}
+                                min={1}
+                                max={item.stock}
+                                onBlur={e => {
+                                  const val = parseInt(e.target.value)
+                                  if (!isNaN(val) && val >= 1) setCantidad(item.id, val)
+                                  else e.target.value = String(item.cantidad)
+                                }}
+                                onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                              />
+                              <button className="qty-btn" onClick={() => actualizarCantidad(item.id, 1)} disabled={item.cantidad >= item.stock}>
                                 <Plus size={12} />
                               </button>
                               <button className="remove-btn" onClick={() => eliminarItem(item.id)} title="Eliminar">
@@ -744,7 +743,7 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
                         onClick={handleCheckout}
                         disabled={checkoutMutation.isPending}
                       >
-                        {checkoutMutation.isPending ? 'Procesando...' : 'Confirmar pedido'}
+                        {checkoutMutation.isPending ? 'Procesando...' : 'Realizar pedido →'}
                       </button>
                     </div>
                   </div>

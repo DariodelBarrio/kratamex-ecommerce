@@ -11,6 +11,7 @@ Imágenes:   Cloudinary con fallback local
 */
 
 import 'dotenv/config';
+import Stripe from 'stripe';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
 import { zValidator } from '@hono/zod-validator';
@@ -40,6 +41,13 @@ const PORT = 3001;
 const IVA_RATE = 0.21;
 const ENVIO_GRATIS_MINIMO = 100;
 const ENVIO_ESTANDAR = 5.99;
+
+// =================================================================
+// STRIPE
+// =================================================================
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+  apiVersion: '2026-02-25.clover',
+});
 
 // =================================================================
 // CLOUDINARY
@@ -1467,6 +1475,144 @@ app.post('/api/push/subscribe', optionalAuth, zValidator('json', PushSubscriptio
     console.error(err);
     return c.json({ error: 'Error interno del servidor' }, 500);
   }
+});
+
+// =================================================================
+// RUTAS — STRIPE CHECKOUT
+// =================================================================
+app.post('/api/pedidos/checkout', checkoutRateLimiter, optionalAuth, zValidator('json', PedidoSchema), async (c) => {
+  if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY.startsWith('sk_test_REEMPLAZA')) {
+    return c.json({ error: 'Stripe no configurado. Añade STRIPE_SECRET_KEY en backend/.env' }, 503);
+  }
+
+  const { cliente, email, direccion, items, cupon } = c.req.valid('json');
+  const user = c.get('user');
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      let subtotal = 0;
+      const itemsValidados: { id: number; precio: number; cantidad: number }[] = [];
+
+      for (const item of items) {
+        const [prod] = await tx.select({ id: productos.id, precio: productos.precio, stock: productos.stock, nombre: productos.nombre })
+          .from(productos)
+          .where(eq(productos.id, item.id));
+        if (!prod) throw Object.assign(new Error('PRODUCT_NOT_FOUND'), { status: 400 });
+        if (prod.stock < item.cantidad) throw Object.assign(new Error(`Stock insuficiente para "${prod.nombre}". Disponible: ${prod.stock}`), { status: 400, code: 'INSUFFICIENT_STOCK' });
+
+        subtotal += prod.precio * item.cantidad;
+        itemsValidados.push({ id: prod.id, precio: prod.precio, cantidad: item.cantidad });
+      }
+
+      let descuento = 0;
+      let cuponId: number | null = null;
+      if (cupon) {
+        const [cup] = await tx.select().from(cupones).where(eq(cupones.codigo, cupon.toUpperCase()));
+        if (cup && cup.activo) {
+          const now = new Date();
+          const validDate = (!cup.fechaInicio || new Date(cup.fechaInicio) <= now) &&
+                           (!cup.fechaFin || new Date(cup.fechaFin) >= now);
+          const validUsos = !cup.maxUsos || (cup.usosActuales ?? 0) < cup.maxUsos;
+          const validMin = subtotal >= (cup.minCompra ?? 0);
+          if (validDate && validUsos && validMin) {
+            descuento = cup.tipo === 'porcentaje'
+              ? Math.round(subtotal * (cup.valor / 100) * 100) / 100
+              : Math.min(cup.valor, subtotal);
+            cuponId = cup.id;
+            await tx.update(cupones).set({ usosActuales: (cup.usosActuales ?? 0) + 1 }).where(eq(cupones.id, cup.id));
+          }
+        }
+      }
+
+      const subtotalConDescuento = subtotal - descuento;
+      const impuestos = calcularImpuestos(subtotalConDescuento);
+      const envio = calcularEnvio(subtotalConDescuento);
+      const total = Math.round((subtotalConDescuento + impuestos + envio) * 100) / 100;
+
+      const [newPedido] = await tx.insert(pedidos).values({
+        usuarioId:  user?.id ?? null,
+        cliente:    sanitizeText(cliente),
+        email,
+        direccion:  sanitizeText(direccion),
+        subtotal:   subtotalConDescuento,
+        impuestos,
+        envio,
+        descuento,
+        cuponId,
+        total,
+        estado:     'pendiente',
+      }).returning({ id: pedidos.id });
+
+      for (const item of itemsValidados) {
+        await tx.insert(pedidoItems).values({
+          pedidoId:   newPedido.id,
+          productoId: item.id,
+          cantidad:   item.cantidad,
+          precio:     item.precio,
+        });
+        await tx.update(productos).set({
+          stock: sql`${productos.stock} - ${item.cantidad}`,
+        }).where(eq(productos.id, item.id));
+      }
+
+      return { id: newPedido.id, total };
+    });
+
+    // Create Stripe PaymentIntent (amount in cents)
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount:   Math.round(result.total * 100),
+      currency: 'eur',
+      metadata: { pedidoId: String(result.id) },
+      automatic_payment_methods: { enabled: true },
+    });
+
+    return c.json({ clientSecret: paymentIntent.client_secret, pedidoId: result.id, total: result.total });
+  } catch (err: any) {
+    if (err.message === 'PRODUCT_NOT_FOUND')
+      return c.json({ error: 'Uno o más artículos no están disponibles' }, 400);
+    if (err.code === 'INSUFFICIENT_STOCK')
+      return c.json({ error: err.message }, 400);
+    console.error(err);
+    return c.json({ error: 'Error al procesar el pedido' }, 500);
+  }
+});
+
+// =================================================================
+// RUTAS — STRIPE WEBHOOK
+// =================================================================
+app.post('/api/webhook', async (c) => {
+  const rawBody = await c.req.text();
+  const sig     = c.req.header('stripe-signature') || '';
+  const secret  = process.env.STRIPE_WEBHOOK_SECRET || '';
+
+  if (!secret || secret.startsWith('whsec_REEMPLAZA')) {
+    // Sin secret configurado: aceptar en dev sin verificar firma
+    console.warn('[webhook] STRIPE_WEBHOOK_SECRET no configurado — saltando verificación');
+    return c.json({ received: true });
+  }
+
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(rawBody, sig, secret);
+  } catch (err: any) {
+    console.error('[webhook] Firma inválida:', err.message);
+    return c.json({ error: `Webhook Error: ${err.message}` }, 400);
+  }
+
+  if (event.type === 'payment_intent.succeeded') {
+    const pi = event.data.object as Stripe.PaymentIntent;
+    const pedidoId = parseInt(pi.metadata?.pedidoId || '');
+    if (!isNaN(pedidoId)) {
+      try {
+        await db.update(pedidos).set({ estado: 'pagado' }).where(eq(pedidos.id, pedidoId));
+        console.log(`[webhook] Pedido #${pedidoId} marcado como pagado`);
+      } catch (err) {
+        console.error('[webhook] Error al actualizar pedido:', err);
+      }
+    }
+  }
+
+  return c.json({ received: true });
 });
 
 // =================================================================

@@ -897,9 +897,25 @@ header::before {
   transition: all 0.15s;
 }
 
-.qty-btn:hover { background: var(--surface-raised); border-color: var(--border-strong); }
+.qty-btn:hover:not(:disabled) { background: var(--surface-raised); border-color: var(--border-strong); }
+.qty-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-.qty-num { font-size: 0.875rem; font-weight: 600; min-width: 20px; text-align: center; }
+.qty-num {
+  font-size: 0.875rem;
+  font-weight: 600;
+  width: 44px;
+  text-align: center;
+  background: rgba(30,41,59,0.5);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: inherit;
+  padding: 3px 4px;
+  cursor: text;
+  -moz-appearance: textfield;
+}
+.qty-num::-webkit-outer-spin-button,
+.qty-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.qty-num:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
 
 .remove-btn {
   color: var(--text-subtle);
