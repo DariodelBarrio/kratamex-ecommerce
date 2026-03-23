@@ -191,7 +191,7 @@ describe('Backend API', () => {
 
   it('POST /api/login → 429 tras 12 intentos fallidos (rate limiting)', async () => {
     // IP exclusiva para este test (nunca usada en otro test)
-    const RATE_IP = '10.0.1.99';
+    const RATE_IP = '10.0.1.99'; // NOSONAR - IP ficticia usada solo en tests de aislamiento
     const headers = { 'Content-Type': 'application/json', 'x-forwarded-for': RATE_IP };
     const body    = JSON.stringify({ username: 'brute', password: 'wrong' });
 
