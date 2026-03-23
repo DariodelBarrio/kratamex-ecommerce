@@ -14,6 +14,7 @@ import 'dotenv/config';
 import Stripe from 'stripe';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
+import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
@@ -224,10 +225,36 @@ setInterval(() => {
 type Variables = { user: SessionData };
 const app = new Hono<{ Variables: Variables }>();
 
+// IPs de proxies de confianza (nginx en Docker usa la red interna 172.x.x.x)
+const TRUSTED_PROXY_CIDRS = (process.env.TRUSTED_PROXIES || '172.16.0.0/12,10.0.0.0/8,127.0.0.1').split(',').map(s => s.trim());
+
+function ipInCidr(ip: string, cidr: string): boolean {
+  try {
+    const [range, bits] = cidr.split('/');
+    const mask = bits ? ~((1 << (32 - Number(bits))) - 1) : -1;
+    const ipNum  = ip.split('.').reduce((acc, o) => (acc << 8) + Number(o), 0);
+    const rangeNum = range.split('.').reduce((acc, o) => (acc << 8) + Number(o), 0);
+    return (ipNum & mask) === (rangeNum & mask);
+  } catch { return false; }
+}
+
+function isTrustedProxy(ip: string): boolean {
+  return TRUSTED_PROXY_CIDRS.some(cidr => ipInCidr(ip, cidr));
+}
+
 function getClientIP(c: Context): string {
+  const remoteIp = c.req.header('x-real-ip');
+  // Si tenemos IP real y viene de un proxy de confianza, usar X-Forwarded-For
+  if (remoteIp && isTrustedProxy(remoteIp)) {
+    const forwarded = c.req.header('x-forwarded-for');
+    if (forwarded) return forwarded.split(',')[0].trim();
+  }
+  // Si tenemos IP real pero no es proxy de confianza, usarla directamente (ignora XFF spoofed)
+  if (remoteIp) return remoteIp;
+  // Sin IP real (entorno dev/test): usar X-Forwarded-For si existe, si no 'unknown'
   const forwarded = c.req.header('x-forwarded-for');
   if (forwarded) return forwarded.split(',')[0].trim();
-  return c.req.header('x-real-ip') || 'unknown';
+  return 'unknown';
 }
 
 // --- Security headers ---
@@ -659,14 +686,20 @@ app.delete('/api/productos/:id/galeria/:imgId', authenticate, requireAdmin, asyn
   }
 });
 
-app.patch('/api/productos/:id/stock', authenticate, requireAdmin, async (c) => {
+const StockPatchSchema = z.object({
+  stock:  z.number().int().min(0).max(999999).optional(),
+  activo: z.boolean().optional(),
+});
+
+app.patch('/api/productos/:id/stock', authenticate, requireAdmin, zValidator('json', StockPatchSchema), async (c) => {
   try {
     const id = Number.parseInt(c.req.param('id'));
     if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
-    const body = await c.req.json();
+    const body = c.req.valid('json');
     const updateData: Record<string, unknown> = {};
-    if (body.stock !== undefined) updateData.stock = Math.max(0, Number.parseInt(body.stock) || 0);
-    if (body.activo !== undefined) updateData.activo = Boolean(body.activo);
+    if (body.stock !== undefined) updateData.stock = body.stock;
+    if (body.activo !== undefined) updateData.activo = body.activo;
+    if (Object.keys(updateData).length === 0) return c.json({ error: 'Sin campos para actualizar' }, 400);
     const result = await db.update(productos).set(updateData).where(eq(productos.id, id)).returning({ id: productos.id });
     if (!result.length) return c.json({ error: 'Producto no encontrado' }, 404);
     return c.json({ mensaje: 'Stock actualizado' });
@@ -993,16 +1026,35 @@ app.delete('/api/admin/pedidos/:id', authenticate, requireAdmin, async (c) => {
 // =================================================================
 // RUTAS — CSV EXPORT
 // =================================================================
+
+/** Escapa un valor para CSV previniendo inyección de fórmulas */
+function csvEscape(v: unknown): string {
+  if (v == null) return '';
+  let s = String(v);
+  // Prevenir formula injection: prefijo con comilla si empieza con =, +, -, @, tab, CR
+  if (s.length > 0 && ['=', '+', '-', '@', '\t', '\r'].includes(s[0])) {
+    s = `'${s}`;
+  }
+  s = s.replace(/"/g, '""');
+  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+    s = `"${s}"`;
+  }
+  return s;
+}
+
 app.get('/api/admin/pedidos/csv', authenticate, requireAdmin, async (c) => {
   try {
     const rows = await db.select().from(pedidos).orderBy(desc(pedidos.fecha));
-    let csv = 'ID,Cliente,Email,Dirección,Subtotal,Impuestos,Envío,Descuento,Total,Estado,Fecha\n';
-    for (const p of rows) {
-      csv += `${p.id},"${p.cliente}","${p.email}","${p.direccion}",${p.subtotal ?? ''},${p.impuestos ?? ''},${p.envio ?? ''},${p.descuento ?? 0},${p.total},"${p.estado}","${p.fecha}"\n`;
-    }
+    const lines = [
+      'ID,Cliente,Email,Dirección,Subtotal,Impuestos,Envío,Descuento,Total,Estado,Fecha',
+      ...rows.map(p =>
+        [p.id, p.cliente, p.email, p.direccion, p.subtotal ?? '', p.impuestos ?? '', p.envio ?? '', p.descuento ?? 0, p.total, p.estado, p.fecha?.toISOString() ?? '']
+          .map(csvEscape).join(',')
+      ),
+    ];
     c.header('Content-Type', 'text/csv; charset=utf-8');
     c.header('Content-Disposition', 'attachment; filename="pedidos.csv"');
-    return c.body(csv);
+    return c.body(lines.join('\n'));
   } catch (err) {
     console.error(err);
     return c.json({ error: 'Error al exportar' }, 500);
@@ -1012,13 +1064,16 @@ app.get('/api/admin/pedidos/csv', authenticate, requireAdmin, async (c) => {
 app.get('/api/admin/productos/csv', authenticate, requireAdmin, async (c) => {
   try {
     const rows = await db.select().from(productos).orderBy(asc(productos.id));
-    let csv = 'ID,Nombre,Categoría,Precio,Stock,SKU,Destacado,Activo\n';
-    for (const p of rows) {
-      csv += `${p.id},"${p.nombre}","${p.categoria}",${p.precio},${p.stock},"${p.sku || ''}",${p.destacado},${p.activo}\n`;
-    }
+    const lines = [
+      'ID,Nombre,Categoría,Precio,Stock,SKU,Destacado,Activo',
+      ...rows.map(p =>
+        [p.id, p.nombre, p.categoria, p.precio, p.stock, p.sku ?? '', p.destacado, p.activo]
+          .map(csvEscape).join(',')
+      ),
+    ];
     c.header('Content-Type', 'text/csv; charset=utf-8');
     c.header('Content-Disposition', 'attachment; filename="productos.csv"');
-    return c.body(csv);
+    return c.body(lines.join('\n'));
   } catch (err) {
     console.error(err);
     return c.json({ error: 'Error al exportar' }, 500);
@@ -1351,6 +1406,11 @@ app.put('/api/usuario/password', authenticate, zValidator('json', CambiarPasswor
     if (!valida) return c.json({ error: 'Contraseña actual incorrecta' }, 400);
     const hash = await argon2.hash(passwordNueva);
     await db.update(usuarios).set({ password: hash }).where(eq(usuarios.id, user.id));
+    // Invalidar todas las sesiones del usuario excepto la actual
+    const tokenActual = c.req.header('authorization');
+    for (const [t, s] of Object.entries(sessions)) {
+      if (s.id === user.id && t !== tokenActual) delete sessions[t];
+    }
     return c.json({ mensaje: 'Contraseña actualizada' });
   } catch (err) {
     console.error(err);
@@ -1556,13 +1616,8 @@ app.get('/api/security/events/export', authenticate, requireAdmin, async (c) => 
 
     if (format === 'csv') {
       const header = 'id,tipo,ip,username,endpoint,metodo,user_agent,detalles,fecha';
-      const escape = (v: unknown) => {
-        if (v == null) return '';
-        const s = String(v).replace(/"/g, '""');
-        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;
-      };
       const lines = rows.map(r =>
-        [r.id, r.tipo, r.ip, r.username, r.endpoint, r.metodo, r.userAgent, r.detalles, r.fecha?.toISOString()].map(escape).join(',')
+        [r.id, r.tipo, r.ip, r.username, r.endpoint, r.metodo, r.userAgent, r.detalles, r.fecha?.toISOString()].map(csvEscape).join(',')
       );
       return new Response([header, ...lines].join('\n'), {
         headers: {
@@ -1860,8 +1915,10 @@ app.get('/api/calcular-costes', (c) => {
 // RUTAS — RECUPERACIÓN DE CONTRASEÑA
 // =================================================================
 app.post('/api/forgot-password', generalRateLimiter, async (c) => {
-  const { email } = await c.req.json().catch(() => ({}));
-  if (!email || typeof email !== 'string') return c.json({ error: 'Email requerido' }, 400);
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = z.object({ email: z.string().email().max(254) }).safeParse(body);
+  if (!parsed.success) return c.json({ error: 'Email inválido' }, 400);
+  const { email } = parsed.data;
 
   // Respuesta siempre igual para no revelar si el email existe (anti-enumeración)
   const ok = { ok: true, message: 'Si ese email existe, recibirás un enlace en breve.' };
@@ -1884,7 +1941,7 @@ app.post('/api/forgot-password', generalRateLimiter, async (c) => {
   }
 });
 
-app.post('/api/reset-password', async (c) => {
+app.post('/api/reset-password', generalRateLimiter, async (c) => {
   const { token, password } = await c.req.json().catch(() => ({}));
   if (!token || !password || typeof token !== 'string' || typeof password !== 'string')
     return c.json({ error: 'Token y contraseña requeridos' }, 400);
