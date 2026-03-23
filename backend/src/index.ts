@@ -17,10 +17,10 @@ import { cors } from 'hono/cors';
 import { zValidator } from '@hono/zod-validator';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { eq, and, or, ilike, gte, lte, asc, desc, sql, count, avg } from 'drizzle-orm';
-import crypto from 'crypto';
-import path from 'path';
-import fs from 'fs';
+import { eq, and, or, gte, lte, asc, desc, sql, count, avg } from 'drizzle-orm';
+import crypto from 'node:crypto';
+import path from 'node:path';
+import fs from 'node:fs';
 import argon2 from 'argon2';
 import nodemailer from 'nodemailer';
 import { v2 as cloudinary } from 'cloudinary';
@@ -197,22 +197,25 @@ const CHECKOUT_WINDOW = 60_000;
 const MAX_ATTEMPTS   = 12;
 const BLOCK_DURATION = 60_000;
 
+function cleanupWindowAttempts(map: Record<string, RateLimitRecord>, windowMs: number, now: number) {
+  for (const ip of Object.keys(map)) {
+    if (now - map[ip].windowStart > windowMs * 5) delete map[ip];
+  }
+}
+
+function isLoginExpired(rec: LoginRecord, now: number): boolean {
+  if (rec.blockedUntil) return now > rec.blockedUntil + 300_000;
+  return now - (rec.lastAttempt || 0) > 300_000;
+}
+
 setInterval(() => {
   const now = Date.now();
   for (const ip of Object.keys(loginAttempts)) {
-    const rec = loginAttempts[ip];
-    if (rec.blockedUntil && now > rec.blockedUntil + 300_000) delete loginAttempts[ip];
-    else if (!rec.blockedUntil && now - (rec.lastAttempt || 0) > 300_000) delete loginAttempts[ip];
+    if (isLoginExpired(loginAttempts[ip], now)) delete loginAttempts[ip];
   }
-  for (const ip of Object.keys(checkoutAttempts)) {
-    if (now - checkoutAttempts[ip].windowStart > CHECKOUT_WINDOW * 5) delete checkoutAttempts[ip];
-  }
-  for (const ip of Object.keys(generalAttempts)) {
-    if (now - generalAttempts[ip].windowStart > GENERAL_WINDOW * 5) delete generalAttempts[ip];
-  }
-  for (const ip of Object.keys(comentariosAttempts)) {
-    if (now - comentariosAttempts[ip].windowStart > 60_000 * 5) delete comentariosAttempts[ip];
-  }
+  cleanupWindowAttempts(checkoutAttempts,    CHECKOUT_WINDOW, now);
+  cleanupWindowAttempts(generalAttempts,     GENERAL_WINDOW,  now);
+  cleanupWindowAttempts(comentariosAttempts, 60_000,          now);
 }, 5 * 60 * 1000);
 
 // =================================================================
@@ -241,13 +244,13 @@ app.use('*', async (c, next) => {
 });
 
 // --- CORS ---
-const ALLOWED_ORIGINS = [
+const ALLOWED_ORIGINS = new Set([
   process.env.CORS_ORIGIN     || 'https://localhost',
   process.env.DEV_CORS_ORIGIN || 'http://localhost:3000',
-];
+]);
 app.use('*', cors({
   origin: (origin) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) return origin || '*';
+    if (!origin || ALLOWED_ORIGINS.has(origin)) return origin || '*';
     return null;
   },
   credentials: true,
@@ -398,6 +401,37 @@ function calcularImpuestos(subtotal: number): number {
 }
 
 // =================================================================
+// HELPERS — Coupon application (shared by /api/pedidos and /api/pedidos/checkout)
+// =================================================================
+type TxLike = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function applyCupon(
+  tx: TxLike,
+  codigoCupon: string | undefined,
+  subtotal: number
+): Promise<{ descuento: number; cuponId: number | null }> {
+  if (!codigoCupon) return { descuento: 0, cuponId: null };
+
+  const [cup] = await tx.select().from(cupones).where(eq(cupones.codigo, codigoCupon.toUpperCase()));
+  if (!cup?.activo) return { descuento: 0, cuponId: null };
+
+  const now = new Date();
+  const validDate = (!cup.fechaInicio || new Date(cup.fechaInicio) <= now) &&
+                    (!cup.fechaFin    || new Date(cup.fechaFin)    >= now);
+  const validUsos = !cup.maxUsos || (cup.usosActuales ?? 0) < cup.maxUsos;
+  const validMin  = subtotal >= (cup.minCompra ?? 0);
+
+  if (!validDate || !validUsos || !validMin) return { descuento: 0, cuponId: null };
+
+  const descuento = cup.tipo === 'porcentaje'
+    ? Math.round(subtotal * (cup.valor / 100) * 100) / 100
+    : Math.min(cup.valor, subtotal);
+
+  await tx.update(cupones).set({ usosActuales: (cup.usosActuales ?? 0) + 1 }).where(eq(cupones.id, cup.id));
+  return { descuento, cuponId: cup.id };
+}
+
+// =================================================================
 // SECURITY EVENT LOGGER
 // =================================================================
 async function logSecEvent(tipo: string, data: {
@@ -436,10 +470,11 @@ app.get('/api/productos', generalRateLimiter, zValidator('query', ProductosQuery
     // Ocultar productos marcados como inactivos
     conditions.push(sql`${productos.activo} = true`);
 
-    const orderBy = orden === 'asc'    ? asc(productos.precio)
-                  : orden === 'desc'   ? desc(productos.precio)
-                  : orden === 'nuevo'  ? desc(productos.fecha)
-                  : asc(productos.id);
+    let orderBy;
+    if (orden === 'asc')        orderBy = asc(productos.precio);
+    else if (orden === 'desc')  orderBy = desc(productos.precio);
+    else if (orden === 'nuevo') orderBy = desc(productos.fecha);
+    else                        orderBy = asc(productos.id);
 
     const rows = await db.select().from(productos)
       .where(conditions.length ? and(...conditions as Parameters<typeof and>) : undefined)
@@ -451,15 +486,16 @@ app.get('/api/productos', generalRateLimiter, zValidator('query', ProductosQuery
     const productIds = rows.map(r => r.id);
     let ratingsMap: Record<number, { avg: number; count: number }> = {};
     if (productIds.length > 0) {
+      const idsSql = sql.join(productIds.map((id) => sql`${id}`), sql`,`);
       const ratingsResult = await db.select({
         productoId: valoraciones.productoId,
         avg: avg(valoraciones.puntuacion),
         count: count(),
       }).from(valoraciones)
-        .where(sql`${valoraciones.productoId} IN (${sql.join(productIds.map(id => sql`${id}`), sql`,`)})`)
+        .where(sql`${valoraciones.productoId} IN (${idsSql})`)
         .groupBy(valoraciones.productoId);
       for (const r of ratingsResult) {
-        ratingsMap[r.productoId] = { avg: parseFloat(r.avg as string) || 0, count: Number(r.count) };
+        ratingsMap[r.productoId] = { avg: Number.parseFloat(r.avg as string) || 0, count: Number(r.count) };
       }
     }
 
@@ -478,8 +514,8 @@ app.get('/api/productos', generalRateLimiter, zValidator('query', ProductosQuery
 
 app.get('/api/productos/:id', async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
 
     const [producto] = await db.select().from(productos).where(eq(productos.id, id));
     if (!producto) return c.json({ error: 'Producto no encontrado' }, 404);
@@ -498,7 +534,7 @@ app.get('/api/productos/:id', async (c) => {
     return c.json({
       ...producto,
       imagenes: imagenes.map(i => i.url),
-      rating: parseFloat(ratingData?.avg as string) || 0,
+      rating: Number.parseFloat(ratingData?.avg as string) || 0,
       numValoraciones: Number(ratingData?.count) || 0,
     });
   } catch (err) {
@@ -530,8 +566,8 @@ app.post('/api/productos', authenticate, requireAdmin, zValidator('json', Produc
 
 app.put('/api/productos/:id', authenticate, requireAdmin, zValidator('json', ProductoBodySchema), async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
 
     const data = c.req.valid('json');
     const result = await db.update(productos).set({
@@ -556,8 +592,8 @@ app.put('/api/productos/:id', authenticate, requireAdmin, zValidator('json', Pro
 
 app.post('/api/productos/:id/imagen', authenticate, requireAdmin, async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
 
     const [prod] = await db.select({ id: productos.id }).from(productos).where(eq(productos.id, id));
     if (!prod) return c.json({ error: 'Producto no encontrado' }, 404);
@@ -580,8 +616,8 @@ app.post('/api/productos/:id/imagen', authenticate, requireAdmin, async (c) => {
 // Galería: múltiples imágenes
 app.post('/api/productos/:id/galeria', authenticate, requireAdmin, async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
 
     const [prod] = await db.select({ id: productos.id }).from(productos).where(eq(productos.id, id));
     if (!prod) return c.json({ error: 'Producto no encontrado' }, 404);
@@ -613,8 +649,8 @@ app.post('/api/productos/:id/galeria', authenticate, requireAdmin, async (c) => 
 
 app.delete('/api/productos/:id/galeria/:imgId', authenticate, requireAdmin, async (c) => {
   try {
-    const imgId = parseInt(c.req.param('imgId'));
-    if (isNaN(imgId)) return c.json({ error: 'ID inválido' }, 400);
+    const imgId = Number.parseInt(c.req.param('imgId'));
+    if (Number.isNaN(imgId)) return c.json({ error: 'ID inválido' }, 400);
     await db.delete(productoImagenes).where(eq(productoImagenes.id, imgId));
     return c.json({ mensaje: 'Imagen eliminada' });
   } catch (err) {
@@ -625,11 +661,11 @@ app.delete('/api/productos/:id/galeria/:imgId', authenticate, requireAdmin, asyn
 
 app.patch('/api/productos/:id/stock', authenticate, requireAdmin, async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
     const body = await c.req.json();
     const updateData: Record<string, unknown> = {};
-    if (body.stock !== undefined) updateData.stock = Math.max(0, parseInt(body.stock) || 0);
+    if (body.stock !== undefined) updateData.stock = Math.max(0, Number.parseInt(body.stock) || 0);
     if (body.activo !== undefined) updateData.activo = Boolean(body.activo);
     const result = await db.update(productos).set(updateData).where(eq(productos.id, id)).returning({ id: productos.id });
     if (!result.length) return c.json({ error: 'Producto no encontrado' }, 404);
@@ -642,8 +678,8 @@ app.patch('/api/productos/:id/stock', authenticate, requireAdmin, async (c) => {
 
 app.delete('/api/productos/:id', authenticate, requireAdmin, async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
     const result = await db.delete(productos).where(eq(productos.id, id)).returning({ id: productos.id });
     if (!result.length) return c.json({ error: 'Producto no encontrado' }, 404);
     return c.json({ mensaje: 'Producto eliminado' });
@@ -658,8 +694,8 @@ app.delete('/api/productos/:id', authenticate, requireAdmin, async (c) => {
 // =================================================================
 app.get('/api/productos/:id/valoraciones', async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
 
     const rows = await db.select({
       id:         valoraciones.id,
@@ -684,8 +720,8 @@ app.get('/api/productos/:id/valoraciones', async (c) => {
 
 app.post('/api/productos/:id/valoraciones', authenticate, zValidator('json', ValoracionSchema), async (c) => {
   try {
-    const productoId = parseInt(c.req.param('id'));
-    if (isNaN(productoId)) return c.json({ error: 'ID inválido' }, 400);
+    const productoId = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(productoId)) return c.json({ error: 'ID inválido' }, 400);
 
     const user = c.get('user');
     const data = c.req.valid('json');
@@ -721,8 +757,8 @@ app.post('/api/productos/:id/valoraciones', authenticate, zValidator('json', Val
 // =================================================================
 app.get('/api/productos/:id/comentarios', async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
 
     const rows = await db.select({
       id:        comentarios.id,
@@ -743,8 +779,8 @@ app.get('/api/productos/:id/comentarios', async (c) => {
 
 app.post('/api/productos/:id/comentarios', comentariosRateLimiter, zValidator('json', ComentarioSchema), async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
 
     const { autor, contenido } = c.req.valid('json');
     const [prod] = await db.select({ id: productos.id }).from(productos).where(eq(productos.id, id));
@@ -787,25 +823,7 @@ app.post('/api/pedidos', checkoutRateLimiter, optionalAuth, zValidator('json', P
       }
 
       // Apply coupon
-      let descuento = 0;
-      let cuponId: number | null = null;
-      if (cupon) {
-        const [cup] = await tx.select().from(cupones).where(eq(cupones.codigo, cupon.toUpperCase()));
-        if (cup && cup.activo) {
-          const now = new Date();
-          const validDate = (!cup.fechaInicio || new Date(cup.fechaInicio) <= now) &&
-                           (!cup.fechaFin || new Date(cup.fechaFin) >= now);
-          const validUsos = !cup.maxUsos || (cup.usosActuales ?? 0) < cup.maxUsos;
-          const validMin = subtotal >= (cup.minCompra ?? 0);
-          if (validDate && validUsos && validMin) {
-            descuento = cup.tipo === 'porcentaje'
-              ? Math.round(subtotal * (cup.valor / 100) * 100) / 100
-              : Math.min(cup.valor, subtotal);
-            cuponId = cup.id;
-            await tx.update(cupones).set({ usosActuales: (cup.usosActuales ?? 0) + 1 }).where(eq(cupones.id, cup.id));
-          }
-        }
-      }
+      const { descuento, cuponId } = await applyCupon(tx, cupon, subtotal);
 
       const subtotalConDescuento = subtotal - descuento;
       const impuestos = calcularImpuestos(subtotalConDescuento);
@@ -885,8 +903,8 @@ app.get('/api/mis-pedidos', authenticate, async (c) => {
 // Admin — list orders
 app.get('/api/pedidos', authenticate, requireAdmin, async (c) => {
   try {
-    const limit  = Math.min(parseInt(c.req.query('limit') || '100'), 500);
-    const offset = Math.max(parseInt(c.req.query('offset') || '0'), 0);
+    const limit  = Math.min(Number.parseInt(c.req.query('limit') || '100'), 500);
+    const offset = Math.max(Number.parseInt(c.req.query('offset') || '0'), 0);
     const rows = await db.select().from(pedidos)
       .orderBy(desc(pedidos.fecha))
       .limit(limit)
@@ -900,8 +918,8 @@ app.get('/api/pedidos', authenticate, requireAdmin, async (c) => {
 
 app.get('/api/pedidos/:id', authenticate, requireAdmin, async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
 
     const [pedido] = await db.select().from(pedidos).where(eq(pedidos.id, id));
     if (!pedido) return c.json({ error: 'Pedido no encontrado' }, 404);
@@ -928,8 +946,8 @@ app.get('/api/pedidos/:id', authenticate, requireAdmin, async (c) => {
 // Update order status
 app.patch('/api/pedidos/:id/estado', authenticate, requireAdmin, zValidator('json', PedidoEstadoSchema), async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
 
     const { estado, notas } = c.req.valid('json');
     const updateData: Record<string, unknown> = { estado };
@@ -946,8 +964,8 @@ app.patch('/api/pedidos/:id/estado', authenticate, requireAdmin, zValidator('jso
 
 app.get('/api/admin/pedidos', authenticate, requireAdmin, async (c) => {
   try {
-    const limit  = Math.min(parseInt(c.req.query('limit') || '100'), 500);
-    const offset = Math.max(parseInt(c.req.query('offset') || '0'), 0);
+    const limit  = Math.min(Number.parseInt(c.req.query('limit') || '100'), 500);
+    const offset = Math.max(Number.parseInt(c.req.query('offset') || '0'), 0);
     const rows = await db.select().from(pedidos)
       .orderBy(desc(pedidos.fecha))
       .limit(limit)
@@ -961,8 +979,8 @@ app.get('/api/admin/pedidos', authenticate, requireAdmin, async (c) => {
 
 app.delete('/api/admin/pedidos/:id', authenticate, requireAdmin, async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
     const result = await db.delete(pedidos).where(eq(pedidos.id, id)).returning({ id: pedidos.id });
     if (!result.length) return c.json({ error: 'Pedido no encontrado' }, 404);
     return c.json({ mensaje: 'Pedido eliminado' });
@@ -1039,8 +1057,8 @@ app.post('/api/categorias', authenticate, requireAdmin, zValidator('json', Categ
 
 app.put('/api/categorias/:id', authenticate, requireAdmin, zValidator('json', CategoriaSchema), async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
     const data = c.req.valid('json');
     const result = await db.update(categorias).set({
       nombre:      sanitizeText(data.nombre),
@@ -1059,8 +1077,8 @@ app.put('/api/categorias/:id', authenticate, requireAdmin, zValidator('json', Ca
 
 app.delete('/api/categorias/:id', authenticate, requireAdmin, async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
     await db.delete(categorias).where(eq(categorias.id, id));
     return c.json({ mensaje: 'Categoría eliminada' });
   } catch (err) {
@@ -1104,8 +1122,8 @@ app.post('/api/admin/cupones', authenticate, requireAdmin, zValidator('json', Cu
 
 app.delete('/api/admin/cupones/:id', authenticate, requireAdmin, async (c) => {
   try {
-    const id = parseInt(c.req.param('id'));
-    if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
     await db.delete(cupones).where(eq(cupones.id, id));
     return c.json({ mensaje: 'Cupón eliminado' });
   } catch (err) {
@@ -1119,7 +1137,7 @@ app.post('/api/cupones/validar', zValidator('json', ValidarCuponSchema), async (
   try {
     const { codigo, subtotal } = c.req.valid('json');
     const [cup] = await db.select().from(cupones).where(eq(cupones.codigo, codigo.toUpperCase()));
-    if (!cup || !cup.activo) return c.json({ error: 'Cupón no válido' }, 404);
+    if (!cup?.activo) return c.json({ error: 'Cupón no válido' }, 404);
 
     const now = new Date();
     if (cup.fechaInicio && new Date(cup.fechaInicio) > now) return c.json({ error: 'Cupón aún no activo' }, 400);
@@ -1165,8 +1183,8 @@ app.get('/api/favoritos', authenticate, async (c) => {
 app.post('/api/favoritos/:productoId', authenticate, async (c) => {
   try {
     const user = c.get('user');
-    const productoId = parseInt(c.req.param('productoId'));
-    if (isNaN(productoId)) return c.json({ error: 'ID inválido' }, 400);
+    const productoId = Number.parseInt(c.req.param('productoId'));
+    if (Number.isNaN(productoId)) return c.json({ error: 'ID inválido' }, 400);
 
     const [existing] = await db.select({ id: favoritos.id }).from(favoritos)
       .where(and(eq(favoritos.usuarioId, user.id), eq(favoritos.productoId, productoId)));
@@ -1183,8 +1201,8 @@ app.post('/api/favoritos/:productoId', authenticate, async (c) => {
 app.delete('/api/favoritos/:productoId', authenticate, async (c) => {
   try {
     const user = c.get('user');
-    const productoId = parseInt(c.req.param('productoId'));
-    if (isNaN(productoId)) return c.json({ error: 'ID inválido' }, 400);
+    const productoId = Number.parseInt(c.req.param('productoId'));
+    if (Number.isNaN(productoId)) return c.json({ error: 'ID inválido' }, 400);
 
     await db.delete(favoritos).where(and(eq(favoritos.usuarioId, user.id), eq(favoritos.productoId, productoId)));
     return c.json({ mensaje: 'Eliminado de favoritos' });
@@ -1609,7 +1627,7 @@ app.get('/api/admin/valoraciones', authenticate, requireAdmin, async (c) => {
 
 app.delete('/api/admin/valoraciones/:id', authenticate, requireAdmin, async (c) => {
   const id = Number(c.req.param('id'));
-  if (isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+  if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
   try {
     await db.delete(valoraciones).where(eq(valoraciones.id, id));
     return c.json({ ok: true });
@@ -1733,25 +1751,8 @@ app.post('/api/pedidos/checkout', checkoutRateLimiter, optionalAuth, zValidator(
         itemsValidados.push({ id: prod.id, precio: prod.precio, cantidad: item.cantidad });
       }
 
-      let descuento = 0;
-      let cuponId: number | null = null;
-      if (cupon) {
-        const [cup] = await tx.select().from(cupones).where(eq(cupones.codigo, cupon.toUpperCase()));
-        if (cup && cup.activo) {
-          const now = new Date();
-          const validDate = (!cup.fechaInicio || new Date(cup.fechaInicio) <= now) &&
-                           (!cup.fechaFin || new Date(cup.fechaFin) >= now);
-          const validUsos = !cup.maxUsos || (cup.usosActuales ?? 0) < cup.maxUsos;
-          const validMin = subtotal >= (cup.minCompra ?? 0);
-          if (validDate && validUsos && validMin) {
-            descuento = cup.tipo === 'porcentaje'
-              ? Math.round(subtotal * (cup.valor / 100) * 100) / 100
-              : Math.min(cup.valor, subtotal);
-            cuponId = cup.id;
-            await tx.update(cupones).set({ usosActuales: (cup.usosActuales ?? 0) + 1 }).where(eq(cupones.id, cup.id));
-          }
-        }
-      }
+      // Apply coupon
+      const { descuento, cuponId } = await applyCupon(tx, cupon, subtotal);
 
       const subtotalConDescuento = subtotal - descuento;
       const impuestos = calcularImpuestos(subtotalConDescuento);
@@ -1830,8 +1831,8 @@ app.post('/api/webhook', async (c) => {
 
   if (event.type === 'payment_intent.succeeded') {
     const pi = event.data.object as Stripe.PaymentIntent;
-    const pedidoId = parseInt(pi.metadata?.pedidoId || '');
-    if (!isNaN(pedidoId)) {
+    const pedidoId = Number.parseInt(pi.metadata?.pedidoId || '');
+    if (!Number.isNaN(pedidoId)) {
       try {
         await db.update(pedidos).set({ estado: 'pagado' }).where(eq(pedidos.id, pedidoId));
         console.log(`[webhook] Pedido #${pedidoId} marcado como pagado`);
@@ -1848,7 +1849,7 @@ app.post('/api/webhook', async (c) => {
 // RUTAS — CÁLCULO ENVÍO/IMPUESTOS (público)
 // =================================================================
 app.get('/api/calcular-costes', (c) => {
-  const subtotal = parseFloat(c.req.query('subtotal') || '0');
+  const subtotal = Number.parseFloat(c.req.query('subtotal') || '0');
   const envio = calcularEnvio(subtotal);
   const impuestos = calcularImpuestos(subtotal);
   const total = Math.round((subtotal + impuestos + envio) * 100) / 100;
@@ -2095,7 +2096,7 @@ async function initDB() {
 
 async function seedProductos() {
   const result = await pool.query('SELECT COUNT(*) AS count FROM productos');
-  if (parseInt(result.rows[0].count) > 0) return;
+  if (Number.parseInt(result.rows[0].count) > 0) return;
   const data = [
     ['MacBook Pro 14"',           'Apple M3 Pro, 18GB RAM, 512GB SSD, Pantalla Liquid Retina XDR',                    2249.00, 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&h=300&fit=crop',   'Portátiles', 25, 'MBP-14-M3'],
     ['Dell XPS 15',               'Intel Core i7-13700H, 32GB RAM, 1TB SSD, NVIDIA RTX 4060, 15.6" 3.5K OLED',       1899.00, 'https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?w=400&h=300&fit=crop',   'Portátiles', 30, 'DELL-XPS15'],
@@ -2124,7 +2125,7 @@ async function seedProductos() {
 
 async function seedUsuarios() {
   const result = await pool.query('SELECT COUNT(*) AS count FROM usuarios');
-  const cnt = parseInt(result.rows[0].count);
+  const cnt = Number.parseInt(result.rows[0].count);
 
   const adminUser = process.env.ADMIN_USER    ?? 'admin';
   const adminPass = process.env.ADMIN_PASS    ?? 'Kr@tamex_adm1n!';
@@ -2156,7 +2157,7 @@ async function seedUsuarios() {
 
 async function seedPedidos() {
   const result = await pool.query('SELECT COUNT(*) AS count FROM pedidos');
-  if (parseInt(result.rows[0].count) > 0) return;
+  if (Number.parseInt(result.rows[0].count) > 0) return;
   const data = [
     { cliente: 'Juan Pérez',      email: 'juan@email.com',    direccion: 'Calle Mayor 123, Madrid',         total: 2249.00, daysAgo: 6 },
     { cliente: 'María García',    email: 'maria@email.com',   direccion: 'Av. Roma 45, Barcelona',          total: 1899.00, daysAgo: 6 },
@@ -2184,7 +2185,7 @@ async function seedPedidos() {
 
 async function seedCupones() {
   const result = await pool.query('SELECT COUNT(*) AS count FROM cupones');
-  if (parseInt(result.rows[0].count) > 0) return;
+  if (Number.parseInt(result.rows[0].count) > 0) return;
   await pool.query(`
     INSERT INTO cupones (codigo, tipo, valor, min_compra, max_usos) VALUES
     ('BIENVENIDO10', 'porcentaje', 10, 50, 100),
@@ -2196,7 +2197,7 @@ async function seedCupones() {
 
 async function seedCategorias() {
   const result = await pool.query('SELECT COUNT(*) AS count FROM categorias');
-  if (parseInt(result.rows[0].count) > 0) return;
+  if (Number.parseInt(result.rows[0].count) > 0) return;
   await pool.query(`
     INSERT INTO categorias (nombre, descripcion, orden) VALUES
     ('Portátiles',  'Portátiles para trabajo y productividad', 1),

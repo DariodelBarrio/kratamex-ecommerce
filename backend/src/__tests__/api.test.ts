@@ -66,8 +66,8 @@ vi.mock('nodemailer', () => ({
   },
 }));
 
-vi.mock('fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('fs')>();
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
   return {
     ...actual,
     appendFile:    vi.fn((_p: unknown, _d: unknown, cb?: (e: null) => void) => cb?.(null)),
@@ -328,7 +328,7 @@ describe('Backend API', () => {
 
   // ── Seguridad de precios ────────────────────────────────────────
   it('POST /api/pedidos — el total se calcula con el precio de la BD, no del body', async () => {
-    const mockProduct = { id: 1, precio: 10.00, stock: 100, nombre: 'Producto Test' };
+    const mockProduct = { id: 1, precio: 10, stock: 100, nombre: 'Producto Test' };
 
     const txSelect = vi.fn()
       .mockReturnValueOnce(makeChain([mockProduct]))  // lookup del producto
@@ -352,9 +352,9 @@ describe('Backend API', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json() as { subtotal: number; total: number };
-    // subtotal = precio_BD (10.00) × cantidad (2) = 20.00
-    expect(body.subtotal).toBeCloseTo(20.00, 2);
-    // total = 20.00 + IVA 21% (4.20) + envío (5.99) = 30.19
+    // subtotal = precio_BD (10) × cantidad (2) = 20
+    expect(body.subtotal).toBeCloseTo(20, 2);
+    // total = 20 + IVA 21% (4.20) + envío (5.99) = 30.19
     expect(body.total).toBeCloseTo(30.19, 2);
   });
 });

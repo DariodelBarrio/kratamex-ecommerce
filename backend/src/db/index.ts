@@ -4,10 +4,10 @@ import * as schema from './schema';
 
 const pool = new Pool({
   host:     process.env.DB_HOST     || 'localhost',
-  port:     parseInt(process.env.DB_PORT || '5432'),
+  port:     Number.parseInt(process.env.DB_PORT || '5432'),
   database: process.env.DB_NAME     || 'kratamex',
   user:     process.env.DB_USER     || 'kratamex',
-  password: process.env.DB_PASSWORD || 'kratamex_dev',
+  password: process.env.DB_PASSWORD,
 });
 
 pool.on('error', (err) => {
