@@ -32,8 +32,8 @@ export const ProductosQuerySchema = z.object({
 // AUTH
 // =================================================================
 export const LoginSchema = z.object({
-  username: z.string().min(1, 'Usuario requerido'),
-  password: z.string().min(1, 'Contraseña requerida'),
+  username: z.string().min(1, 'Usuario requerido').max(50),
+  password: z.string().min(1, 'Contraseña requerida').max(1000),
 });
 
 export const RegisterSchema = z.object({
