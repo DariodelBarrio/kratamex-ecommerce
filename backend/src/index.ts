@@ -2026,13 +2026,12 @@ app.post('/api/forgot-password', generalRateLimiter, async (c) => {
   if (!parsed.success) return c.json({ error: 'Email inválido' }, 400);
   const { email } = parsed.data;
 
-  // Respuesta siempre igual para no revelar si el email existe (anti-enumeración)
-  const ok = { ok: true, message: 'Si ese email existe, recibirás un enlace en breve.' };
-
   try {
     const [user] = await db.select({ id: usuarios.id, email: usuarios.email, username: usuarios.username })
       .from(usuarios).where(eq(usuarios.email, email.toLowerCase().trim()));
-    if (!user?.email) return c.json(ok); // email no registrado — respuesta idéntica
+
+    if (!user?.email)
+      return c.json({ error: 'No existe ninguna cuenta registrada con ese email.' }, 404);
 
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
@@ -2040,10 +2039,10 @@ app.post('/api/forgot-password', generalRateLimiter, async (c) => {
     await db.insert(passwordResetTokens).values({ usuarioId: user.id, token, expiresAt });
     await sendResetEmail(user.email, token, user.username);
 
-    return c.json(ok);
+    return c.json({ ok: true, message: 'Enlace enviado. Revisa tu bandeja de entrada (y la carpeta de spam).' });
   } catch (err) {
     console.error('forgot-password error:', err);
-    return c.json(ok); // no revelar error interno
+    return c.json({ error: 'Error al enviar el email. Inténtalo de nuevo.' }, 500);
   }
 });
 
