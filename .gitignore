@@ -34,10 +34,8 @@ coverage/
 *.tmp
 *.temp
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
+# Database (Thumbs.db ya está excluido en la sección OS)
+# *.db — permitido para SQLite de desarrollo
 
 # TLS certificates — generar localmente, nunca subir al repo
 nginx/certs/*.pem
