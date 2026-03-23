@@ -240,8 +240,8 @@ app.use('*', async (c, next) => {
 
 // --- CORS ---
 const ALLOWED_ORIGINS = [
-  process.env.CORS_ORIGIN || 'https://localhost',
-  'http://localhost:3000',
+  process.env.CORS_ORIGIN     || 'https://localhost',
+  process.env.DEV_CORS_ORIGIN || 'http://localhost:3000',
 ];
 app.use('*', cors({
   origin: (origin) => {
@@ -2124,10 +2124,10 @@ async function seedUsuarios() {
   const result = await pool.query('SELECT COUNT(*) AS count FROM usuarios');
   const cnt = parseInt(result.rows[0].count);
 
-  const adminUser = process.env.ADMIN_USER    || 'admin';
-  const adminPass = process.env.ADMIN_PASS    || 'admin123';
-  const stdUser   = process.env.USER_STANDARD || 'user';
-  const stdPass   = process.env.USER_PASS     || 'user123';
+  const adminUser = process.env.ADMIN_USER    ?? 'admin';
+  const adminPass = process.env.ADMIN_PASS    ?? 'Kr@tamex_adm1n!';
+  const stdUser   = process.env.USER_STANDARD ?? 'user';
+  const stdPass   = process.env.USER_PASS     ?? 'Kr@tamex_usr1!';
 
   if (cnt === 0) {
     await pool.query(

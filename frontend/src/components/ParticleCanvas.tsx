@@ -15,15 +15,20 @@ const COLORS = [
   'rgba(16,185,129,',
 ]
 
+/** Secure random float [0, 1) using crypto — avoids S2245 */
+function rnd(): number {
+  return crypto.getRandomValues(new Uint32Array(1))[0] / 0x100000000
+}
+
 function makeParticles(w: number, h: number, n = 70): Particle[] {
   return Array.from({ length: n }, () => ({
-    x:  Math.random() * w,
-    y:  Math.random() * h,
-    vx: (Math.random() - 0.5) * 0.42,
-    vy: (Math.random() - 0.5) * 0.42,
-    r:  Math.random() * 1.6 + 0.4,
-    opacity: Math.random() * 0.5 + 0.2,
-    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+    x:  rnd() * w,
+    y:  rnd() * h,
+    vx: (rnd() - 0.5) * 0.42,
+    vy: (rnd() - 0.5) * 0.42,
+    r:  rnd() * 1.6 + 0.4,
+    opacity: rnd() * 0.5 + 0.2,
+    color: COLORS[Math.floor(rnd() * COLORS.length)],
   }))
 }
 
