@@ -76,7 +76,7 @@ async function uploadToCloudinary(buffer: Buffer, folder: string): Promise<strin
 // =================================================================
 // EMAIL (nodemailer — Gmail SMTP)
 // =================================================================
-const mailer = nodemailer.createTransport({
+const mailer = nodemailer.createTransport({ // NOSONAR - gmail service usa SMTPS (puerto 465) con TLS por defecto
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_FROM,
