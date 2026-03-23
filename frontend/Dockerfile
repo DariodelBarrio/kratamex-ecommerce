@@ -6,7 +6,12 @@ COPY package*.json ./
 
 RUN npm install --legacy-peer-deps
 
-COPY . .
+COPY src ./src
+COPY public ./public
+COPY index.html ./
+COPY tsconfig.json ./
+COPY tsconfig.node.json ./
+COPY vite.config.ts ./
 
 RUN chown -R node:node /app
 
