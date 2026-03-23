@@ -32,10 +32,11 @@ export function ProductCard({ producto, onAddToCart, index, isWishlisted = false
 
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (added || producto.stock <= 0) return;
-    onAddToCart(producto);
-    setAdded(true);
-    setTimeout(() => setAdded(false), 1600);
+    if (!added && producto.stock > 0) {
+      onAddToCart(producto);
+      setAdded(true);
+      setTimeout(() => setAdded(false), 1600);
+    }
   };
 
   if (vistaLista) {
