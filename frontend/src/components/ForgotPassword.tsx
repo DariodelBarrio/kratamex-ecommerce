@@ -34,7 +34,7 @@ export default function ForgotPassword() {
             <CheckCircle size={44} style={{ color: '#10b981', marginBottom: 16 }} />
             <h2 style={title}>Email enviado</h2>
             <p style={sub}>
-              Si ese email está registrado, recibirás un enlace para restablecer tu contraseña en breve. Revisa también el spam.
+              Te hemos enviado un enlace para restablecer tu contraseña. Revisa tu bandeja de entrada y, si no aparece, la carpeta de spam.
             </p>
             <Link to="/login" style={link}><ArrowLeft size={14} /> Volver al login</Link>
           </>
