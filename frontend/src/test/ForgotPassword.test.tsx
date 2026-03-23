@@ -34,7 +34,7 @@ describe('ForgotPassword', () => {
     fireEvent.change(screen.getByPlaceholderText(/correo/i), { target: { value: 'test@test.com' } });
     fireEvent.click(screen.getByRole('button', { name: /enviar/i }));
 
-    await waitFor(() => expect(screen.getByText(/enviado/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: /email enviado/i })).toBeInTheDocument());
   });
 
   it('muestra error cuando la API responde con error', async () => {
