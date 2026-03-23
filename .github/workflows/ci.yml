@@ -7,9 +7,48 @@ on:
     branches: [main]
 
 # ──────────────────────────────────────────────────────────────────
-# FRONTEND
+# SECRET SCAN
 # ──────────────────────────────────────────────────────────────────
 jobs:
+  secret-scan:
+    name: Gitleaks — escaneo de secrets
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks scan
+        id: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_REPORT: gitleaks-report.json
+
+      - name: Job Summary
+        if: always()
+        run: |
+          if [ "${{ steps.gitleaks.outcome }}" = "success" ]; then
+            echo "## ✅ Secret Scan — No se han detectado credenciales expuestas" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Secret Scan — Se han encontrado secrets en el repositorio" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            if [ -f gitleaks-report.json ]; then
+              echo "| Archivo | Línea | Regla |" >> $GITHUB_STEP_SUMMARY
+              echo "|---------|-------|-------|" >> $GITHUB_STEP_SUMMARY
+              jq -r '.[] | "| \(.File) | \(.StartLine) | \(.RuleID) |"' gitleaks-report.json >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+      - name: Fail if secrets found
+        if: steps.gitleaks.outcome != 'success'
+        run: exit 1
+
+# ──────────────────────────────────────────────────────────────────
+# FRONTEND
+# ──────────────────────────────────────────────────────────────────
   test-frontend:
     name: Frontend — typecheck + tests + coverage
     runs-on: ubuntu-latest
