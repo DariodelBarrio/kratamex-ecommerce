@@ -52,7 +52,7 @@ const translations: Record<Lang, Record<string, string>> = {
     'auth.login': 'Iniciar sesión',
     'auth.register': 'Crear cuenta',
     'auth.username': 'Usuario',
-    'auth.password': 'Contraseña',
+    'auth.password': 'Contraseña', // NOSONAR — translation label, not a credential
     'auth.email': 'Email',
     'auth.name': 'Nombre completo',
     'auth.noAccount': '¿No tienes cuenta?',
@@ -149,7 +149,7 @@ const translations: Record<Lang, Record<string, string>> = {
     'auth.login': 'Sign in',
     'auth.register': 'Create account',
     'auth.username': 'Username',
-    'auth.password': 'Password',
+    'auth.password': 'Password', // NOSONAR — translation label, not a credential
     'auth.email': 'Email',
     'auth.name': 'Full name',
     'auth.noAccount': "Don't have an account?",
