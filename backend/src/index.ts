@@ -84,12 +84,14 @@ const mailer = nodemailer.createTransport({
   },
 });
 
-async function sendResetEmail(to: string, token: string) {
+async function sendResetEmail(to: string, token: string, username: string) {
   const link = `${process.env.CORS_ORIGIN || 'https://localhost'}/reset-password?token=${token}`;
+  const nombre = username.charAt(0).toUpperCase() + username.slice(1);
+  const ahora  = new Date().toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/Madrid' });
   await mailer.sendMail({
     from: `"Kratamex" <${process.env.EMAIL_FROM}>`,
     to,
-    subject: '🔐 Restablece tu contraseña — Kratamex',
+    subject: `${nombre}, aquí está tu enlace para restablecer la contraseña`,
     html: `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -99,70 +101,104 @@ async function sendResetEmail(to: string, token: string) {
 <body style="margin:0;padding:0;background:#0f172a;font-family:'Segoe UI',Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;padding:40px 16px;">
     <tr><td align="center">
-      <table width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#1e293b;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+      <table width="540" cellpadding="0" cellspacing="0" style="max-width:540px;width:100%;background:#1e293b;border-radius:20px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.6);">
 
         <!-- HEADER -->
         <tr>
-          <td style="background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);padding:40px 40px 32px;text-align:center;">
-            <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:12px;padding:10px 24px;margin-bottom:20px;">
-              <span style="color:#fff;font-size:22px;font-weight:800;letter-spacing:1px;">KRATAMEX</span>
+          <td style="background:linear-gradient(135deg,#1d4ed8 0%,#6d28d9 100%);padding:44px 44px 36px;text-align:center;">
+            <div style="display:inline-block;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:14px;padding:10px 26px;margin-bottom:24px;">
+              <span style="color:#fff;font-size:20px;font-weight:900;letter-spacing:2px;text-transform:uppercase;">Kratamex</span>
             </div>
-            <div style="font-size:40px;margin:0 0 14px;">🔐</div>
-            <h1 style="margin:0;color:#fff;font-size:24px;font-weight:700;">Recupera tu contraseña</h1>
-            <p style="margin:8px 0 0;color:rgba(255,255,255,0.7);font-size:14px;">Solicitud recibida correctamente</p>
+            <div style="background:rgba(255,255,255,0.1);border-radius:50%;width:72px;height:72px;margin:0 auto 18px;text-align:center;line-height:72px;font-size:34px;">🔐</div>
+            <h1 style="margin:0 0 6px;color:#fff;font-size:26px;font-weight:800;letter-spacing:-0.5px;">Restablece tu contraseña</h1>
+            <p style="margin:0;color:rgba(255,255,255,0.65);font-size:14px;">Te ayudamos a recuperar el acceso a tu cuenta</p>
           </td>
         </tr>
 
-        <!-- BODY -->
+        <!-- SALUDO -->
         <tr>
-          <td style="padding:36px 40px 28px;">
-            <p style="margin:0 0 24px;color:#94a3b8;font-size:15px;line-height:1.75;">
-              Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en
-              <strong style="color:#e2e8f0;">Kratamex</strong>.
-              Haz clic en el botón para crear una nueva:
+          <td style="padding:36px 44px 0;">
+            <p style="margin:0;color:#e2e8f0;font-size:17px;font-weight:600;">Hola, ${nombre} 👋</p>
+          </td>
+        </tr>
+
+        <!-- CUERPO -->
+        <tr>
+          <td style="padding:16px 44px 32px;">
+            <p style="margin:0 0 10px;color:#94a3b8;font-size:15px;line-height:1.8;">
+              Recibimos una solicitud para restablecer la contraseña asociada a tu cuenta de
+              <strong style="color:#c7d2fe;">Kratamex</strong>.
+              Si fuiste tú, haz clic en el botón de abajo — solo te llevará un momento.
+            </p>
+            <p style="margin:0 0 28px;color:#64748b;font-size:13px;">
+              Solicitud realizada el <strong style="color:#94a3b8;">${ahora}</strong>
             </p>
 
             <!-- CTA -->
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td align="center" style="padding:4px 0 32px;">
+                <td align="center" style="padding:0 0 32px;">
                   <a href="${link}"
-                     style="display:inline-block;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;text-decoration:none;font-size:16px;font-weight:700;padding:16px 44px;border-radius:12px;letter-spacing:0.3px;box-shadow:0 4px 24px rgba(37,99,235,0.45);">
-                    Restablecer contraseña &rarr;
+                     style="display:inline-block;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;text-decoration:none;font-size:17px;font-weight:700;padding:18px 48px;border-radius:14px;letter-spacing:0.2px;box-shadow:0 8px 32px rgba(37,99,235,0.5);">
+                    Crear nueva contraseña &rarr;
                   </a>
                 </td>
               </tr>
             </table>
 
-            <hr style="border:none;border-top:1px solid #334155;margin:0 0 24px;">
+            <!-- Info técnica -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+              <tr>
+                <td style="background:#0f172a;border-radius:12px;padding:20px 22px;border-left:3px solid #2563eb;">
+                  <p style="margin:0 0 12px;color:#6366f1;font-size:11px;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;">Detalles de seguridad</p>
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="color:#64748b;font-size:13px;padding:3px 0;">⏱</td>
+                      <td style="color:#94a3b8;font-size:13px;padding:3px 0 3px 8px;">Este enlace <strong style="color:#e2e8f0;">caduca en 1 hora</strong></td>
+                    </tr>
+                    <tr>
+                      <td style="color:#64748b;font-size:13px;padding:3px 0;">🔒</td>
+                      <td style="color:#94a3b8;font-size:13px;padding:3px 0 3px 8px;">Solo puede usarse <strong style="color:#e2e8f0;">una única vez</strong></td>
+                    </tr>
+                    <tr>
+                      <td style="color:#64748b;font-size:13px;padding:3px 0;">👤</td>
+                      <td style="color:#94a3b8;font-size:13px;padding:3px 0 3px 8px;">Vinculado exclusivamente a la cuenta <strong style="color:#e2e8f0;">${nombre}</strong></td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
 
-            <!-- Info box -->
+            <!-- Aviso si no lo pidieron -->
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td style="background:#0f172a;border-radius:10px;padding:18px 20px;">
-                  <p style="margin:0 0 10px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Detalles del enlace</p>
-                  <p style="margin:0;color:#94a3b8;font-size:13px;line-height:1.9;">
-                    ⏱&nbsp; Caduca en <strong style="color:#f1f5f9;">1 hora</strong><br>
-                    🔒&nbsp; Válido <strong style="color:#f1f5f9;">una sola vez</strong><br>
-                    🛡&nbsp; Si no lo pediste, <strong style="color:#f1f5f9;">ignora este email</strong> — tu cuenta está segura
+                <td style="background:#1a0a0a;border:1px solid #7f1d1d;border-radius:10px;padding:16px 20px;">
+                  <p style="margin:0 0 4px;color:#fca5a5;font-size:12px;font-weight:700;">⚠️ &nbsp;¿No solicitaste este cambio?</p>
+                  <p style="margin:0;color:#f87171;font-size:13px;line-height:1.6;">
+                    Ignora este email — tu contraseña actual <strong>no cambiará</strong>. Si crees que alguien intentó acceder a tu cuenta, te recomendamos revisar la seguridad de tu email.
                   </p>
                 </td>
               </tr>
             </table>
 
-            <p style="margin:22px 0 0;color:#475569;font-size:12px;line-height:1.6;">
-              ¿El botón no funciona? Copia este enlace:<br>
-              <a href="${link}" style="color:#818cf8;word-break:break-all;font-size:11px;">${link}</a>
+            <p style="margin:24px 0 0;color:#374151;font-size:12px;line-height:1.7;">
+              ¿El botón no abre? Copia y pega este enlace en tu navegador:<br>
+              <a href="${link}" style="color:#6366f1;word-break:break-all;font-size:11px;">${link}</a>
             </p>
           </td>
         </tr>
 
+        <!-- DIVIDER -->
+        <tr><td style="padding:0 44px;"><hr style="border:none;border-top:1px solid #1e3a5f;margin:0;"></td></tr>
+
         <!-- FOOTER -->
         <tr>
-          <td style="background:#0a1121;padding:20px 40px;text-align:center;border-top:1px solid #1e293b;">
-            <p style="margin:0;color:#475569;font-size:12px;">
-              &copy; 2025 <strong style="color:#64748b;">Kratamex</strong> &middot; Tienda online<br>
-              <span style="color:#334155;font-size:11px;">Email generado automáticamente · No respondas a este mensaje</span>
+          <td style="padding:24px 44px;text-align:center;">
+            <p style="margin:0 0 6px;color:#334155;font-size:13px;">
+              &copy; 2025 <strong style="color:#475569;">Kratamex</strong> &middot; Tienda online de tecnología
+            </p>
+            <p style="margin:0;color:#1e3a5f;font-size:11px;">
+              Este mensaje fue generado automáticamente. Por favor, no respondas a este correo.
             </p>
           </td>
         </tr>
@@ -1994,7 +2030,7 @@ app.post('/api/forgot-password', generalRateLimiter, async (c) => {
   const ok = { ok: true, message: 'Si ese email existe, recibirás un enlace en breve.' };
 
   try {
-    const [user] = await db.select({ id: usuarios.id, email: usuarios.email })
+    const [user] = await db.select({ id: usuarios.id, email: usuarios.email, username: usuarios.username })
       .from(usuarios).where(eq(usuarios.email, email.toLowerCase().trim()));
     if (!user?.email) return c.json(ok); // email no registrado — respuesta idéntica
 
@@ -2002,7 +2038,7 @@ app.post('/api/forgot-password', generalRateLimiter, async (c) => {
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
 
     await db.insert(passwordResetTokens).values({ usuarioId: user.id, token, expiresAt });
-    await sendResetEmail(user.email, token);
+    await sendResetEmail(user.email, token, user.username);
 
     return c.json(ok);
   } catch (err) {
