@@ -357,4 +357,97 @@ describe('Backend API', () => {
     // total = 20 + IVA 21% (4.20) + envío (5.99) = 30.19
     expect(body.total).toBeCloseTo(30.19, 2);
   });
+
+  // ── Autorización: rutas admin con usuario standard → 403 ─────────
+  it('PATCH /api/productos/:id/stock con token standard → 403', async () => {
+    const token = await loginAs(STD_USER);
+    const res   = await app.request('/api/productos/1/stock', {
+      method:  'PATCH',
+      headers: { authorization: token, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ stock: 10 }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('POST /api/admin/cupones con token standard → 403', async () => {
+    const token = await loginAs(STD_USER);
+    const res   = await app.request('/api/admin/cupones', {
+      method:  'POST',
+      headers: { authorization: token, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ codigo: 'TEST10', descuento: 10, tipo: 'porcentaje', activo: true }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('DELETE /api/admin/cupones/:id con token standard → 403', async () => {
+    const token = await loginAs(STD_USER);
+    const res   = await app.request('/api/admin/cupones/1', {
+      method:  'DELETE',
+      headers: { authorization: token },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('GET /api/admin/pedidos/csv con token standard → 403', async () => {
+    const token = await loginAs(STD_USER);
+    const res   = await app.request('/api/admin/pedidos/csv', {
+      headers: { authorization: token },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('GET /api/admin/productos/csv con token standard → 403', async () => {
+    const token = await loginAs(STD_USER);
+    const res   = await app.request('/api/admin/productos/csv', {
+      headers: { authorization: token },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('GET /api/security/events/export con token standard → 403', async () => {
+    const token = await loginAs(STD_USER);
+    const res   = await app.request('/api/security/events/export', {
+      headers: { authorization: token },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  // ── Cupones ──────────────────────────────────────────────────────
+  it('POST /api/cupones/validar con cuerpo inválido → 400', async () => {
+    const res = await app.request('/api/cupones/validar', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /api/cupones/validar con código inexistente → 404', async () => {
+    // db.select devuelve [] → cupón no encontrado
+    const res = await app.request('/api/cupones/validar', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ codigo: 'NOEXISTE', subtotal: 50 }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  // ── GET /api/admin/cupones con admin ─────────────────────────────
+  it('GET /api/admin/cupones con token de admin → 200', async () => {
+    const token = await loginAs(ADMIN_USER);
+    const res   = await app.request('/api/admin/cupones', {
+      headers: { authorization: token },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  // ── Push subscribe ───────────────────────────────────────────────
+  it('POST /api/push/subscribe con payload inválido → 400', async () => {
+    const res = await app.request('/api/push/subscribe', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
 });

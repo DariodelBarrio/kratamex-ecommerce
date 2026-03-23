@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { ProductCard } from '../components/ProductCard';
+import { ProductCard, BrandLogoSmall } from '../components/ProductCard';
 
-// Mock framer-motion — avoids animation/browser-API issues in jsdom
+// ── Framer-motion mock ──────────────────────────────────────────────
 vi.mock('framer-motion', () => ({
   motion: {
     div:    ({ children, onClick, className, style }: React.HTMLAttributes<HTMLDivElement>) =>
@@ -16,29 +16,36 @@ vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-const mockProducto = {
-  id:             1,
+// ── Fixture ─────────────────────────────────────────────────────────
+const base = {
+  id:              1,
   nombre:         'Portátil Gaming Pro',
   descripcion:    'Alto rendimiento para gaming',
-  precio:         999.99,
+  precio:          999.99,
   imagen:         '',
   categoria:      'Gaming',
-  stock:          15,
-  activo:         true,
-  destacado:      false,
-  rating:         0,
+  stock:           15,
+  activo:          true,
+  destacado:       false,
+  rating:          0,
   numValoraciones: 0,
 };
 
-function renderCard() {
-  render(
+function renderCard(overrides = {}, extra: Record<string, unknown> = {}) {
+  return render(
     <MemoryRouter>
-      <ProductCard producto={mockProducto} onAddToCart={vi.fn()} index={0} />
+      <ProductCard
+        producto={{ ...base, ...overrides }}
+        onAddToCart={vi.fn()}
+        index={0}
+        {...extra}
+      />
     </MemoryRouter>,
   );
 }
 
-describe('ProductCard', () => {
+// ── Grid view ───────────────────────────────────────────────────────
+describe('ProductCard — vista cuadrícula', () => {
   it('renderiza el nombre del producto', () => {
     renderCard();
     expect(screen.getByText('Portátil Gaming Pro')).toBeInTheDocument();
@@ -52,5 +59,124 @@ describe('ProductCard', () => {
   it('muestra "En stock" cuando hay más de 10 unidades', () => {
     renderCard();
     expect(screen.getByText('En stock')).toBeInTheDocument();
+  });
+
+  it('muestra "Quedan X" cuando stock ≤ 10 y > 0', () => {
+    renderCard({ stock: 5 });
+    expect(screen.getByText('Quedan 5')).toBeInTheDocument();
+  });
+
+  it('muestra "Sin stock" cuando stock = 0', () => {
+    renderCard({ stock: 0 });
+    expect(screen.getByText('Sin stock')).toBeInTheDocument();
+  });
+
+  it('llama a onAddToCart al pulsar "Agregar al carrito"', () => {
+    const onAddToCart = vi.fn();
+    render(
+      <MemoryRouter>
+        <ProductCard producto={base} onAddToCart={onAddToCart} index={0} />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTitle('Agregar al carrito'));
+    expect(onAddToCart).toHaveBeenCalledWith(base);
+  });
+
+  it('NO llama a onAddToCart si stock = 0', () => {
+    const onAddToCart = vi.fn();
+    render(
+      <MemoryRouter>
+        <ProductCard producto={{ ...base, stock: 0 }} onAddToCart={onAddToCart} index={0} />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTitle('Agregar al carrito'));
+    expect(onAddToCart).not.toHaveBeenCalled();
+  });
+
+  it('llama a onToggleWishlist al pulsar el botón de favoritos', () => {
+    const onToggleWishlist = vi.fn();
+    render(
+      <MemoryRouter>
+        <ProductCard
+          producto={base}
+          onAddToCart={vi.fn()}
+          index={0}
+          onToggleWishlist={onToggleWishlist}
+          isWishlisted={false}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTitle('Agregar a favoritos'));
+    expect(onToggleWishlist).toHaveBeenCalledWith(base.id);
+  });
+
+  it('muestra el título "Quitar de favoritos" cuando isWishlisted = true', () => {
+    renderCard({}, { onToggleWishlist: vi.fn(), isWishlisted: true });
+    expect(screen.getByTitle('Quitar de favoritos')).toBeInTheDocument();
+  });
+
+  it('renderiza la descripción del producto', () => {
+    renderCard();
+    expect(screen.getByText('Alto rendimiento para gaming')).toBeInTheDocument();
+  });
+
+  it('renderiza la categoría del producto', () => {
+    renderCard();
+    expect(screen.getByText('Gaming')).toBeInTheDocument();
+  });
+});
+
+// ── List view ────────────────────────────────────────────────────────
+describe('ProductCard — vista lista (vistaLista=true)', () => {
+  it('renderiza en modo lista', () => {
+    renderCard({}, { vistaLista: true });
+    expect(screen.getByText('Portátil Gaming Pro')).toBeInTheDocument();
+    expect(screen.getByText('$999.99')).toBeInTheDocument();
+  });
+
+  it('llama a onAddToCart en vista lista', () => {
+    const onAddToCart = vi.fn();
+    render(
+      <MemoryRouter>
+        <ProductCard producto={base} onAddToCart={onAddToCart} index={0} vistaLista />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTitle('Agregar al carrito'));
+    expect(onAddToCart).toHaveBeenCalledWith(base);
+  });
+
+  it('llama a onToggleWishlist en vista lista', () => {
+    const onToggleWishlist = vi.fn();
+    render(
+      <MemoryRouter>
+        <ProductCard
+          producto={base}
+          onAddToCart={vi.fn()}
+          index={0}
+          vistaLista
+          onToggleWishlist={onToggleWishlist}
+          isWishlisted={false}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTitle('Agregar a favoritos'));
+    expect(onToggleWishlist).toHaveBeenCalledWith(base.id);
+  });
+});
+
+// ── BrandLogoSmall ───────────────────────────────────────────────────
+describe('BrandLogoSmall', () => {
+  it('renderiza la imagen cuando se pasa imagen', () => {
+    const { container } = render(
+      <BrandLogoSmall imagen="http://example.com/img.png" nombre="Test" />,
+    );
+    expect(container.querySelector('img')).toBeInTheDocument();
+  });
+
+  it('renderiza el placeholder cuando no hay imagen', () => {
+    const { container } = render(<BrandLogoSmall nombre="Test" />);
+    expect(container.querySelector('img')).not.toBeInTheDocument();
+    // Monitor icon from lucide renders as SVG
+    expect(container.querySelector('svg')).toBeInTheDocument();
   });
 });
