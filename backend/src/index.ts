@@ -89,19 +89,89 @@ async function sendResetEmail(to: string, token: string) {
   await mailer.sendMail({
     from: `"Kratamex" <${process.env.EMAIL_FROM}>`,
     to,
-    subject: 'Recuperación de contraseña — Kratamex',
-    html: `
-      <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;background:#f8fafc;border-radius:12px">
-        <h2 style="color:#1e293b;margin-bottom:8px">Recupera tu contraseña</h2>
-        <p style="color:#475569;margin-bottom:24px">Has solicitado restablecer tu contraseña en Kratamex. Haz clic en el botón para continuar:</p>
-        <a href="${link}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600">
-          Restablecer contraseña
-        </a>
-        <p style="color:#94a3b8;font-size:13px;margin-top:24px">Este enlace caduca en <strong>1 hora</strong>. Si no solicitaste este cambio, ignora este email.</p>
-        <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-        <p style="color:#cbd5e1;font-size:12px">Kratamex · Tienda online</p>
-      </div>
-    `,
+    subject: '🔐 Restablece tu contraseña — Kratamex',
+    html: `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#0f172a;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#1e293b;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+
+        <!-- HEADER -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);padding:40px 40px 32px;text-align:center;">
+            <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:12px;padding:10px 24px;margin-bottom:20px;">
+              <span style="color:#fff;font-size:22px;font-weight:800;letter-spacing:1px;">KRATAMEX</span>
+            </div>
+            <div style="font-size:40px;margin:0 0 14px;">🔐</div>
+            <h1 style="margin:0;color:#fff;font-size:24px;font-weight:700;">Recupera tu contraseña</h1>
+            <p style="margin:8px 0 0;color:rgba(255,255,255,0.7);font-size:14px;">Solicitud recibida correctamente</p>
+          </td>
+        </tr>
+
+        <!-- BODY -->
+        <tr>
+          <td style="padding:36px 40px 28px;">
+            <p style="margin:0 0 24px;color:#94a3b8;font-size:15px;line-height:1.75;">
+              Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en
+              <strong style="color:#e2e8f0;">Kratamex</strong>.
+              Haz clic en el botón para crear una nueva:
+            </p>
+
+            <!-- CTA -->
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td align="center" style="padding:4px 0 32px;">
+                  <a href="${link}"
+                     style="display:inline-block;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;text-decoration:none;font-size:16px;font-weight:700;padding:16px 44px;border-radius:12px;letter-spacing:0.3px;box-shadow:0 4px 24px rgba(37,99,235,0.45);">
+                    Restablecer contraseña &rarr;
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <hr style="border:none;border-top:1px solid #334155;margin:0 0 24px;">
+
+            <!-- Info box -->
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:#0f172a;border-radius:10px;padding:18px 20px;">
+                  <p style="margin:0 0 10px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Detalles del enlace</p>
+                  <p style="margin:0;color:#94a3b8;font-size:13px;line-height:1.9;">
+                    ⏱&nbsp; Caduca en <strong style="color:#f1f5f9;">1 hora</strong><br>
+                    🔒&nbsp; Válido <strong style="color:#f1f5f9;">una sola vez</strong><br>
+                    🛡&nbsp; Si no lo pediste, <strong style="color:#f1f5f9;">ignora este email</strong> — tu cuenta está segura
+                  </p>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:22px 0 0;color:#475569;font-size:12px;line-height:1.6;">
+              ¿El botón no funciona? Copia este enlace:<br>
+              <a href="${link}" style="color:#818cf8;word-break:break-all;font-size:11px;">${link}</a>
+            </p>
+          </td>
+        </tr>
+
+        <!-- FOOTER -->
+        <tr>
+          <td style="background:#0a1121;padding:20px 40px;text-align:center;border-top:1px solid #1e293b;">
+            <p style="margin:0;color:#475569;font-size:12px;">
+              &copy; 2025 <strong style="color:#64748b;">Kratamex</strong> &middot; Tienda online<br>
+              <span style="color:#334155;font-size:11px;">Email generado automáticamente · No respondas a este mensaje</span>
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
   });
 }
 
