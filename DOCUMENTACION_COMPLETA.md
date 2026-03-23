@@ -738,18 +738,38 @@ if (process.env.NODE_ENV !== 'test') {
 }
 ```
 
-**Tests disponibles** (`backend/src/__tests__/api.test.ts`):
+**Tests disponibles** (`backend/src/__tests__/api.test.ts`) — 23 tests:
 
 | Test | Resultado esperado |
 |------|--------------------|
 | `GET /api/health` | 200 `{ status: "ok" }` |
-| `GET /api/productos` | 200, body es array |
+| `GET /api/productos` | 200, array |
+| `GET /api/categorias` | 200, array |
+| `GET /api/calcular-costes?subtotal=50` | subtotal 50, IVA 10.50, envío 5.99, total 66.49 |
+| `GET /api/calcular-costes?subtotal=100` | envío 0 (umbral gratis) |
 | `POST /api/login` credenciales incorrectas | 401 `{ error: "Credenciales incorrectas" }` |
-| `GET /api/admin/pedidos` sin token | 401 `{ error: /autenticado/i }` |
+| `POST /api/login` credenciales correctas | 200, token string |
+| `POST /api/login` 12 fallos misma IP | 429 (loginRateLimiter) |
+| `POST /api/register` email inválido | 400 (Zod) |
+| `GET /api/usuario` token válido | 200, datos del usuario |
+| `GET /api/usuario` sin token | 401 |
+| `POST /api/logout` con token | 200 |
+| `POST /api/logout` sin token | 200 (idempotente) |
+| `GET /api/mis-pedidos` token standard | 200, array |
+| `GET /api/admin/pedidos` sin token | 401 |
+| `GET /api/admin/pedidos` token standard | 403 |
+| `GET /api/admin/pedidos` token admin | 200, array |
+| `GET /api/admin/usuarios` token admin | 200, array |
+| `GET /api/security/events` token admin | 200 |
+| `GET /api/security/blocked-ips` token admin | 200 |
+| `POST /api/forgot-password` sin email | 400 |
+| `POST /api/forgot-password` email no registrado | 200 (anti-enumeración) |
+| `POST /api/pedidos` con precio manipulado | total calculado con precio de BD, precio del body ignorado |
 
 ```bash
-cd backend && npm test        # ejecutar una vez
-cd backend && npm run test:watch  # modo watch
+cd backend && npm test                # ejecutar una vez
+cd backend && npm run test:coverage   # con cobertura (lcov + json-summary)
+cd backend && npm run test:watch      # modo watch
 ```
 
 #### Frontend — tests de componentes
@@ -781,20 +801,43 @@ cd frontend && npm run test:watch  # modo watch
 
 ### GitHub Actions CI
 
-`.github/workflows/ci.yml` — se ejecuta en cada push y PR a `main`:
+`.github/workflows/ci.yml` — se ejecuta en cada push y PR a `main`. Cuatro jobs:
 
+#### 1. `secret-scan` — Gitleaks
+Escanea el historial completo del repositorio buscando secrets expuestos (tokens, contraseñas, claves API). Si detecta alguno, **bloquea el pipeline** con `exit 1`. Usa `continue-on-error: true` en el paso de Gitleaks para poder generar el Job Summary antes de fallar.
+
+#### 2. `test-frontend` — typecheck + tests + cobertura
 ```yaml
-jobs:
-  test-frontend:
-    - npm ci --legacy-peer-deps
-    - npx tsc --noEmit          # typecheck
-    - npm run test:run          # vitest
-
-  test-backend:
-    - npm ci
-    - npx tsc --noEmit          # typecheck
-    - npm test                  # vitest
+- npm ci --legacy-peer-deps
+- npx tsc --noEmit                    # TypeScript check
+- npm run test:coverage               # Vitest con lcov + json-summary
+- upload-artifact: frontend-coverage  # Sube lcov para SonarCloud
 ```
+Umbrales de cobertura configurados en `vite.config.ts` (thresholds).
+
+#### 3. `test-backend` — typecheck + tests + cobertura
+```yaml
+- npm ci
+- npx tsc --noEmit                   # TypeScript check
+- npm run test:coverage              # Vitest con lcov + json-summary
+- upload-artifact: backend-coverage  # Sube lcov para SonarCloud
+```
+Umbrales: lines ≥ 30%, functions ≥ 30%, branches ≥ 14%, statements ≥ 27%.
+
+#### 4. `quality` — SonarCloud (`needs: [test-frontend, test-backend]`, `if: always()`)
+```yaml
+- actions/checkout fetch-depth: 0       # historial completo para blame
+- download-artifact: frontend-coverage  # lcov del job frontend
+- download-artifact: backend-coverage   # lcov del job backend
+- SonarSource/sonarcloud-github-action  # análisis estático (continue-on-error: true)
+```
+No bloquea el push aunque SonarCloud encuentre issues. El dashboard está en `sonarcloud.io/project/overview?id=ddelbarriojuan-code_Proyecto_web`.
+
+#### Job Summary
+Cada job escribe un resumen en `$GITHUB_STEP_SUMMARY` generado por `.github/scripts/coverage-summary.js`. El script analiza el `coverage-summary.json` y genera:
+- Tabla de cobertura global (líneas, funciones, ramas, sentencias)
+- Lista de archivos con cobertura mejorable (< 50%)
+- **Párrafo en lenguaje natural** en español que explica el estado, el riesgo concreto y el siguiente paso accionable
 
 > No requiere PostgreSQL ni Docker en CI: toda la BD se mockea en los tests de backend.
 

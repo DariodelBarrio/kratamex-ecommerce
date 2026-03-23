@@ -46,8 +46,11 @@ proyecto/
 │   ├── package.json
 │   └── Dockerfile
 ├── .github/
-│   └── workflows/
-│       └── ci.yml         # GitHub Actions CI (typecheck + tests)
+│   ├── workflows/
+│   │   └── ci.yml         # GitHub Actions CI (secret-scan + tests + SonarCloud)
+│   └── scripts/
+│       └── coverage-summary.js  # Genera Job Summary con párrafo en lenguaje natural
+├── sonar-project.properties     # Configuración SonarCloud
 ├── nginx/                 # Reverse proxy HTTPS
 │   ├── nginx.conf
 │   └── certs/
@@ -88,6 +91,8 @@ proyecto/
 - **Vitest** — Tests unitarios y de integración (frontend y backend)
 - **@testing-library/react** — Renderizado de componentes en jsdom
 - **GitHub Actions** — CI automático en cada push a `main`
+- **SonarCloud** — Análisis de calidad de código estático (cobertura lcov, code smells, bugs)
+- **Gitleaks** — Escaneo de secrets en cada commit (bloquea el push si detecta credenciales expuestas)
 
 ## Páginas y Rutas
 
@@ -255,22 +260,46 @@ cd frontend && npm run test:run
 
 ```bash
 cd backend && npm test
+cd backend && npm run test:coverage   # genera lcov + json-summary
 ```
 
-| Test | Descripción |
-|------|-------------|
-| `GET /api/health` | Devuelve `{ status: "ok" }` |
-| `GET /api/productos` | Devuelve array (con DB mockeada) |
-| `POST /api/login` con credenciales incorrectas | Devuelve 401 |
-| `GET /api/admin/pedidos` sin token | Devuelve 401 |
+23 tests en `backend/src/__tests__/api.test.ts`:
+
+| Test | Resultado esperado |
+|------|--------------------|
+| `GET /api/health` | 200 `{ status: "ok" }` |
+| `GET /api/productos` | 200, array |
+| `GET /api/categorias` | 200, array |
+| `GET /api/calcular-costes?subtotal=50` | IVA 21% + envío €5.99 |
+| `GET /api/calcular-costes?subtotal=100` | envío gratis |
+| `POST /api/login` credenciales incorrectas | 401 |
+| `POST /api/login` credenciales correctas | 200 + token |
+| `POST /api/login` 12 fallos desde misma IP | 429 (rate limiting) |
+| `POST /api/register` email inválido | 400 |
+| `GET /api/usuario` token válido | 200 + datos usuario |
+| `GET /api/usuario` sin token | 401 |
+| `POST /api/logout` con token | 200 |
+| `POST /api/logout` sin token | 200 (idempotente) |
+| `GET /api/mis-pedidos` token usuario | 200, array |
+| `GET /api/admin/pedidos` sin token | 401 |
+| `GET /api/admin/pedidos` token standard | 403 |
+| `GET /api/admin/pedidos` token admin | 200, array |
+| `GET /api/admin/usuarios` token admin | 200, array |
+| `GET /api/security/events` token admin | 200 |
+| `GET /api/security/blocked-ips` token admin | 200 |
+| `POST /api/forgot-password` sin email | 400 |
+| `POST /api/forgot-password` email no registrado | 200 (anti-enumeración) |
+| `POST /api/pedidos` precio manipulado en body | precio ignorado, total calculado con precio de BD |
 
 > El backend no necesita PostgreSQL para los tests: la DB se mockea con Vitest.
 
 ### CI (GitHub Actions)
 
-En cada push a `main` se ejecutan automáticamente:
-1. `test-frontend` — typecheck TypeScript + Vitest
-2. `test-backend` — typecheck TypeScript + Vitest
+En cada push a `main` se ejecutan automáticamente 4 jobs:
+1. `secret-scan` — Gitleaks escanea el historial completo buscando secrets expuestos (bloquea si encuentra)
+2. `test-frontend` — typecheck TypeScript + Vitest + cobertura (lcov + json-summary)
+3. `test-backend` — typecheck TypeScript + Vitest + cobertura (lcov + json-summary)
+4. `quality` — SonarCloud descarga artifacts de cobertura y ejecuta análisis estático (no bloquea)
 
 ---
 
@@ -319,4 +348,4 @@ Sin estas variables las imágenes se guardan localmente en `src/uploads/` y `src
 
 ---
 
-*Última actualización: 22/03/2026 — v2.1 (tests + CI)*
+*Última actualización: 23/03/2026 — v2.2 (SonarCloud + Gitleaks + 23 tests backend)*
