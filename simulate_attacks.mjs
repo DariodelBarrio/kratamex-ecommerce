@@ -8,11 +8,13 @@
  * Requiere Node 18+ (fetch nativo).
  */
 
+import { randomInt, randomBytes } from 'crypto';
+
 const BASE       = process.argv[2] ?? 'http://localhost:3000';
 const ADMIN_PASS = process.argv[3] ?? 'admin';
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-const rnd   = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const rnd   = (min, max) => randomInt(min, max + 1);
 const fakeIP = () => `${rnd(1,254)}.${rnd(0,254)}.${rnd(0,254)}.${rnd(0,254)}`;
 
 const UAS = [
@@ -75,7 +77,7 @@ async function loginFails(n = 18) {
     const ua  = UAS[i % UAS.length];
     const usr = users[i % users.length];
     const r   = await POST('/api/login',
-      { username: usr, password: `badpass_${Math.random().toString(36).slice(2,8)}` },
+      { username: usr, password: `badpass_${randomBytes(3).toString('hex')}` },
       { 'User-Agent': ua, 'X-Forwarded-For': fakeIP() }
     );
     const icon = r.status === 401 ? '✗' : r.status === 429 ? '⛔' : '?';
@@ -115,7 +117,7 @@ async function invalidTokens(n = 12) {
     '/api/security/stats', '/api/mis-pedidos', '/api/admin/valoraciones',
   ];
   for (let i = 0; i < n; i++) {
-    const fake  = Math.random().toString(36).repeat(4).slice(2, 66);
+    const fake  = randomBytes(32).toString('hex').slice(0, 64);
     const path  = paths[i % paths.length];
     const r     = await GET(path, {
       'Authorization': fake,
