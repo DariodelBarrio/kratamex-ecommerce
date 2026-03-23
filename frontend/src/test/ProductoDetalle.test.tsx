@@ -61,7 +61,7 @@ function renderPD(props: Partial<React.ComponentProps<typeof ProductoDetalle>> =
 
 /** Configura useQuery por queryKey: producto → productData, relacionados → [] */
 function mockQueryWith(productData: unknown, isLoading = false, isError = false) {
-  vi.mocked(useQuery).mockImplementation(({ queryKey }: { queryKey: unknown[] }) => {
+  vi.mocked(useQuery).mockImplementation(({ queryKey }: { queryKey: readonly unknown[] }) => {
     if (queryKey[0] === 'producto') return { data: productData, isLoading, isError } as never;
     return { data: [], isLoading: false, isError: false } as never; // productos-relacionados
   });
