@@ -36,6 +36,14 @@ jobs:
         id: test
         run: npm run test:coverage
 
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+          retention-days: 1
+
       - name: Job Summary
         if: always()
         run: |
@@ -80,6 +88,14 @@ jobs:
         id: test
         run: npm run test:coverage
 
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage/
+          retention-days: 1
+
       - name: Job Summary
         if: always()
         run: |
@@ -94,3 +110,47 @@ jobs:
             coverage/coverage-summary.json \
             "Backend" \
             "$STATUS" >> $GITHUB_STEP_SUMMARY
+
+# ──────────────────────────────────────────────────────────────────
+# SONARCLOUD
+# ──────────────────────────────────────────────────────────────────
+  quality:
+    name: SonarCloud — análisis de calidad
+    runs-on: ubuntu-latest
+    needs: [test-frontend, test-backend]
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+        continue-on-error: true
+
+      - name: Download backend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage/
+        continue-on-error: true
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## 🔍 SonarCloud — Análisis de calidad" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Ver resultados completos en el dashboard:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "👉 [sonarcloud.io/project/overview?id=ddelbarriojuan-code_Proyecto_web](https://sonarcloud.io/project/overview?id=ddelbarriojuan-code_Proyecto_web)" >> $GITHUB_STEP_SUMMARY
