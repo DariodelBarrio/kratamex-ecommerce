@@ -38,3 +38,8 @@ coverage/
 *.db
 *.sqlite
 *.sqlite3
+
+# TLS certificates — generar localmente, nunca subir al repo
+nginx/certs/*.pem
+nginx/certs/*.key
+nginx/certs/*.crt
