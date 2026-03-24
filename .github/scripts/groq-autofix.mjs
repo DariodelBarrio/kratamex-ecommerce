@@ -8,6 +8,7 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const TOGETHER_API_KEY = process.env.TOGETHER_API_KEY;
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 const PAGE_SIZE = 100;
 
 // ── Fetch all open issues from SonarCloud ──────────────────────────────────
@@ -192,6 +193,30 @@ async function callTogether(filePath, code, issues) {
   return data.choices[0].message.content;
 }
 
+// ── Call Mistral ──────────────────────────────────────────────────────────
+
+async function callMistral(filePath, code, issues) {
+  const prompt = buildPrompt(filePath, code, issues);
+
+  const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${MISTRAL_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "mistral-medium",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: 8192,
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Mistral error ${res.status}`);
+  const data = await res.json();
+  return data.choices[0].message.content;
+}
+
 // ── Try fix with fallback ──────────────────────────────────────────────────
 
 async function tryFix(filePath, code, issues) {
@@ -201,6 +226,7 @@ async function tryFix(filePath, code, issues) {
     { name: "OpenRouter", fn: () => callOpenRouter(filePath, code, issues) },
     { name: "DeepSeek", fn: () => callDeepSeek(filePath, code, issues) },
     { name: "Together", fn: () => callTogether(filePath, code, issues) },
+    { name: "Mistral", fn: () => callMistral(filePath, code, issues) },
   ];
 
   for (const api of apis) {
