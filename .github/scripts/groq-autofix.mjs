@@ -367,7 +367,7 @@ async function main() {
       skipped++;
     }
 
-    await sleep(2500);
+    await sleep(60000);
   }
 
   console.log(`\nDone. Fixed: ${fixed} files. Skipped: ${skipped} files.`);
