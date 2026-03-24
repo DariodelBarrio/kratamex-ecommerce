@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
   schedule:
-    # Run every 6 hours to catch new SonarCloud issues
-    - cron: '0 */6 * * *'
+    # Run every hour to catch new SonarCloud issues quickly
+    - cron: '0 * * * *'
 
 jobs:
   sonar-scan:
