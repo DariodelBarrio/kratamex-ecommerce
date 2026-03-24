@@ -306,14 +306,14 @@ async function callHuggingFace(filePath, code, issues) {
 
 async function tryFix(filePath, code, issues) {
   const apis = [
-    { name: "Gemini", fn: () => callGemini(filePath, code, issues) },
     { name: "Groq", fn: () => callGroq(filePath, code, issues) },
-    { name: "OpenRouter", fn: () => callOpenRouter(filePath, code, issues) },
+    { name: "Gemini", fn: () => callGemini(filePath, code, issues) },
     { name: "DeepSeek", fn: () => callDeepSeek(filePath, code, issues) },
     { name: "Together", fn: () => callTogether(filePath, code, issues) },
+    { name: "OpenRouter", fn: () => callOpenRouter(filePath, code, issues) },
     { name: "Mistral", fn: () => callMistral(filePath, code, issues) },
-    { name: "Replicate", fn: () => callReplicate(filePath, code, issues) },
     { name: "Cohere", fn: () => callCohere(filePath, code, issues) },
+    { name: "Replicate", fn: () => callReplicate(filePath, code, issues) },
     { name: "HuggingFace", fn: () => callHuggingFace(filePath, code, issues) },
   ];
 
