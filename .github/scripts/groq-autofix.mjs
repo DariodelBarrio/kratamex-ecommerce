@@ -6,6 +6,7 @@ const SONAR_PROJECT_KEY = process.env.SONAR_PROJECT_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const PAGE_SIZE = 100;
 
 // ── Fetch all open issues from SonarCloud ──────────────────────────────────
@@ -142,6 +143,30 @@ async function callOpenRouter(filePath, code, issues) {
   return data.choices[0].message.content;
 }
 
+// ── Call DeepSeek ─────────────────────────────────────────────────────────
+
+async function callDeepSeek(filePath, code, issues) {
+  const prompt = buildPrompt(filePath, code, issues);
+
+  const res = await fetch("https://api.deepseek.com/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "deepseek-coder",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: 8192,
+    }),
+  });
+
+  if (!res.ok) throw new Error(`DeepSeek error ${res.status}`);
+  const data = await res.json();
+  return data.choices[0].message.content;
+}
+
 // ── Try fix with fallback ──────────────────────────────────────────────────
 
 async function tryFix(filePath, code, issues) {
@@ -149,6 +174,7 @@ async function tryFix(filePath, code, issues) {
     { name: "Gemini", fn: () => callGemini(filePath, code, issues) },
     { name: "Groq", fn: () => callGroq(filePath, code, issues) },
     { name: "OpenRouter", fn: () => callOpenRouter(filePath, code, issues) },
+    { name: "DeepSeek", fn: () => callDeepSeek(filePath, code, issues) },
   ];
 
   for (const api of apis) {

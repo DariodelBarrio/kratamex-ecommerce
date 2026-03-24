@@ -56,7 +56,7 @@ jobs:
       - name: Install frontend deps
         run: cd frontend && npm ci --legacy-peer-deps
 
-      - name: Fetch issues and autofix (Gemini → Groq → OpenRouter)
+      - name: Fetch issues and autofix (Gemini → Groq → OpenRouter → DeepSeek)
         id: autofix
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -64,6 +64,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: node .github/scripts/groq-autofix.mjs
 
       - name: Verify TypeScript
