@@ -61,7 +61,7 @@ File: ${{ steps.groq.outputs.file_path }}
 Auto-fixed by Groq delegation.
 
 Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
-            git push origin main
+            git push https://${{ secrets.GITHUB_TOKEN }}@github.com/DariodelBarrio/Proyecto_web.git main
           else
             echo "No changes detected"
           fi
