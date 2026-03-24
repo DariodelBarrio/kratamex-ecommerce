@@ -27,7 +27,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
         run: |
-          ISSUES=$(curl -s -u "$SONAR_TOKEN:" \
+          ISSUES=$(curl -s -H "Authorization: Bearer $SONAR_TOKEN" \
             "https://sonarcloud.io/api/issues/search?projectKeys=$SONAR_PROJECT_KEY&statuses=OPEN&severities=BLOCKER,CRITICAL,MAJOR,MINOR&ps=1" \
             | jq '.total')
           echo "Open issues: $ISSUES"
