@@ -151,45 +151,5 @@ jobs:
             "$STATUS" >> $GITHUB_STEP_SUMMARY
 
 # ──────────────────────────────────────────────────────────────────
-# SONARCLOUD
+# NOTE: SonarCloud Automatic Analysis is enabled and runs on every push
 # ──────────────────────────────────────────────────────────────────
-  quality:
-    name: SonarCloud — análisis de calidad
-    runs-on: ubuntu-latest
-    needs: [test-frontend, test-backend]
-    if: always()
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-
-      - name: Download frontend coverage
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-coverage
-          path: frontend/coverage/
-        continue-on-error: true
-
-      - name: Download backend coverage
-        uses: actions/download-artifact@v4
-        with:
-          name: backend-coverage
-          path: backend/coverage/
-        continue-on-error: true
-
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@383f7e52eae3ab0510c3cb0e7d9d150bbaeab838 # v3
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-      - name: Job Summary
-        if: always()
-        run: |
-          echo "## 🔍 SonarCloud — Análisis de calidad" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Ver resultados completos en el dashboard:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "👉 [sonarcloud.io/project/overview?id=ddelbarriojuan-code_Proyecto_web](https://sonarcloud.io/project/overview?id=ddelbarriojuan-code_Proyecto_web)" >> $GITHUB_STEP_SUMMARY
