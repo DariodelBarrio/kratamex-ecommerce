@@ -129,8 +129,8 @@ async function main() {
       skipped++;
     }
 
-    // Rate limit: 500ms between calls (Gemini has higher quota)
-    await sleep(500);
+    // Rate limit: 2.5s between calls (Gemini free tier is strict)
+    await sleep(2500);
   }
 
   console.log(`\nDone. Fixed: ${fixed} files. Skipped: ${skipped} files.`);
