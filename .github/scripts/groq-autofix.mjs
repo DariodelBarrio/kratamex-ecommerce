@@ -7,6 +7,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const TOGETHER_API_KEY = process.env.TOGETHER_API_KEY;
 const PAGE_SIZE = 100;
 
 // ── Fetch all open issues from SonarCloud ──────────────────────────────────
@@ -167,6 +168,30 @@ async function callDeepSeek(filePath, code, issues) {
   return data.choices[0].message.content;
 }
 
+// ── Call Together AI ───────────────────────────────────────────────────────
+
+async function callTogether(filePath, code, issues) {
+  const prompt = buildPrompt(filePath, code, issues);
+
+  const res = await fetch("https://api.together.xyz/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${TOGETHER_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "meta-llama/Llama-3-70b-chat-hf",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: 8192,
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Together error ${res.status}`);
+  const data = await res.json();
+  return data.choices[0].message.content;
+}
+
 // ── Try fix with fallback ──────────────────────────────────────────────────
 
 async function tryFix(filePath, code, issues) {
@@ -175,6 +200,7 @@ async function tryFix(filePath, code, issues) {
     { name: "Groq", fn: () => callGroq(filePath, code, issues) },
     { name: "OpenRouter", fn: () => callOpenRouter(filePath, code, issues) },
     { name: "DeepSeek", fn: () => callDeepSeek(filePath, code, issues) },
+    { name: "Together", fn: () => callTogether(filePath, code, issues) },
   ];
 
   for (const api of apis) {
