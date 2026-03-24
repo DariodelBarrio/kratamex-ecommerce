@@ -10,8 +10,8 @@ export const sanitize = (str: string | null | undefined): string => {
   let result = str;
   
   // Remove script tags without catastrophic backtracking (S5852)
-  result = result.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-  result = result.replace(/<[^>]*>/g, '');
+  result = result.replaceAll(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+  result = result.replaceAll(/<[^>]*>/g, '');
   result = result.replaceAll('&', '&amp;');
   result = result.replaceAll('<', '&lt;');
   result = result.replaceAll('>', '&gt;');
