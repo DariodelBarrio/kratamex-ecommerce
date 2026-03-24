@@ -3,8 +3,8 @@ import { join } from "path";
 
 const SONAR_TOKEN = process.env.SONAR_TOKEN;
 const SONAR_PROJECT_KEY = process.env.SONAR_PROJECT_KEY;
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = "gemini-1.5-pro";
 const PAGE_SIZE = 100;
 
 // ── Fetch all open issues from SonarCloud ──────────────────────────────────
@@ -64,9 +64,9 @@ function readLocal(filePath) {
   }
 }
 
-// ── Call Groq ──────────────────────────────────────────────────────────────
+// ── Call Gemini ────────────────────────────────────────────────────────────
 
-async function callGroq(filePath, code, issues) {
+async function callGemini(filePath, code, issues) {
   const issueList = issues
     .map((i) => `  - Line ${i.line ?? "?"}: [${i.severity}] ${i.rule} — ${i.message}`)
     .join("\n");
@@ -78,23 +78,18 @@ async function callGroq(filePath, code, issues) {
     `Issues to fix:\n${issueList}\n\n` +
     `Current file content:\n${code}`;
 
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${GROQ_API_KEY}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.1,
-      max_tokens: 8192,
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
     }),
   });
 
-  if (!res.ok) throw new Error(`Groq error ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Gemini error ${res.status}: ${await res.text()}`);
   const data = await res.json();
-  return data.choices[0].message.content;
+  return data.candidates[0].content.parts[0].text;
 }
 
 // ── Sleep helper ───────────────────────────────────────────────────────────
@@ -125,7 +120,7 @@ async function main() {
     }
 
     try {
-      const fixed_code = await callGroq(filePath, code, fileIssues);
+      const fixed_code = await callGemini(filePath, code, fileIssues);
       writeFileSync(join(process.cwd(), filePath), fixed_code, "utf8");
       console.log(`  → Fixed and written: ${filePath}`);
       fixed++;
@@ -134,8 +129,8 @@ async function main() {
       skipped++;
     }
 
-    // Rate limit: 1 second between calls
-    await sleep(1000);
+    // Rate limit: 500ms between calls (Gemini has higher quota)
+    await sleep(500);
   }
 
   console.log(`\nDone. Fixed: ${fixed} files. Skipped: ${skipped} files.`);
