@@ -408,7 +408,7 @@
   border-color: rgba(245,158,11,0.25);
   box-shadow: 0 0 6px rgba(245,158,11,0.1);
 }
-.ev-fail { border-left-color: #f59e0b !important; }
+.ev-fail { border-left-color: #f59e0b !important; background: rgba(245,158,11,0.02); }
 
 /* critical */
 .ev-critical  .logBadge,
@@ -419,7 +419,7 @@
   box-shadow: 0 0 8px rgba(239,68,68,0.2);
   animation: pulse-red 2s ease-in-out infinite;
 }
-.ev-critical { border-left-color: #ef4444 !important; background: rgba(239,68,68,0.03) !important; }
+.ev-critical { border-left-color: #ef4444 !important; background: rgba(239,68,68,0.025) !important; }
 
 @keyframes pulse-red {
   0%, 100% { box-shadow: 0 0 6px rgba(239,68,68,0.2); }
@@ -442,10 +442,6 @@
   color: #94a3b8;
   border-color: rgba(148,163,184,0.15);
 }
-
-/* Row tinting */
-.ev-critical { background: rgba(239,68,68,0.025) !important; }
-.ev-fail     { background: rgba(245,158,11,0.02); }
 
 .emptyLog {
   padding: 40px;

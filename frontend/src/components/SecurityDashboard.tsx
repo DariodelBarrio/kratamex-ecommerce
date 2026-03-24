@@ -54,14 +54,14 @@ interface SecStats {
 }
 
 const TIPO_CONFIG: Record<string, { label: string; cls: string; icon: string }> = {
-  login_ok:        { label: 'LOGIN OK',       cls: 'ev-ok',       icon: '✓' },
-  login_fail:      { label: 'LOGIN FAIL',     cls: 'ev-fail',     icon: '✗' },
-  brute_force:     { label: 'BRUTE FORCE',    cls: 'ev-critical', icon: '⚠' },
+  login_ok:        { label: 'LOGIN OK',       cls: 'ev-ok',       icon: '\u2713' },
+  login_fail:      { label: 'LOGIN FAIL',     cls: 'ev-fail',     icon: '\u2717' },
+  brute_force:     { label: 'BRUTE FORCE',    cls: 'ev-critical', icon: '\u26A0' },
   auth_invalid:    { label: 'AUTH INVALID',   cls: 'ev-warn',     icon: '!' },
-  register:        { label: 'REGISTER',       cls: 'ev-info',     icon: '→' },
-  forbidden:       { label: 'FORBIDDEN',      cls: 'ev-warn',     icon: '⛔' },
-  honeypot:        { label: 'HONEYPOT',       cls: 'ev-critical', icon: '🍯' },
-  blocked_request: { label: 'BLOCKED',        cls: 'ev-fail',     icon: '🚫' },
+  register:        { label: 'REGISTER',       cls: 'ev-info',     icon: '\u2192' },
+  forbidden:       { label: 'FORBIDDEN',      cls: 'ev-warn',     icon: '\u26D4' },
+  honeypot:        { label: 'HONEYPOT',       cls: 'ev-critical', icon: '\uD83C\uDF6F' },
+  blocked_request: { label: 'BLOCKED',        cls: 'ev-fail',     icon: '\uD83D\uDEAB' },
 };
 
 function fmtTime(d: string) {
@@ -69,6 +69,179 @@ function fmtTime(d: string) {
 }
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
+}
+
+// ================================================================
+// HELPER: VT badge classification (reduces branching)
+// ================================================================
+function getVtClassAndLabel(r: VtResult): { cls: string; label: string } {
+  const total = r.malicious + r.suspicious + r.harmless + r.undetected;
+  if (r.malicious > 0) return { cls: styles.vtMalicious, label: `\u26A0 MALICIOUS ${r.malicious}/${total}` };
+  if (r.suspicious > 0) return { cls: styles.vtSuspicious, label: `~ SUSPICIOUS ${r.suspicious}/${total}` };
+  if (r.reputation < -10) return { cls: styles.vtWarn, label: `REP ${r.reputation}` };
+  return { cls: styles.vtClean, label: '\u2713 CLEAN' };
+}
+
+// ================================================================
+// HELPER: Threat level from stats (eliminates nested ternaries)
+// ================================================================
+function getThreatInfo(stats: SecStats | null): { level: string; color: string } {
+  if ((stats?.brute_force ?? 0) > 0) return { level: 'CR\u00CDTICO', color: '#ef4444' };
+  if ((stats?.login_fail ?? 0) > 10) return { level: 'ALTO', color: '#f59e0b' };
+  if ((stats?.login_fail ?? 0) > 3) return { level: 'MEDIO', color: '#eab308' };
+  return { level: 'BAJO', color: '#10b981' };
+}
+
+// ================================================================
+// HELPER: Build hourly chart data
+// ================================================================
+function buildChartData(stats: SecStats | null) {
+  const hourlyMap: Record<string, { hora: string; ok: number; fail: number; brute: number; invalid: number }> = {};
+  (stats?.hourly ?? []).forEach(r => {
+    const k = r.hora;
+    if (!hourlyMap[k]) hourlyMap[k] = { hora: new Date(k).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }), ok: 0, fail: 0, brute: 0, invalid: 0 };
+    if (r.tipo === 'login_ok')     hourlyMap[k].ok     += r.total;
+    if (r.tipo === 'login_fail')   hourlyMap[k].fail   += r.total;
+    if (r.tipo === 'brute_force')  hourlyMap[k].brute  += r.total;
+    if (r.tipo === 'auth_invalid') hourlyMap[k].invalid += r.total;
+  });
+  return Object.values(hourlyMap);
+}
+
+// ================================================================
+// SOC LOGIN FORM (extracted to reduce cognitive complexity)
+// ================================================================
+interface SocLoginFormProps {
+  username: string;
+  setUsername: (v: string) => void;
+  password: string;
+  setPassword: (v: string) => void;
+  showPass: boolean;
+  setShowPass: (fn: (p: boolean) => boolean) => void;
+  loginErr: string;
+  onLogin: () => void;
+}
+
+function SocLoginForm({ username, setUsername, password, setPassword, showPass, setShowPass, loginErr, onLogin }: SocLoginFormProps) {
+  return (
+    <div className={styles.loginWrap}>
+      <div className={styles.loginBox}>
+        <div className={styles.loginLogo}>
+          <Shield size={40} />
+          <span>KRATAMEX SOC</span>
+        </div>
+        <p className={styles.loginSub}>Security Operations Center &middot; Acceso restringido</p>
+
+        {/* Hidden honeypot inputs -- absorb browser autofill before it reaches real fields */}
+        <input type="text" name="username" style={{ display: 'none' }} tabIndex={-1} readOnly />
+        <input type="password" name="password" style={{ display: 'none' }} tabIndex={-1} readOnly />
+
+        <div className={styles.loginField}>
+          <label>USUARIO</label>
+          <input
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && onLogin()}
+            placeholder="identificador"
+            autoComplete="off"
+            name="soc-user"
+            id="soc-user"
+          />
+        </div>
+        <div className={styles.loginField}>
+          <label>CONTRASE&Ntilde;A</label>
+          <div className={styles.passWrap}>
+            <input
+              type={showPass ? 'text' : 'password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && onLogin()}
+              placeholder="&&bull;&&bull;&&bull;&&bull;&&bull;&&bull;&&bull;&&bull;"
+              autoComplete="off"
+              name="soc-pass"
+              id="soc-pass"
+            />
+            <button onClick={() => setShowPass(p => !p)} type="button">
+              {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+        {loginErr && <p className={styles.loginErr}>{loginErr}</p>}
+        <button className={styles.loginBtn} onClick={onLogin}>
+          <Lock size={16} /> AUTENTICAR
+        </button>
+        <Link to="/" className={styles.loginBack}>&larr; Volver a la tienda</Link>
+      </div>
+    </div>
+  );
+}
+
+// ================================================================
+// EVENT LOG (extracted to reduce cognitive complexity)
+// ================================================================
+interface EventLogProps {
+  events: SecEvent[];
+  tipoFiltro: string;
+  setTipoFiltro: (v: string) => void;
+  exportEvents: (format: 'csv' | 'json') => void;
+  renderVtBadge: (ip: string) => React.ReactNode;
+  checkVT: (ip: string) => void;
+}
+
+function EventLog({ events, tipoFiltro, setTipoFiltro, exportEvents, renderVtBadge, checkVT }: EventLogProps) {
+  return (
+    <div className={styles.panel}>
+      <div className={styles.panelTitle}>
+        <Terminal size={14} /> LOG DE EVENTOS
+        <div className={styles.filterRow}>
+          {['', 'login_fail', 'login_ok', 'brute_force', 'auth_invalid', 'honeypot', 'blocked_request'].map(t => (
+            <button key={t}
+              className={`${styles.filterBtn} ${tipoFiltro === t ? styles.filterBtnActive : ''}`}
+              onClick={() => setTipoFiltro(t)}>
+              {t === '' ? 'TODOS' : (TIPO_CONFIG[t]?.label ?? t.toUpperCase())}
+            </button>
+          ))}
+        </div>
+        <div className={styles.exportRow}>
+          <button className={styles.exportBtn} onClick={() => exportEvents('csv')} title="Exportar CSV">
+            <Download size={12} /> CSV
+          </button>
+          <button className={styles.exportBtn} onClick={() => exportEvents('json')} title="Exportar JSON">
+            <Download size={12} /> JSON
+          </button>
+        </div>
+      </div>
+      <div className={styles.logTable}>
+        <div className={styles.logHeader}>
+          <span>TIEMPO</span><span>TIPO</span><span>IP / THREAT INTEL</span><span>USUARIO</span><span>ENDPOINT</span><span>DETALLES</span>
+        </div>
+        {events.length === 0 ? (
+          <div className={styles.emptyLog}>No hay eventos registrados a&uacute;n</div>
+        ) : (
+          events.map(ev => {
+            const cfg = TIPO_CONFIG[ev.tipo] ?? { label: ev.tipo.toUpperCase(), cls: 'ev-info', icon: '\u00B7' };
+            const vtBadge = ev.ip ? renderVtBadge(ev.ip) : null;
+            return (
+              <div key={ev.id} className={`${styles.logRow} ${styles[cfg.cls]}`}>
+                <span className={styles.logTime}>{fmtDate(ev.fecha)} {fmtTime(ev.fecha)}</span>
+                <span className={`${styles.logBadge} ${styles[cfg.cls]}`}>{cfg.icon} {cfg.label}</span>
+                <span className={styles.logIp}>
+                  {ev.ip
+                    ? <button className={styles.ipClickable} onClick={() => checkVT(ev.ip!)} title="Consultar VirusTotal">{ev.ip}</button>
+                    : '\u2014'
+                  }
+                  {vtBadge && <span className={styles.vtInline}>{vtBadge}</span>}
+                </span>
+                <span className={styles.logUser}>{ev.username ?? '\u2014'}</span>
+                <span className={styles.logEndpoint}>{ev.metodo && ev.endpoint ? `${ev.metodo} ${ev.endpoint}` : '\u2014'}</span>
+                <span className={styles.logDetails}>{ev.detalles ?? '\u2014'}</span>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ================================================================
@@ -96,14 +269,14 @@ export default function SecurityDashboard() {
   const [blockMotivo, setBlockMotivo] = useState('');
   const [blockLoading, setBlockLoading] = useState(false);
 
-  // Restaurar sesión al montar si hay token guardado
+  // Restaurar sesi&oacute;n al montar si hay token guardado
   useEffect(() => {
     const saved = localStorage.getItem(SOC_TOKEN_KEY);
     if (!saved) return;
     fetch('/api/security/stats', { headers: { Authorization: saved } }).then(r => {
       if (r.ok) { setAuthed(true); }
       else { localStorage.removeItem(SOC_TOKEN_KEY); setToken(''); }
-    }).catch(() => { /* sin conexión — dejamos el token para reintentar */ });
+    }).catch(() => { /* sin conexi&oacute;n -- dejamos el token para reintentar */ });
   }, []);
 
   const loadData = useCallback(async (tk: string) => {
@@ -168,12 +341,11 @@ export default function SecurityDashboard() {
   };
 
   const exportEvents = (format: 'csv' | 'json') => {
-    const a = document.createElement('a');
-    a.href = `/api/security/events/export?format=${format}&limit=1000`;
-    // Passing auth via URL not ideal — use fetch + blob instead
-    fetch(a.href, { headers: { Authorization: token } })
+    const exportUrl = `/api/security/events/export?format=${format}&limit=1000`;
+    fetch(exportUrl, { headers: { Authorization: token } })
       .then(r => r.blob())
       .then(blob => {
+        const a = document.createElement('a');
         const url = URL.createObjectURL(blob);
         a.href = url;
         a.download = `soc-events-${new Date().toISOString().slice(0,10)}.${format}`;
@@ -211,7 +383,7 @@ export default function SecurityDashboard() {
       setToken(data.token);
       setAuthed(true);
     } catch {
-      setLoginErr('Error de conexión');
+      setLoginErr('Error de conexi\u00F3n');
     }
   };
 
@@ -221,106 +393,46 @@ export default function SecurityDashboard() {
     setAuthed(false); setToken(''); setUsername(''); setPassword('');
   };
 
-  // ── LOGIN ──────────────────────────────────────────────────────
+  // -- LOGIN -------------------------------------------------------
   if (!authed) {
     return (
-      <div className={styles.loginWrap}>
-        <div className={styles.loginBox}>
-          <div className={styles.loginLogo}>
-            <Shield size={40} />
-            <span>KRATAMEX SOC</span>
-          </div>
-          <p className={styles.loginSub}>Security Operations Center · Acceso restringido</p>
-
-          {/* Hidden honeypot inputs — absorb browser autofill before it reaches real fields */}
-          <input type="text" name="username" style={{ display: 'none' }} tabIndex={-1} readOnly />
-          <input type="password" name="password" style={{ display: 'none' }} tabIndex={-1} readOnly />
-
-          <div className={styles.loginField}>
-            <label>USUARIO</label>
-            <input
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              placeholder="identificador"
-              autoComplete="off"
-              name="soc-user"
-              id="soc-user"
-            />
-          </div>
-          <div className={styles.loginField}>
-            <label>CONTRASEÑA</label>
-            <div className={styles.passWrap}>
-              <input
-                type={showPass ? 'text' : 'password'}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                placeholder="••••••••"
-                autoComplete="off"
-                name="soc-pass"
-                id="soc-pass"
-              />
-              <button onClick={() => setShowPass(p => !p)} type="button">
-                {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
-          {loginErr && <p className={styles.loginErr}>{loginErr}</p>}
-          <button className={styles.loginBtn} onClick={handleLogin}>
-            <Lock size={16} /> AUTENTICAR
-          </button>
-          <Link to="/" className={styles.loginBack}>← Volver a la tienda</Link>
-        </div>
-      </div>
+      <SocLoginForm
+        username={username}
+        setUsername={setUsername}
+        password={password}
+        setPassword={setPassword}
+        showPass={showPass}
+        setShowPass={setShowPass}
+        loginErr={loginErr}
+        onLogin={handleLogin}
+      />
     );
   }
 
-  // ── Preparar datos para charts ────────────────────────────────
-  const hourlyMap: Record<string, { hora: string; ok: number; fail: number; brute: number; invalid: number }> = {};
-  (stats?.hourly ?? []).forEach(r => {
-    const k = r.hora;
-    if (!hourlyMap[k]) hourlyMap[k] = { hora: new Date(k).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }), ok: 0, fail: 0, brute: 0, invalid: 0 };
-    if (r.tipo === 'login_ok')     hourlyMap[k].ok     += r.total;
-    if (r.tipo === 'login_fail')   hourlyMap[k].fail   += r.total;
-    if (r.tipo === 'brute_force')  hourlyMap[k].brute  += r.total;
-    if (r.tipo === 'auth_invalid') hourlyMap[k].invalid += r.total;
-  });
-  const chartData = Object.values(hourlyMap);
+  // -- Preparar datos para charts ----------------------------------
+  const chartData = buildChartData(stats);
 
   function renderVtBadge(ip: string) {
     const vt = vtResults[ip];
     if (!vt) return null;
     if (vt === 'loading') return <span className={styles.vtLoading}>consultando...</span>;
     if (vt === 'error')   return <span className={styles.vtErr}>error</span>;
-    if ('error' in vt)    return <span className={styles.vtErr}>{(vt as { error: string }).error}</span>;
-    const r = vt as VtResult;
-    const total = r.malicious + r.suspicious + r.harmless + r.undetected;
-    const cls = r.malicious > 0 ? styles.vtMalicious
-               : r.suspicious > 0 ? styles.vtSuspicious
-               : r.reputation < -10 ? styles.vtWarn
-               : styles.vtClean;
-    const label = r.malicious > 0 ? `⚠ MALICIOUS ${r.malicious}/${total}`
-                : r.suspicious > 0 ? `~ SUSPICIOUS ${r.suspicious}/${total}`
-                : r.reputation < -10 ? `REP ${r.reputation}`
-                : `✓ CLEAN`;
+    if ('error' in vt)    return <span className={styles.vtErr}>{vt.error}</span>;
+    const r = vt;
+    const { cls, label } = getVtClassAndLabel(r);
     return (
       <span className={styles.vtResult}>
         <span className={`${styles.vtBadge} ${cls}`}>{label}</span>
         {r.country  && <span className={styles.vtMeta}>{r.country}</span>}
         {r.as_owner && <span className={styles.vtMeta} title={r.network ?? ''}>{r.as_owner.slice(0, 22)}</span>}
-        {r.cached   && <span className={styles.vtCached}>↩ caché</span>}
+        {r.cached   && <span className={styles.vtCached}>{'\u21A9'} cach\u00E9</span>}
       </span>
     );
   }
 
-  const threatLevel = (stats?.brute_force ?? 0) > 0 ? 'CRÍTICO'
-    : (stats?.login_fail ?? 0) > 10 ? 'ALTO'
-    : (stats?.login_fail ?? 0) > 3  ? 'MEDIO'
-    : 'BAJO';
-  const threatColor = threatLevel === 'CRÍTICO' ? '#ef4444' : threatLevel === 'ALTO' ? '#f59e0b' : threatLevel === 'MEDIO' ? '#eab308' : '#10b981';
+  const { level: threatLevel, color: threatColor } = getThreatInfo(stats);
 
-  // ── DASHBOARD ─────────────────────────────────────────────────
+  // -- DASHBOARD ---------------------------------------------------
   return (
     <div className={styles.wrap}>
       {/* HEADER */}
@@ -350,7 +462,7 @@ export default function SecurityDashboard() {
           <Link to="/" className={styles.iconBtn} title="Tienda">
             <Globe size={16} />
           </Link>
-          <button className={styles.iconBtn} onClick={handleLogout} title="Cerrar sesión">
+          <button className={styles.iconBtn} onClick={handleLogout} title="Cerrar sesi\u00F3n">
             <LogOut size={16} />
           </button>
         </div>
@@ -365,48 +477,48 @@ export default function SecurityDashboard() {
             <Shield size={15} className={styles.statIcon} style={{ color: threatColor, opacity: 0.3 }} />
             <div className={styles.statLabel}>NIVEL AMENAZA</div>
             <div className={styles.statValue} style={{ color: threatColor, textShadow: `0 0 16px ${threatColor}88`, fontSize: '1.5rem' }}>{threatLevel}</div>
-            <div className={styles.statSub}>últimas 24h</div>
+            <div className={styles.statSub}>{'\u00FA'}ltimas 24h</div>
           </div>
 
           <div className={styles.statCard} style={{ borderColor: 'rgba(245,158,11,0.2)', boxShadow: '0 0 20px rgba(245,158,11,0.06)' }}>
             <AlertTriangle size={15} className={styles.statIcon} style={{ color: '#f59e0b', opacity: 0.25 }} />
             <div className={styles.statLabel}>FALLOS LOGIN</div>
-            <div className={styles.statValue} style={{ color: '#fbbf24', textShadow: '0 0 12px rgba(245,158,11,0.5)' }}>{stats?.login_fail ?? '—'}</div>
+            <div className={styles.statValue} style={{ color: '#fbbf24', textShadow: '0 0 12px rgba(245,158,11,0.5)' }}>{stats?.login_fail ?? '\u2014'}</div>
             <div className={styles.statSub}>24h</div>
           </div>
 
           <div className={styles.statCard} style={{ borderColor: 'rgba(239,68,68,0.25)', boxShadow: '0 0 20px rgba(239,68,68,0.07)' }}>
             <XCircle size={15} className={styles.statIcon} style={{ color: '#ef4444', opacity: 0.25 }} />
             <div className={styles.statLabel}>BRUTE FORCE</div>
-            <div className={styles.statValue} style={{ color: '#f87171', textShadow: '0 0 12px rgba(239,68,68,0.5)' }}>{stats?.brute_force ?? '—'}</div>
+            <div className={styles.statValue} style={{ color: '#f87171', textShadow: '0 0 12px rgba(239,68,68,0.5)' }}>{stats?.brute_force ?? '\u2014'}</div>
             <div className={styles.statSub}>24h</div>
           </div>
 
           <div className={styles.statCard} style={{ borderColor: 'rgba(16,185,129,0.2)', boxShadow: '0 0 20px rgba(16,185,129,0.05)' }}>
             <CheckCircle size={15} className={styles.statIcon} style={{ color: '#10b981', opacity: 0.25 }} />
             <div className={styles.statLabel}>LOGINS OK</div>
-            <div className={styles.statValue} style={{ color: '#34d399', textShadow: '0 0 12px rgba(16,185,129,0.5)' }}>{stats?.login_ok ?? '—'}</div>
+            <div className={styles.statValue} style={{ color: '#34d399', textShadow: '0 0 12px rgba(16,185,129,0.5)' }}>{stats?.login_ok ?? '\u2014'}</div>
             <div className={styles.statSub}>24h</div>
           </div>
 
           <div className={styles.statCard} style={{ borderColor: 'rgba(99,102,241,0.2)', boxShadow: '0 0 20px rgba(99,102,241,0.06)' }}>
             <Lock size={15} className={styles.statIcon} style={{ color: '#6366f1', opacity: 0.25 }} />
-            <div className={styles.statLabel}>TOKEN INVÁLIDOS</div>
-            <div className={styles.statValue} style={{ color: '#a5b4fc', textShadow: '0 0 12px rgba(99,102,241,0.5)' }}>{stats?.auth_invalid ?? '—'}</div>
+            <div className={styles.statLabel}>TOKEN INV{'\u00C1'}LIDOS</div>
+            <div className={styles.statValue} style={{ color: '#a5b4fc', textShadow: '0 0 12px rgba(99,102,241,0.5)' }}>{stats?.auth_invalid ?? '\u2014'}</div>
             <div className={styles.statSub}>24h</div>
           </div>
 
           <div className={styles.statCard} style={{ borderColor: 'rgba(34,211,238,0.2)', boxShadow: '0 0 20px rgba(34,211,238,0.05)' }}>
             <Wifi size={15} className={styles.statIcon} style={{ color: '#22d3ee', opacity: 0.25 }} />
-            <div className={styles.statLabel}>IPs ÚNICAS</div>
-            <div className={styles.statValue} style={{ color: '#67e8f9', textShadow: '0 0 12px rgba(34,211,238,0.5)' }}>{stats?.unique_ips ?? '—'}</div>
+            <div className={styles.statLabel}>IPs {'\u00DA'}NICAS</div>
+            <div className={styles.statValue} style={{ color: '#67e8f9', textShadow: '0 0 12px rgba(34,211,238,0.5)' }}>{stats?.unique_ips ?? '\u2014'}</div>
             <div className={styles.statSub}>24h</div>
           </div>
 
           <div className={styles.statCard} style={{ borderColor: 'rgba(167,139,250,0.2)', boxShadow: '0 0 20px rgba(167,139,250,0.05)' }}>
             <Users size={15} className={styles.statIcon} style={{ color: '#a78bfa', opacity: 0.25 }} />
             <div className={styles.statLabel}>SESIONES ACTIVAS</div>
-            <div className={styles.statValue} style={{ color: '#c4b5fd', textShadow: '0 0 12px rgba(167,139,250,0.5)' }}>{stats?.active_sessions ?? '—'}</div>
+            <div className={styles.statValue} style={{ color: '#c4b5fd', textShadow: '0 0 12px rgba(167,139,250,0.5)' }}>{stats?.active_sessions ?? '\u2014'}</div>
             <div className={styles.statSub}>ahora</div>
           </div>
         </div>
@@ -414,7 +526,7 @@ export default function SecurityDashboard() {
         {/* CHART + TOP IPs */}
         <div className={styles.midRow}>
           <div className={`${styles.panel} ${styles.panelChart}`}>
-            <div className={styles.panelTitle}><Activity size={14} /> ACTIVIDAD ÚLTIMAS 24H</div>
+            <div className={styles.panelTitle}><Activity size={14} /> ACTIVIDAD {'\u00DA'}LTIMAS 24H</div>
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={chartData} margin={{ top: 12, right: 16, left: -16, bottom: 0 }}>
                 <defs>
@@ -512,7 +624,7 @@ export default function SecurityDashboard() {
             ) : blockedList.map(b => (
               <div key={b.id} className={styles.blockedRow}>
                 <span className={styles.blockedIp}>{b.ip}</span>
-                <span className={styles.blockedMotivo}>{b.motivo ?? '—'}</span>
+                <span className={styles.blockedMotivo}>{b.motivo ?? '\u2014'}</span>
                 <span className={styles.blockedHasta}>
                   {b.bloqueadoHasta
                     ? `hasta ${new Date(b.bloqueadoHasta).toLocaleString('es-ES')}`
@@ -527,57 +639,14 @@ export default function SecurityDashboard() {
         </div>
 
         {/* EVENT LOG */}
-        <div className={styles.panel}>
-          <div className={styles.panelTitle}>
-            <Terminal size={14} /> LOG DE EVENTOS
-            <div className={styles.filterRow}>
-              {['', 'login_fail', 'login_ok', 'brute_force', 'auth_invalid', 'honeypot', 'blocked_request'].map(t => (
-                <button key={t}
-                  className={`${styles.filterBtn} ${tipoFiltro === t ? styles.filterBtnActive : ''}`}
-                  onClick={() => setTipoFiltro(t)}>
-                  {t === '' ? 'TODOS' : (TIPO_CONFIG[t]?.label ?? t.toUpperCase())}
-                </button>
-              ))}
-            </div>
-            <div className={styles.exportRow}>
-              <button className={styles.exportBtn} onClick={() => exportEvents('csv')} title="Exportar CSV">
-                <Download size={12} /> CSV
-              </button>
-              <button className={styles.exportBtn} onClick={() => exportEvents('json')} title="Exportar JSON">
-                <Download size={12} /> JSON
-              </button>
-            </div>
-          </div>
-          <div className={styles.logTable}>
-            <div className={styles.logHeader}>
-              <span>TIEMPO</span><span>TIPO</span><span>IP / THREAT INTEL</span><span>USUARIO</span><span>ENDPOINT</span><span>DETALLES</span>
-            </div>
-            {events.length === 0 ? (
-              <div className={styles.emptyLog}>No hay eventos registrados aún</div>
-            ) : (
-              events.map(ev => {
-                const cfg = TIPO_CONFIG[ev.tipo] ?? { label: ev.tipo.toUpperCase(), cls: 'ev-info', icon: '·' };
-                const vtBadge = ev.ip ? renderVtBadge(ev.ip) : null;
-                return (
-                  <div key={ev.id} className={`${styles.logRow} ${styles[cfg.cls]}`}>
-                    <span className={styles.logTime}>{fmtDate(ev.fecha)} {fmtTime(ev.fecha)}</span>
-                    <span className={`${styles.logBadge} ${styles[cfg.cls]}`}>{cfg.icon} {cfg.label}</span>
-                    <span className={styles.logIp}>
-                      {ev.ip
-                        ? <button className={styles.ipClickable} onClick={() => checkVT(ev.ip!)} title="Consultar VirusTotal">{ev.ip}</button>
-                        : '—'
-                      }
-                      {vtBadge && <span className={styles.vtInline}>{vtBadge}</span>}
-                    </span>
-                    <span className={styles.logUser}>{ev.username ?? '—'}</span>
-                    <span className={styles.logEndpoint}>{ev.metodo && ev.endpoint ? `${ev.metodo} ${ev.endpoint}` : '—'}</span>
-                    <span className={styles.logDetails}>{ev.detalles ?? '—'}</span>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
+        <EventLog
+          events={events}
+          tipoFiltro={tipoFiltro}
+          setTipoFiltro={setTipoFiltro}
+          exportEvents={exportEvents}
+          renderVtBadge={renderVtBadge}
+          checkVT={checkVT}
+        />
       </div>
     </div>
   );

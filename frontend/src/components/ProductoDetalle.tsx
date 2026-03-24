@@ -22,11 +22,11 @@ function SeccionRelacionados({
   categoriaActual,
   idActual,
   onAddToCart,
-}: {
+}: Readonly<{
   categoriaActual: string
   idActual: number
   onAddToCart: (p: Producto) => void
-}) {
+}>) {
   const navigate = useNavigate()
   const [addedId, setAddedId] = useState<number | null>(null)
 
@@ -92,7 +92,7 @@ function SeccionRelacionados({
 // =================================================================
 // PRODUCT DETAIL PAGE
 // =================================================================
-export default function ProductoDetalle({ onAddToCart, carritoCount, onOpenCart }: Props) {
+export default function ProductoDetalle({ onAddToCart, carritoCount, onOpenCart }: Readonly<Props>) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [added, setAdded] = useState(false)
@@ -100,7 +100,7 @@ export default function ProductoDetalle({ onAddToCart, carritoCount, onOpenCart 
   const [shared, setShared] = useState(false)
 
   const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href).then(() => {
+    navigator.clipboard.writeText(globalThis.location.href).then(() => {
       setShared(true)
       setTimeout(() => setShared(false), 2000)
     })

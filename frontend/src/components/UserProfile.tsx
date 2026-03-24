@@ -14,7 +14,7 @@ interface UserProfileProps {
   user: Usuario;
 }
 
-export default function UserProfile({ user }: UserProfileProps) {
+export default function UserProfile({ user }: Readonly<UserProfileProps>) {
   const queryClient = useQueryClient();
 
   // Fetch latest user data

@@ -17,9 +17,8 @@ const queryClient = new QueryClient({
 
 // Desregistrar todos los service workers para evitar caché obsoleta
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(registrations => {
-    registrations.forEach(r => r.unregister());
-  });
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  registrations.forEach(r => r.unregister());
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
