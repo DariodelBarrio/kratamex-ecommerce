@@ -18,13 +18,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@e44258b109568baa0df60ed515909fc6c72cba92 # v3.0.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-      - name: Check for open issues
+      - name: Check for open issues (via API, no manual scan)
         id: check
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
