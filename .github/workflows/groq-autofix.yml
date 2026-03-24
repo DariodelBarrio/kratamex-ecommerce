@@ -52,7 +52,7 @@ jobs:
           node-version: 24
 
       - name: Install frontend deps
-        run: cd frontend && npm ci
+        run: cd frontend && npm ci --legacy-peer-deps
 
       - name: Fetch issues and autofix with Groq
         id: autofix
