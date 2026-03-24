@@ -56,7 +56,7 @@ jobs:
       - name: Install frontend deps
         run: cd frontend && npm ci --legacy-peer-deps
 
-      - name: Fetch issues and autofix (5 APIs fallback)
+      - name: Fetch issues and autofix (6 APIs fallback)
         id: autofix
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -66,6 +66,7 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           TOGETHER_API_KEY: ${{ secrets.TOGETHER_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
         run: node .github/scripts/groq-autofix.mjs
 
       - name: Verify TypeScript
