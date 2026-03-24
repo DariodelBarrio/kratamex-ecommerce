@@ -46,7 +46,7 @@ vi.mock('../components/ProductCard', () => ({
 vi.mock('framer-motion', () => ({
   motion: {
     div:    ({ children, className, style, onClick }: React.HTMLAttributes<HTMLDivElement>) =>
-      <div className={className} style={style} onClick={onClick}>{children}</div>,
+      <div className={className} style={style} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') onClick(e as unknown as React.MouseEvent<HTMLDivElement>); } : undefined}>{children}</div>, // NOSONAR
     button: ({ children, onClick, className, title }: React.ButtonHTMLAttributes<HTMLButtonElement>) =>
       <button onClick={onClick} className={className} title={title}>{children}</button>,
     span:   ({ children, className }: React.HTMLAttributes<HTMLSpanElement>) =>

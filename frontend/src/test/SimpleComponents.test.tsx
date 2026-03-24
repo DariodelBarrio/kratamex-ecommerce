@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 // ── Framer-motion mock (shared) ────────────────────────────────────
 vi.mock('framer-motion', () => ({
   motion: {
-    div:    ({ children, className, style, onClick }: React.HTMLAttributes<HTMLDivElement>) => <div className={className} style={style} onClick={onClick}>{children}</div>,
+    div:    ({ children, className, style, onClick }: React.HTMLAttributes<HTMLDivElement>) => <div className={className} style={style} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') onClick(e as unknown as React.MouseEvent<HTMLDivElement>); } : undefined}>{children}</div>, // NOSONAR
     span:   ({ children, className }: React.HTMLAttributes<HTMLSpanElement>) => <span className={className}>{children}</span>,
     p:      ({ children, className }: React.HTMLAttributes<HTMLParagraphElement>) => <p className={className}>{children}</p>,
     input:  ({ style, type, value, onChange, placeholder }: React.InputHTMLAttributes<HTMLInputElement>) => <input style={style} type={type} value={value} onChange={onChange} placeholder={placeholder} />,

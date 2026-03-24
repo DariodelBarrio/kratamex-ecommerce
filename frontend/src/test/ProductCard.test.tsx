@@ -7,7 +7,7 @@ import { ProductCard, BrandLogoSmall } from '../components/ProductCard';
 vi.mock('framer-motion', () => ({
   motion: {
     div:    ({ children, onClick, className, style }: React.HTMLAttributes<HTMLDivElement>) =>
-      <div onClick={onClick} className={className} style={style}>{children}</div>,
+      <div onClick={onClick} className={className} style={style} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') onClick(e as unknown as React.MouseEvent<HTMLDivElement>); } : undefined}>{children}</div>, // NOSONAR
     button: ({ children, onClick, className, title, disabled }: React.ButtonHTMLAttributes<HTMLButtonElement>) =>
       <button onClick={onClick} className={className} title={title} disabled={disabled}>{children}</button>,
     span:   ({ children, className }: React.HTMLAttributes<HTMLSpanElement>) =>
