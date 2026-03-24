@@ -4,7 +4,8 @@ import { join } from "path";
 const SONAR_TOKEN = process.env.SONAR_TOKEN;
 const SONAR_PROJECT_KEY = process.env.SONAR_PROJECT_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const PAGE_SIZE = 100;
 
 // ── Fetch all open issues from SonarCloud ──────────────────────────────────
@@ -41,8 +42,8 @@ async function fetchIssues() {
 function groupByFile(issues) {
   const map = new Map();
   for (const issue of issues) {
-    const component = issue.component; // e.g. "project:frontend/src/utils.ts"
-    const filePath = component.split(":").slice(1).join(":"); // strip project key
+    const component = issue.component;
+    const filePath = component.split(":").slice(1).join(":");
     if (!map.has(filePath)) map.set(filePath, []);
     map.get(filePath).push({
       line: issue.line,
@@ -64,21 +65,22 @@ function readLocal(filePath) {
   }
 }
 
-// ── Call Gemini ────────────────────────────────────────────────────────────
+// ── Build prompt ───────────────────────────────────────────────────────────
 
-async function callGemini(filePath, code, issues) {
+function buildPrompt(filePath, code, issues) {
   const issueList = issues
     .map((i) => `  - Line ${i.line ?? "?"}: [${i.severity}] ${i.rule} — ${i.message}`)
     .join("\n");
 
-  const prompt =
-    `Fix the following SonarCloud issues in this file. ` +
-    `Return ONLY the complete corrected file content, no explanations, no markdown fences.\n\n` +
-    `File: ${filePath}\n\n` +
-    `Issues to fix:\n${issueList}\n\n` +
-    `Current file content:\n${code}`;
+  return `Fix the following SonarCloud issues in this file. Return ONLY the complete corrected file content, no explanations, no markdown fences.\n\nFile: ${filePath}\n\nIssues to fix:\n${issueList}\n\nCurrent file content:\n${code}`;
+}
 
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`, {
+// ── Call Gemini ────────────────────────────────────────────────────────────
+
+async function callGemini(filePath, code, issues) {
+  const prompt = buildPrompt(filePath, code, issues);
+
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -87,9 +89,79 @@ async function callGemini(filePath, code, issues) {
     }),
   });
 
-  if (!res.ok) throw new Error(`Gemini error ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Gemini error ${res.status}`);
   const data = await res.json();
   return data.candidates[0].content.parts[0].text;
+}
+
+// ── Call Groq ──────────────────────────────────────────────────────────────
+
+async function callGroq(filePath, code, issues) {
+  const prompt = buildPrompt(filePath, code, issues);
+
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: 8192,
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Groq error ${res.status}`);
+  const data = await res.json();
+  return data.choices[0].message.content;
+}
+
+// ── Call OpenRouter ────────────────────────────────────────────────────────
+
+async function callOpenRouter(filePath, code, issues) {
+  const prompt = buildPrompt(filePath, code, issues);
+
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "meta-llama/llama-3.3-70b-instruct:free",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: 8192,
+    }),
+  });
+
+  if (!res.ok) throw new Error(`OpenRouter error ${res.status}`);
+  const data = await res.json();
+  return data.choices[0].message.content;
+}
+
+// ── Try fix with fallback ──────────────────────────────────────────────────
+
+async function tryFix(filePath, code, issues) {
+  const apis = [
+    { name: "Gemini", fn: () => callGemini(filePath, code, issues) },
+    { name: "Groq", fn: () => callGroq(filePath, code, issues) },
+    { name: "OpenRouter", fn: () => callOpenRouter(filePath, code, issues) },
+  ];
+
+  for (const api of apis) {
+    try {
+      const fixed = await api.fn();
+      console.log(`  ✓ Fixed with ${api.name}`);
+      return fixed;
+    } catch (err) {
+      console.log(`  ⚠ ${api.name} failed: ${err.message}`);
+    }
+  }
+
+  throw new Error("All APIs failed");
 }
 
 // ── Sleep helper ───────────────────────────────────────────────────────────
@@ -114,22 +186,21 @@ async function main() {
 
     const code = readLocal(filePath);
     if (!code) {
-      console.log(`  → Skipped (file not found locally): ${filePath}`);
+      console.log(`  → Skipped (file not found locally)`);
       skipped++;
       continue;
     }
 
     try {
-      const fixed_code = await callGemini(filePath, code, fileIssues);
+      const fixed_code = await tryFix(filePath, code, fileIssues);
       writeFileSync(join(process.cwd(), filePath), fixed_code, "utf8");
-      console.log(`  → Fixed and written: ${filePath}`);
+      console.log(`  → Written to ${filePath}`);
       fixed++;
     } catch (err) {
-      console.error(`  → Error processing ${filePath}: ${err.message}`);
+      console.error(`  → Error: ${err.message}`);
       skipped++;
     }
 
-    // Rate limit: 2.5s between calls (Gemini free tier is strict)
     await sleep(2500);
   }
 
