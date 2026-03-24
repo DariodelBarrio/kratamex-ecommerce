@@ -27,9 +27,10 @@ jobs:
           SONAR_PROJECT_KEY=$(grep '^sonar.projectKey' sonar-project.properties | cut -d'=' -f2 | tr -d ' ')
           echo "Project key: $SONAR_PROJECT_KEY"
           echo "project_key=$SONAR_PROJECT_KEY" >> "$GITHUB_OUTPUT"
-          ISSUES=$(curl -s -H "Authorization: Bearer $SONAR_TOKEN" \
-            "https://sonarcloud.io/api/issues/search?projectKeys=$SONAR_PROJECT_KEY&statuses=OPEN&severities=BLOCKER,CRITICAL,MAJOR,MINOR&ps=1" \
-            | jq '.total // 0')
+          RESPONSE=$(curl -s -H "Authorization: Bearer $SONAR_TOKEN" \
+            "https://sonarcloud.io/api/issues/search?projectKeys=$SONAR_PROJECT_KEY&statuses=OPEN&severities=BLOCKER,CRITICAL,MAJOR,MINOR&ps=1")
+          echo "API Response: $RESPONSE" | head -c 500
+          ISSUES=$(echo "$RESPONSE" | jq -r '.total // 0')
           echo "Open issues: $ISSUES"
           if [ "$ISSUES" -gt "0" ]; then
             echo "has_issues=true" >> "$GITHUB_OUTPUT"
