@@ -42,7 +42,7 @@ const CheckoutSchema = z.object({
 // =================================================================
 interface Toast { id: number; nombre: string }
 
-function ToastContainer({ toasts }: { toasts: Toast[] }) {
+function ToastContainer({ toasts }: Readonly<{ toasts: Toast[] }>) {
   return (
     <div className="toast-container">
       <AnimatePresence>
@@ -80,7 +80,7 @@ interface TiendaProps {
   onLogout: () => void
 }
 
-function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setCarritoAbiertoExterno, wishlistExterno, onToggleWishlistExterno, tema, onToggleTema, authUser, onLogout }: TiendaProps) {
+function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setCarritoAbiertoExterno, wishlistExterno, onToggleWishlistExterno, tema, onToggleTema, authUser, onLogout }: Readonly<TiendaProps>) {
   const carrito = carritoExterno
   const setCarrito = setCarritoExterno
   const carritoAbierto = carritoAbiertoExterno
@@ -643,7 +643,7 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
                                 max={item.stock}
                                 onBlur={e => {
                                   const val = parseInt(e.target.value)
-                                  if (!isNaN(val) && val >= 1) setCantidad(item.id, val)
+                                  if (!Number.isNaN(val) && val >= 1) setCantidad(item.id, val)
                                   else e.target.value = String(item.cantidad)
                                 }}
                                 onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
