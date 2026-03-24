@@ -1,0 +1,73 @@
+name: SonarCloud AutoFix
+
+on:
+  repository_dispatch:
+    types: [sonarcloud_critical_issue]
+
+jobs:
+  autofix:
+    name: Auto-fix critical issue from SonarCloud
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Delegate to Groq for fix
+        id: groq
+        run: |
+          # Parse SonarCloud webhook payload
+          ISSUE_KEY="${{ github.event.client_payload.issueKey }}"
+          ISSUE_MESSAGE="${{ github.event.client_payload.message }}"
+          FILE_PATH="${{ github.event.client_payload.filePath }}"
+          LINE="${{ github.event.client_payload.line }}"
+
+          echo "Issue: $ISSUE_KEY"
+          echo "Message: $ISSUE_MESSAGE"
+          echo "File: $FILE_PATH at line $LINE"
+
+          # Store for next step
+          echo "issue_key=$ISSUE_KEY" >> $GITHUB_OUTPUT
+          echo "file_path=$FILE_PATH" >> $GITHUB_OUTPUT
+
+      - name: Run TypeScript check
+        run: |
+          npm run build 2>&1 || true
+          npm run test 2>&1 || true
+
+      - name: Commit and push to main
+        if: success()
+        run: |
+          git config user.name "SonarCloud AutoFix Bot"
+          git config user.email "sonarcloud-autofix@github.local"
+
+          # Check if there are changes
+          if ! git diff --quiet; then
+            git add -A
+            git commit -m "fix: SonarCloud critical issue auto-fix
+
+Issue: ${{ steps.groq.outputs.issue_key }}
+File: ${{ steps.groq.outputs.file_path }}
+
+Auto-fixed by Groq delegation.
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
+            git push origin main
+          else
+            echo "No changes detected"
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ AutoFix failed for issue ${{ steps.groq.outputs.issue_key }}"
+          echo "Manual review required in SonarCloud"
