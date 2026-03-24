@@ -1,0 +1,91 @@
+name: Groq Autofix SonarCloud
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sonar-scan:
+    name: SonarCloud Scan
+    runs-on: ubuntu-latest
+    outputs:
+      has_issues: ${{ steps.check.outputs.has_issues }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@e44258b109568baa0df60ed515909fc6c72cba92 # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Check for open issues
+        id: check
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+        run: |
+          ISSUES=$(curl -s -u "$SONAR_TOKEN:" \
+            "https://sonarcloud.io/api/issues/search?projectKeys=$SONAR_PROJECT_KEY&statuses=OPEN&severities=BLOCKER,CRITICAL,MAJOR,MINOR&ps=1" \
+            | jq '.total')
+          echo "Open issues: $ISSUES"
+          if [ "$ISSUES" -gt "0" ]; then
+            echo "has_issues=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_issues=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  groq-autofix:
+    name: Groq Autofix
+    needs: sonar-scan
+    if: needs.sonar-scan.outputs.has_issues == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 20
+
+      - name: Install frontend deps
+        run: cd frontend && npm ci
+
+      - name: Fetch issues and autofix with Groq
+        id: autofix
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: node .github/scripts/groq-autofix.mjs
+
+      - name: Verify TypeScript
+        id: tsc
+        run: cd frontend && npx tsc --noEmit
+        continue-on-error: true
+
+      - name: Revert if tsc fails
+        if: steps.tsc.outcome == 'failure'
+        run: |
+          echo "TypeScript check failed — reverting changes"
+          git checkout -- .
+          exit 1
+
+      - name: Commit fixes
+        if: steps.tsc.outcome == 'success'
+        run: |
+          git config user.name  "groq-autofix[bot]"
+          git config user.email "groq-autofix[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "fix: autofix issues SonarCloud via Groq 🤖"
+            git push
+          fi
