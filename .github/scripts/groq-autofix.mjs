@@ -10,6 +10,7 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const TOGETHER_API_KEY = process.env.TOGETHER_API_KEY;
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 const REPLICATE_API_KEY = process.env.REPLICATE_API_KEY;
+const COHERE_API_KEY = process.env.COHERE_API_KEY;
 const PAGE_SIZE = 100;
 
 // ── Fetch all open issues from SonarCloud ──────────────────────────────────
@@ -253,6 +254,31 @@ async function callReplicate(filePath, code, issues) {
   return prediction.output?.join?.("") || prediction.output;
 }
 
+// ── Call Cohere ───────────────────────────────────────────────────────────
+
+async function callCohere(filePath, code, issues) {
+  const prompt = buildPrompt(filePath, code, issues);
+
+  const res = await fetch("https://api.cohere.ai/v1/generate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${COHERE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "command",
+      prompt: prompt,
+      max_tokens: 8192,
+      temperature: 0.1,
+      stop_sequences: [],
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Cohere error ${res.status}`);
+  const data = await res.json();
+  return data.generations[0].text.trim();
+}
+
 // ── Try fix with fallback ──────────────────────────────────────────────────
 
 async function tryFix(filePath, code, issues) {
@@ -264,6 +290,7 @@ async function tryFix(filePath, code, issues) {
     { name: "Together", fn: () => callTogether(filePath, code, issues) },
     { name: "Mistral", fn: () => callMistral(filePath, code, issues) },
     { name: "Replicate", fn: () => callReplicate(filePath, code, issues) },
+    { name: "Cohere", fn: () => callCohere(filePath, code, issues) },
   ];
 
   for (const api of apis) {
