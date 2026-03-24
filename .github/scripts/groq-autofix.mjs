@@ -9,6 +9,7 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const TOGETHER_API_KEY = process.env.TOGETHER_API_KEY;
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+const REPLICATE_API_KEY = process.env.REPLICATE_API_KEY;
 const PAGE_SIZE = 100;
 
 // ── Fetch all open issues from SonarCloud ──────────────────────────────────
@@ -217,6 +218,41 @@ async function callMistral(filePath, code, issues) {
   return data.choices[0].message.content;
 }
 
+// ── Call Replicate ────────────────────────────────────────────────────────
+
+async function callReplicate(filePath, code, issues) {
+  const prompt = buildPrompt(filePath, code, issues);
+
+  const res = await fetch("https://api.replicate.com/v1/predictions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${REPLICATE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      version: "2e7f615e751a4e7c9c1f1c8c0e1c9b6d7f8e9f0a",
+      input: { prompt, max_tokens: 8192, temperature: 0.1 },
+      wait_for_webhook: false,
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Replicate error ${res.status}`);
+  const data = await res.json();
+
+  // Poll for result
+  let prediction = data;
+  while (prediction.status === "processing") {
+    await sleep(1000);
+    const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+      headers: { Authorization: `Bearer ${REPLICATE_API_KEY}` },
+    });
+    prediction = await pollRes.json();
+  }
+
+  if (prediction.status !== "succeeded") throw new Error(`Replicate failed: ${prediction.status}`);
+  return prediction.output?.join?.("") || prediction.output;
+}
+
 // ── Try fix with fallback ──────────────────────────────────────────────────
 
 async function tryFix(filePath, code, issues) {
@@ -227,6 +263,7 @@ async function tryFix(filePath, code, issues) {
     { name: "DeepSeek", fn: () => callDeepSeek(filePath, code, issues) },
     { name: "Together", fn: () => callTogether(filePath, code, issues) },
     { name: "Mistral", fn: () => callMistral(filePath, code, issues) },
+    { name: "Replicate", fn: () => callReplicate(filePath, code, issues) },
   ];
 
   for (const api of apis) {
