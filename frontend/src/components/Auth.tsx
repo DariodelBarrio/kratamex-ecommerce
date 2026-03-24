@@ -15,7 +15,7 @@ interface AuthProps {
   defaultMode?: 'login' | 'register';
 }
 
-export default function Auth({ onAuth, defaultMode = 'login' }: AuthProps) {
+export default function Auth({ onAuth, defaultMode = 'login' }: Readonly<AuthProps>) {
   const [mode, setMode] = useState<'login' | 'register'>(defaultMode);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -176,32 +176,26 @@ export default function Auth({ onAuth, defaultMode = 'login' }: AuthProps) {
             {isRegister && <PasswordStrength password={password} />}
 
             {/* Submit */}
-            <motion.button
-              type="submit"
-              disabled={loading}
-              style={{
-                ...styles.submitButton,
-                opacity: loading ? 0.65 : 1,
-                cursor: loading ? 'not-allowed' : 'pointer',
-              }}
-              whileHover={{ scale: loading ? 1 : 1.02 }}
-              whileTap={{ scale: loading ? 1 : 0.98 }}
-            >
-              {loading ? (
-                <span style={styles.spinner} />
-              ) : isRegister ? (
-                <UserPlus size={16} />
-              ) : (
-                <LogIn size={16} />
-              )}
-              <span>
-                {loading
-                  ? t('general.loading')
-                  : isRegister
-                    ? t('auth.register')
-                    : t('auth.login')}
-              </span>
-            </motion.button>
+            {(() => {
+              const submitIcon = loading ? <span style={styles.spinner} /> : isRegister ? <UserPlus size={16} /> : <LogIn size={16} />;
+              const submitText = loading ? t('general.loading') : isRegister ? t('auth.register') : t('auth.login');
+              return (
+                <motion.button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    ...styles.submitButton,
+                    opacity: loading ? 0.65 : 1,
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                  }}
+                  whileHover={{ scale: loading ? 1 : 1.02 }}
+                  whileTap={{ scale: loading ? 1 : 0.98 }}
+                >
+                  {submitIcon}
+                  <span>{submitText}</span>
+                </motion.button>
+              );
+            })()}
 
             {!isRegister && (
               <Link to="/forgot-password" style={{ display: 'block', textAlign: 'center', marginTop: 12, color: '#94a3b8', fontSize: '0.82rem', textDecoration: 'none' }}>

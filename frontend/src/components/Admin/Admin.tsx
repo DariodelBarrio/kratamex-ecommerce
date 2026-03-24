@@ -150,9 +150,9 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
     await postAdminCupon({
       codigo: formCupon.codigo.toUpperCase(),
       tipo: formCupon.tipo,
-      valor: parseFloat(formCupon.valor),
-      minCompra: formCupon.minCompra ? parseFloat(formCupon.minCompra) : 0,
-      maxUsos: formCupon.maxUsos ? parseInt(formCupon.maxUsos) : undefined,
+      valor: Number.parseFloat(formCupon.valor),
+      minCompra: formCupon.minCompra ? Number.parseFloat(formCupon.minCompra) : 0,
+      maxUsos: formCupon.maxUsos ? Number.parseInt(formCupon.maxUsos) : undefined,
     });
     setFormCupon({ codigo: '', tipo: 'porcentaje', valor: '', minCompra: '', maxUsos: '' });
     getAdminCupones().then(setCupones);
@@ -166,7 +166,7 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
 
   const descargarCSV = async (tipo: 'pedidos' | 'productos') => {
     const csv = tipo === 'pedidos' ? await exportPedidosCsv() : await exportProductosCsv();
-    const blob = new Blob([csv as string], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = `${tipo}_${new Date().toISOString().slice(0,10)}.csv`; a.click();
@@ -207,7 +207,7 @@ const eliminarPedido = async (id: number) => {
     setGuardando(true);
     setMensajeForm('');
     try {
-      const data = { ...formProducto, precio: parseFloat(formProducto.precio), stock: parseInt(formProducto.stock) || 0 };
+      const data = { ...formProducto, precio: Number.parseFloat(formProducto.precio), stock: Number.parseInt(formProducto.stock) || 0 };
       const url = editando ? `/api/productos/${editando.id}` : '/api/productos';
       const method = editando ? 'PUT' : 'POST';
       const res = await fetch(url, {
@@ -593,7 +593,7 @@ const eliminarPedido = async (id: number) => {
 
               <div className={styles['form-actions']}>
                 <button className={styles['btn-primary']} onClick={guardarProducto} disabled={guardando}>
-                  {guardando ? 'Guardando...' : editando ? 'Actualizar' : 'Crear producto'}
+                  {(() => { if (guardando) return 'Guardando...'; return editando ? 'Actualizar' : 'Crear producto'; })()}
                 </button>
                 {editando && (
                   <button className={styles['btn-secondary']} onClick={() => {
@@ -614,7 +614,11 @@ const eliminarPedido = async (id: number) => {
                 </thead>
                 <tbody>
                   {productos.map((p: Producto) => {
-                    const stockColor = (p.stock ?? 0) === 0 ? '#ef4444' : (p.stock ?? 0) <= 5 ? '#f59e0b' : '#10b981';
+                    const stockAmount = p.stock ?? 0;
+                    let stockColor: string;
+                    if (stockAmount === 0) { stockColor = '#ef4444'; }
+                    else if (stockAmount <= 5) { stockColor = '#f59e0b'; }
+                    else { stockColor = '#10b981'; }
                     return (
                     <tr key={p.id} style={{ opacity: p.activo === false ? 0.5 : 1 }}>
                       <td>{p.id}</td>
@@ -633,14 +637,17 @@ const eliminarPedido = async (id: number) => {
                             type="number" min={0} defaultValue={p.stock ?? 0}
                             value={stockValor}
                             onChange={e => setStockValor(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter') actualizarStock(p.id, parseInt(stockValor) || 0); if (e.key === 'Escape') setStockEditando(null); }}
-                            onBlur={() => actualizarStock(p.id, parseInt(stockValor) || 0)}
+                            onKeyDown={e => { if (e.key === 'Enter') { actualizarStock(p.id, Number.parseInt(stockValor) || 0); } if (e.key === 'Escape') { setStockEditando(null); } }}
+                            onBlur={() => actualizarStock(p.id, Number.parseInt(stockValor) || 0)}
                             autoFocus
                             style={{ width: 70, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: 13 }}
                           />
                         ) : (
                           <span
                             onClick={() => { setStockEditando(p.id); setStockValor(String(p.stock ?? 0)); }}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { setStockEditando(p.id); setStockValor(String(p.stock ?? 0)); } }}
                             title="Click para editar stock"
                             style={{ cursor: 'pointer', fontWeight: 700, color: stockColor, padding: '2px 8px', borderRadius: 6, background: `${stockColor}18`, border: `1px solid ${stockColor}33` }}
                           >
@@ -719,6 +726,9 @@ const eliminarPedido = async (id: number) => {
                           ) : (
                             <span
                               onClick={() => setEstadoEditando(p.id)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { setEstadoEditando(p.id); } }}
                               title="Click para cambiar estado"
                               style={{ cursor: 'pointer', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: `${estadoColors[p.estado] || '#94a3b8'}22`, color: estadoColors[p.estado] || '#94a3b8', border: `1px solid ${estadoColors[p.estado] || '#94a3b8'}44` }}
                             >

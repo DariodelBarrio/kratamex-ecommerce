@@ -260,12 +260,6 @@
   color: #a0aec0;
 }
 
-.password-input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
 .password-input-wrapper .form-input {
   padding-right: 44px;
 }

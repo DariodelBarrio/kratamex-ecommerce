@@ -45,8 +45,10 @@ export const cambiarPassword = (passwordActual: string, passwordNueva: string) =
   request('/usuario/password', { method: 'PUT', body: JSON.stringify({ passwordActual, passwordNueva }) });
 
 // Products
-export const getProductos = (params?: string) =>
-  request<any[]>(`/productos${params ? `?${params}` : ''}`);
+export const getProductos = (params?: string) => {
+  const path = params ? `/productos?${params}` : '/productos';
+  return request<any[]>(path);
+};
 
 export const getProducto = (id: number) => request<any>(`/productos/${id}`);
 

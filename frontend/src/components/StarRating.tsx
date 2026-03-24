@@ -15,7 +15,7 @@ interface StarRatingProps {
   size?: number
 }
 
-export function StarRating({ rating, count, size = 16 }: StarRatingProps) {
+export function StarRating({ rating, count, size = 16 }: Readonly<StarRatingProps>) {
   const stars = []
   const clamped = Math.max(0, Math.min(5, rating))
 
@@ -88,7 +88,7 @@ interface RatingFormProps {
   onSubmit?: () => void
 }
 
-export function RatingForm({ productoId, onSubmit }: RatingFormProps) {
+export function RatingForm({ productoId, onSubmit }: Readonly<RatingFormProps>) {
   const queryClient = useQueryClient()
   const [puntuacion, setPuntuacion] = useState(0)
   const [hoverIndex, setHoverIndex] = useState(0)
@@ -282,7 +282,7 @@ interface ValoracionesListProps {
   productoId: number
 }
 
-export function ValoracionesList({ productoId }: ValoracionesListProps) {
+export function ValoracionesList({ productoId }: Readonly<ValoracionesListProps>) {
   const { data: valoraciones = [], isLoading } = useQuery<Valoracion[]>({
     queryKey: ['valoraciones', productoId],
     queryFn: () => getValoraciones(productoId),

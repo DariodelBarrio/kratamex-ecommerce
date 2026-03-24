@@ -28,7 +28,7 @@ describe('OptimizedImage', () => {
     );
     
     const img = screen.getByTestId('img');
-    Object.getOwnPropertyDescriptor(window.Image.prototype, 'onerror')?.value?.call(img);
+    Object.getOwnPropertyDescriptor(globalThis.Image.prototype, 'onerror')?.value?.call(img);
   });
 
   it('should have correct src after load', async () => {

@@ -74,7 +74,7 @@ export function ParticleCanvas() {
         for (let j = i + 1; j < particles.length; j++) {
           const a = particles[i], b = particles[j]
           const dx = a.x - b.x, dy = a.y - b.y
-          const dist = Math.sqrt(dx * dx + dy * dy)
+          const dist = Math.hypot(dx, dy)
           if (dist < MAX_DIST) {
             const alpha = (1 - dist / MAX_DIST) * 0.18
             ctx.beginPath()
@@ -94,7 +94,8 @@ export function ParticleCanvas() {
     draw()
 
     const ro = new ResizeObserver(resize)
-    ro.observe(canvas.parentElement!)
+    const parent = canvas.parentElement
+    if (parent) ro.observe(parent)
 
     return () => {
       cancelAnimationFrame(animId)

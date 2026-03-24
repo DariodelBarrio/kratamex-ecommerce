@@ -11,6 +11,7 @@ const TOGETHER_API_KEY = process.env.TOGETHER_API_KEY;
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 const REPLICATE_API_KEY = process.env.REPLICATE_API_KEY;
 const COHERE_API_KEY = process.env.COHERE_API_KEY;
+const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
 const PAGE_SIZE = 100;
 
 // ── Fetch all open issues from SonarCloud ──────────────────────────────────
@@ -279,6 +280,28 @@ async function callCohere(filePath, code, issues) {
   return data.generations[0].text.trim();
 }
 
+// ── Call HuggingFace ──────────────────────────────────────────────────────
+
+async function callHuggingFace(filePath, code, issues) {
+  const prompt = buildPrompt(filePath, code, issues);
+
+  const res = await fetch("https://api-inference.huggingface.co/models/meta-llama/Llama-2-70b-chat-hf", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${HUGGINGFACE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      inputs: prompt,
+      parameters: { max_new_tokens: 8192, temperature: 0.1 },
+    }),
+  });
+
+  if (!res.ok) throw new Error(`HuggingFace error ${res.status}`);
+  const data = await res.json();
+  return data[0]?.generated_text?.replace(prompt, "").trim() || data[0]?.generated_text;
+}
+
 // ── Try fix with fallback ──────────────────────────────────────────────────
 
 async function tryFix(filePath, code, issues) {
@@ -291,6 +314,7 @@ async function tryFix(filePath, code, issues) {
     { name: "Mistral", fn: () => callMistral(filePath, code, issues) },
     { name: "Replicate", fn: () => callReplicate(filePath, code, issues) },
     { name: "Cohere", fn: () => callCohere(filePath, code, issues) },
+    { name: "HuggingFace", fn: () => callHuggingFace(filePath, code, issues) },
   ];
 
   for (const api of apis) {

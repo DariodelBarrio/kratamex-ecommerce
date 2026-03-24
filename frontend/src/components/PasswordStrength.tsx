@@ -25,7 +25,7 @@ function calculateStrength(password: string): { score: number; label: string; co
   return { score, label: 'Muy fuerte', color: '#10b981' };
 }
 
-export function PasswordStrength({ password }: PasswordStrengthProps) {
+export function PasswordStrength({ password }: Readonly<PasswordStrengthProps>) {
   const { score, label, color } = useMemo(() => calculateStrength(password), [password]);
 
   if (!password) return null;

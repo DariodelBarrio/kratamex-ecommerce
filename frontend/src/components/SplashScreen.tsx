@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
 
-export function SplashScreen({ onDone }: { onDone: () => void }) {
+export function SplashScreen({ onDone }: Readonly<{ onDone: () => void }>) {
   useEffect(() => {
     const t = setTimeout(onDone, 2000)
     return () => clearTimeout(t)

@@ -59,7 +59,7 @@ function OrderSkeleton() {
   );
 }
 
-function StatusBadge({ estado }: { estado: string }) {
+function StatusBadge({ estado }: Readonly<{ estado: string }>) {
   const colors = statusColors[estado] || statusColors.pendiente;
   return (
     <span
@@ -79,7 +79,7 @@ function StatusBadge({ estado }: { estado: string }) {
   );
 }
 
-function OrderCard({ pedido }: { pedido: Pedido }) {
+function OrderCard({ pedido }: Readonly<{ pedido: Pedido }>) {
   const [expanded, setExpanded] = useState(false);
   const items: PedidoItem[] = pedido.items || [];
 

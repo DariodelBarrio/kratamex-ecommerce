@@ -8,7 +8,7 @@
  * Requiere Node 18+ (fetch nativo).
  */
 
-import { randomInt, randomBytes } from 'crypto';
+import { randomInt, randomBytes } from 'node:crypto';
 
 const BASE       = process.argv[2] ?? 'http://localhost:3000';
 const ADMIN_PASS = process.argv[3] ?? 'admin';
@@ -80,7 +80,8 @@ async function loginFails(n = 18) {
       { username: usr, password: `badpass_${randomBytes(3).toString('hex')}` },
       { 'User-Agent': ua, 'X-Forwarded-For': fakeIP() }
     );
-    const icon = r.status === 401 ? '✗' : r.status === 429 ? '⛔' : '?';
+    const statusIcon = r.status === 429 ? '⛔' : '?';
+    const icon = r.status === 401 ? '✗' : statusIcon;
     ok(`login_fail ${icon} #${i+1} user=${usr.padEnd(15)} HTTP ${r.status}`);
     await sleep(80);
   }
@@ -170,36 +171,34 @@ async function bruteForce2() {
 // ──────────────────────────────────────────────────────────────────────────────
 // MAIN
 // ──────────────────────────────────────────────────────────────────────────────
-(async () => {
-  console.log(`\x1b[31m╔═══════════════════════════════════════════════╗`);
-  console.log(`║  KRATAMEX SOC — Simulador de ataques           ║`);
-  console.log(`║  Target : ${BASE.padEnd(36)}║`);
-  console.log(`╚═══════════════════════════════════════════════╝\x1b[0m`);
+console.log(`\x1b[31m╔═══════════════════════════════════════════════╗`);
+console.log(`║  KRATAMEX SOC — Simulador de ataques           ║`);
+console.log(`║  Target : ${BASE.padEnd(36)}║`);
+console.log(`╚═══════════════════════════════════════════════╝\x1b[0m`);
 
-  const token = await loginOK();
-  await sleep(200);
+const token = await loginOK();
+await sleep(200);
 
-  await loginFails(18);
-  await sleep(200);
+await loginFails(18);
+await sleep(200);
 
-  await bruteForce();
-  await sleep(200);
+await bruteForce();
+await sleep(200);
 
-  await invalidTokens(12);
-  await sleep(200);
+await invalidTokens(12);
+await sleep(200);
 
-  await scanEndpoints();
-  await sleep(200);
+await scanEndpoints();
+await sleep(200);
 
-  await bruteForce2();
+await bruteForce2();
 
-  console.log(`\n\x1b[32m╔═══════════════════════════════════════════════╗`);
-  console.log(`║  ✓ Simulación completada                       ║`);
-  console.log(`║  Abre /panel y refresca para ver los eventos   ║`);
-  console.log(`╚═══════════════════════════════════════════════╝\x1b[0m\n`);
+console.log(`\n\x1b[32m╔═══════════════════════════════════════════════╗`);
+console.log(`║  ✓ Simulación completada                       ║`);
+console.log(`║  Abre /panel y refresca para ver los eventos   ║`);
+console.log(`╚═══════════════════════════════════════════════╝\x1b[0m\n`);
 
-  if (!token) {
-    console.log(`\x1b[33mNOTA: El login_ok falló. Ejecuta así si tu contraseña no es "admin":\x1b[0m`);
-    console.log(`  node simulate_attacks.mjs ${BASE} <tu_contraseña>\n`);
-  }
-})();
+if (!token) {
+  console.log(`\x1b[33mNOTA: El login_ok falló. Ejecuta así si tu contraseña no es "admin":\x1b[0m`);
+  console.log(`  node simulate_attacks.mjs ${BASE} <tu_contraseña>\n`);
+}

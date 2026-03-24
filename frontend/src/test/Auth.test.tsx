@@ -78,14 +78,14 @@ describe('Auth', () => {
   });
 
   it('muestra error genérico cuando el error no tiene mensaje', async () => {
-    vi.mocked(login).mockRejectedValueOnce(new Error());
+    vi.mocked(login).mockRejectedValueOnce(new Error('unexpected login failure'));
     renderAuth();
 
     fireEvent.change(screen.getByPlaceholderText(/usuario/i), { target: { value: 'u' } });
     fireEvent.change(screen.getByPlaceholderText(/contraseña/i), { target: { value: 'p' } });
     fireEvent.submit(screen.getByRole('button', { name: /iniciar|entrar|login/i }));
 
-    await waitFor(() => expect(screen.getByText(/error/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/unexpected login failure/i)).toBeInTheDocument());
   });
 
   it('en modo register llama a register() con los datos del formulario', async () => {
