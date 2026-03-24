@@ -9,13 +9,14 @@ export const sanitize = (str: string | null | undefined): string => {
   
   let result = str;
   
-  result = result.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  // Remove script tags without catastrophic backtracking (S5852)
+  result = result.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
   result = result.replace(/<[^>]*>/g, '');
-  result = result.replace(/&/g, '&amp;');
-  result = result.replace(/</g, '&lt;');
-  result = result.replace(/>/g, '&gt;');
-  result = result.replace(/"/g, '&quot;');
-  result = result.replace(/'/g, '&#039;');
+  result = result.replaceAll('&', '&amp;');
+  result = result.replaceAll('<', '&lt;');
+  result = result.replaceAll('>', '&gt;');
+  result = result.replaceAll('"', '&quot;');
+  result = result.replaceAll("'", '&#039;');
   
   return result;
 };
