@@ -216,11 +216,11 @@ async function sendResetEmail(to: string, token: string, username: string) {
 // =================================================================
 function sanitizeText(str: string): string {
   return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#x27;');
 }
 
 const ALLOWED_EXT  = /^\.(jpe?g|png|gif|webp)$/i;
@@ -939,66 +939,73 @@ app.post('/api/productos/:id/comentarios', comentariosRateLimiter, zValidator('j
 });
 
 // =================================================================
+// HELPER — CREACIÓN DE PEDIDO (compartido por checkout directo y Stripe)
+// =================================================================
+async function crearPedido(data: {
+  cliente: string; email: string; direccion: string;
+  items: { id: number; cantidad: number }[];
+  cupon?: string; userId?: number | null;
+}): Promise<{ id: number; total: number; subtotal: number; impuestos: number; envio: number; descuento: number }> {
+  return db.transaction(async (tx) => {
+    let subtotal = 0;
+    const itemsValidados: { id: number; precio: number; cantidad: number }[] = [];
+
+    for (const item of data.items) {
+      const [prod] = await tx.select({ id: productos.id, precio: productos.precio, stock: productos.stock, nombre: productos.nombre })
+        .from(productos)
+        .where(eq(productos.id, item.id));
+      if (!prod) throw Object.assign(new Error('PRODUCT_NOT_FOUND'), { status: 400 });
+      if (prod.stock < item.cantidad) throw Object.assign(new Error(`Stock insuficiente para "${prod.nombre}". Disponible: ${prod.stock}`), { status: 400, code: 'INSUFFICIENT_STOCK' });
+
+      subtotal += prod.precio * item.cantidad;
+      itemsValidados.push({ id: prod.id, precio: prod.precio, cantidad: item.cantidad });
+    }
+
+    const { descuento, cuponId } = await applyCupon(tx, data.cupon, subtotal);
+
+    const subtotalConDescuento = subtotal - descuento;
+    const impuestos = calcularImpuestos(subtotalConDescuento);
+    const envio = calcularEnvio(subtotalConDescuento);
+    const total = Math.round((subtotalConDescuento + impuestos + envio) * 100) / 100;
+
+    const [newPedido] = await tx.insert(pedidos).values({
+      usuarioId:  data.userId ?? null,
+      cliente:    sanitizeText(data.cliente),
+      email:      data.email,
+      direccion:  sanitizeText(data.direccion),
+      subtotal:   subtotalConDescuento,
+      impuestos,
+      envio,
+      descuento,
+      cuponId,
+      total,
+      estado:     'pendiente',
+    }).returning({ id: pedidos.id });
+
+    for (const item of itemsValidados) {
+      await tx.insert(pedidoItems).values({
+        pedidoId:   newPedido.id,
+        productoId: item.id,
+        cantidad:   item.cantidad,
+        precio:     item.precio,
+      });
+      await tx.update(productos).set({
+        stock: sql`${productos.stock} - ${item.cantidad}`,
+      }).where(eq(productos.id, item.id));
+    }
+
+    return { id: newPedido.id, total, subtotal: subtotalConDescuento, impuestos, envio, descuento };
+  });
+}
+
+// =================================================================
 // RUTAS — PEDIDOS
 // =================================================================
 app.post('/api/pedidos', checkoutRateLimiter, optionalAuth, zValidator('json', PedidoSchema), async (c) => {
   const { cliente, email, direccion, items, cupon } = c.req.valid('json');
   const user = c.get('user');
-
   try {
-    const result = await db.transaction(async (tx) => {
-      let subtotal = 0;
-      const itemsValidados: { id: number; precio: number; cantidad: number }[] = [];
-
-      for (const item of items) {
-        const [prod] = await tx.select({ id: productos.id, precio: productos.precio, stock: productos.stock, nombre: productos.nombre })
-          .from(productos)
-          .where(eq(productos.id, item.id));
-        if (!prod) throw Object.assign(new Error('PRODUCT_NOT_FOUND'), { status: 400 });
-        if (prod.stock < item.cantidad) throw Object.assign(new Error(`Stock insuficiente para "${prod.nombre}". Disponible: ${prod.stock}`), { status: 400, code: 'INSUFFICIENT_STOCK' });
-
-        subtotal += prod.precio * item.cantidad;
-        itemsValidados.push({ id: prod.id, precio: prod.precio, cantidad: item.cantidad });
-      }
-
-      // Apply coupon
-      const { descuento, cuponId } = await applyCupon(tx, cupon, subtotal);
-
-      const subtotalConDescuento = subtotal - descuento;
-      const impuestos = calcularImpuestos(subtotalConDescuento);
-      const envio = calcularEnvio(subtotalConDescuento);
-      const total = Math.round((subtotalConDescuento + impuestos + envio) * 100) / 100;
-
-      const [newPedido] = await tx.insert(pedidos).values({
-        usuarioId:  user?.id ?? null,
-        cliente:    sanitizeText(cliente),
-        email,
-        direccion:  sanitizeText(direccion),
-        subtotal:   subtotalConDescuento,
-        impuestos,
-        envio,
-        descuento,
-        cuponId,
-        total,
-        estado:     'pendiente',
-      }).returning({ id: pedidos.id });
-
-      for (const item of itemsValidados) {
-        await tx.insert(pedidoItems).values({
-          pedidoId:   newPedido.id,
-          productoId: item.id,
-          cantidad:   item.cantidad,
-          precio:     item.precio,
-        });
-        // Decrease stock
-        await tx.update(productos).set({
-          stock: sql`${productos.stock} - ${item.cantidad}`,
-        }).where(eq(productos.id, item.id));
-      }
-
-      return { id: newPedido.id, total, subtotal: subtotalConDescuento, impuestos, envio, descuento };
-    });
-
+    const result = await crearPedido({ cliente, email, direccion, items, cupon, userId: user?.id });
     return c.json({ ...result, mensaje: 'Pedido creado correctamente' });
   } catch (err: any) {
     if (err.message === 'PRODUCT_NOT_FOUND')
@@ -1136,12 +1143,12 @@ app.delete('/api/admin/pedidos/:id', authenticate, requireAdmin, async (c) => {
 /** Escapa un valor para CSV previniendo inyección de fórmulas */
 function csvEscape(v: unknown): string {
   if (v == null) return '';
-  let s = String(v);
+  let s = typeof v === 'object' ? JSON.stringify(v) : String(v);
   // Prevenir formula injection: prefijo con comilla si empieza con =, +, -, @, tab, CR
   if (s.length > 0 && ['=', '+', '-', '@', '\t', '\r'].includes(s[0])) {
     s = `'${s}`;
   }
-  s = s.replace(/"/g, '""');
+  s = s.replaceAll('"', '""');
   if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
     s = `"${s}"`;
   }
@@ -1897,57 +1904,7 @@ app.post('/api/pedidos/checkout', checkoutRateLimiter, optionalAuth, zValidator(
   const user = c.get('user');
 
   try {
-    const result = await db.transaction(async (tx) => {
-      let subtotal = 0;
-      const itemsValidados: { id: number; precio: number; cantidad: number }[] = [];
-
-      for (const item of items) {
-        const [prod] = await tx.select({ id: productos.id, precio: productos.precio, stock: productos.stock, nombre: productos.nombre })
-          .from(productos)
-          .where(eq(productos.id, item.id));
-        if (!prod) throw Object.assign(new Error('PRODUCT_NOT_FOUND'), { status: 400 });
-        if (prod.stock < item.cantidad) throw Object.assign(new Error(`Stock insuficiente para "${prod.nombre}". Disponible: ${prod.stock}`), { status: 400, code: 'INSUFFICIENT_STOCK' });
-
-        subtotal += prod.precio * item.cantidad;
-        itemsValidados.push({ id: prod.id, precio: prod.precio, cantidad: item.cantidad });
-      }
-
-      // Apply coupon
-      const { descuento, cuponId } = await applyCupon(tx, cupon, subtotal);
-
-      const subtotalConDescuento = subtotal - descuento;
-      const impuestos = calcularImpuestos(subtotalConDescuento);
-      const envio = calcularEnvio(subtotalConDescuento);
-      const total = Math.round((subtotalConDescuento + impuestos + envio) * 100) / 100;
-
-      const [newPedido] = await tx.insert(pedidos).values({
-        usuarioId:  user?.id ?? null,
-        cliente:    sanitizeText(cliente),
-        email,
-        direccion:  sanitizeText(direccion),
-        subtotal:   subtotalConDescuento,
-        impuestos,
-        envio,
-        descuento,
-        cuponId,
-        total,
-        estado:     'pendiente',
-      }).returning({ id: pedidos.id });
-
-      for (const item of itemsValidados) {
-        await tx.insert(pedidoItems).values({
-          pedidoId:   newPedido.id,
-          productoId: item.id,
-          cantidad:   item.cantidad,
-          precio:     item.precio,
-        });
-        await tx.update(productos).set({
-          stock: sql`${productos.stock} - ${item.cantidad}`,
-        }).where(eq(productos.id, item.id));
-      }
-
-      return { id: newPedido.id, total };
-    });
+    const result = await crearPedido({ cliente, email, direccion, items, cupon, userId: user?.id });
 
     // Create Stripe PaymentIntent (amount in cents)
     const paymentIntent = await stripe.paymentIntents.create({
@@ -2090,8 +2047,8 @@ app.notFound((c) => c.json({ error: 'Ruta no encontrada' }, 404));
 // INICIALIZACIÓN
 // =================================================================
 async function initDB() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS categorias (
+  const createTableQueries = [
+    `CREATE TABLE IF NOT EXISTS categorias (
       id          SERIAL PRIMARY KEY,
       nombre      TEXT    NOT NULL UNIQUE,
       descripcion TEXT,
@@ -2099,8 +2056,21 @@ async function initDB() {
       orden       INTEGER DEFAULT 0,
       activa      BOOLEAN DEFAULT TRUE,
       created_at  TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS productos (
+    )`,
+    `CREATE TABLE IF NOT EXISTS usuarios (
+      id         SERIAL PRIMARY KEY,
+      username   TEXT NOT NULL UNIQUE,
+      password   TEXT NOT NULL,
+      email      TEXT,
+      nombre     TEXT,
+      direccion  TEXT,
+      telefono   TEXT,
+      role       TEXT DEFAULT 'standard' CHECK(role IN ('admin','standard')),
+      avatar     TEXT,
+      idioma     TEXT DEFAULT 'es',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS productos (
       id          SERIAL PRIMARY KEY,
       nombre      TEXT    NOT NULL,
       descripcion TEXT,
@@ -2112,15 +2082,15 @@ async function initDB() {
       destacado   BOOLEAN DEFAULT FALSE,
       activo      BOOLEAN DEFAULT TRUE,
       fecha       TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS producto_imagenes (
+    )`,
+    `CREATE TABLE IF NOT EXISTS producto_imagenes (
       id          SERIAL PRIMARY KEY,
       producto_id INTEGER NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
       url         TEXT NOT NULL,
       orden       INTEGER DEFAULT 0,
       created_at  TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS pedidos (
+    )`,
+    `CREATE TABLE IF NOT EXISTS pedidos (
       id          SERIAL PRIMARY KEY,
       usuario_id  INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
       cliente     TEXT NOT NULL,
@@ -2135,35 +2105,22 @@ async function initDB() {
       estado      TEXT DEFAULT 'pendiente',
       notas       TEXT,
       fecha       TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS pedido_items (
+    )`,
+    `CREATE TABLE IF NOT EXISTS pedido_items (
       id          SERIAL  PRIMARY KEY,
       pedido_id   INTEGER NOT NULL REFERENCES pedidos(id)   ON DELETE CASCADE,
       producto_id INTEGER NOT NULL REFERENCES productos(id) ON DELETE RESTRICT,
       cantidad    INTEGER NOT NULL,
       precio      REAL    NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS usuarios (
-      id         SERIAL PRIMARY KEY,
-      username   TEXT NOT NULL UNIQUE,
-      password   TEXT NOT NULL,
-      email      TEXT,
-      nombre     TEXT,
-      direccion  TEXT,
-      telefono   TEXT,
-      role       TEXT DEFAULT 'standard' CHECK(role IN ('admin','standard')),
-      avatar     TEXT,
-      idioma     TEXT DEFAULT 'es',
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS comentarios (
+    )`,
+    `CREATE TABLE IF NOT EXISTS comentarios (
       id          SERIAL PRIMARY KEY,
       producto_id INTEGER NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
       autor       TEXT    NOT NULL,
       contenido   TEXT    NOT NULL,
       fecha       TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS valoraciones (
+    )`,
+    `CREATE TABLE IF NOT EXISTS valoraciones (
       id          SERIAL PRIMARY KEY,
       producto_id INTEGER NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
       usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
@@ -2172,15 +2129,15 @@ async function initDB() {
       comentario  TEXT,
       fecha       TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE(producto_id, usuario_id)
-    );
-    CREATE TABLE IF NOT EXISTS favoritos (
+    )`,
+    `CREATE TABLE IF NOT EXISTS favoritos (
       id          SERIAL PRIMARY KEY,
       usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
       producto_id INTEGER NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
       created_at  TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE(usuario_id, producto_id)
-    );
-    CREATE TABLE IF NOT EXISTS cupones (
+    )`,
+    `CREATE TABLE IF NOT EXISTS cupones (
       id             SERIAL PRIMARY KEY,
       codigo         TEXT NOT NULL UNIQUE,
       tipo           TEXT NOT NULL DEFAULT 'porcentaje',
@@ -2192,16 +2149,16 @@ async function initDB() {
       fecha_inicio   TIMESTAMPTZ,
       fecha_fin      TIMESTAMPTZ,
       created_at     TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS push_subscriptions (
+    )`,
+    `CREATE TABLE IF NOT EXISTS push_subscriptions (
       id          SERIAL PRIMARY KEY,
       usuario_id  INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
       endpoint    TEXT NOT NULL UNIQUE,
       p256dh      TEXT NOT NULL,
       auth        TEXT NOT NULL,
       created_at  TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS security_events (
+    )`,
+    `CREATE TABLE IF NOT EXISTS security_events (
       id          SERIAL PRIMARY KEY,
       tipo        TEXT NOT NULL,
       ip          TEXT,
@@ -2211,23 +2168,27 @@ async function initDB() {
       user_agent  TEXT,
       detalles    TEXT,
       fecha       TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS blocked_ips (
+    )`,
+    `CREATE TABLE IF NOT EXISTS blocked_ips (
       id              SERIAL PRIMARY KEY,
       ip              TEXT NOT NULL UNIQUE,
       motivo          TEXT,
       bloqueado_hasta TIMESTAMPTZ,
       created_at      TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    )`,
+    `CREATE TABLE IF NOT EXISTS password_reset_tokens (
       id          SERIAL PRIMARY KEY,
       usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
       token       TEXT NOT NULL UNIQUE,
       expires_at  TIMESTAMPTZ NOT NULL,
       used_at     TIMESTAMPTZ,
       created_at  TIMESTAMPTZ DEFAULT NOW()
-    );
-  `);
+    )`
+  ];
+
+  for (const query of createTableQueries) {
+    await pool.query(query);
+  }
 
   // Add new columns to existing tables if they don't exist
   const alterQueries = [
