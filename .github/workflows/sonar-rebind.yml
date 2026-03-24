@@ -1,0 +1,44 @@
+name: SonarCloud Re-bind Repository
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rebind:
+    name: Update GitHub binding in SonarCloud
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get current binding
+        id: get_binding
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          BINDING=$(curl -s -u "$SONAR_TOKEN:" \
+            "https://sonarcloud.io/api/alm_settings/get_binding?project=ddelbarriojuan-code_Proyecto_web")
+          echo "Current binding: $BINDING"
+          ALM=$(echo "$BINDING" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('alm',''))")
+          KEY=$(echo "$BINDING" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('key',''))")
+          echo "alm=$ALM" >> "$GITHUB_OUTPUT"
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Update binding to DariodelBarrio/Proyecto_web
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          ALM_KEY="${{ steps.get_binding.outputs.key }}"
+          echo "Using ALM setting key: $ALM_KEY"
+          RESPONSE=$(curl -s -w "\n%{http_code}" -u "$SONAR_TOKEN:" -X POST \
+            "https://sonarcloud.io/api/alm_settings/set_github_binding" \
+            --data-urlencode "project=ddelbarriojuan-code_Proyecto_web" \
+            --data-urlencode "almSetting=$ALM_KEY" \
+            --data-urlencode "repository=DariodelBarrio/Proyecto_web" \
+            --data-urlencode "summaryCommentEnabled=true")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -1)
+          echo "HTTP $HTTP_CODE: $BODY"
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Binding updated successfully"
+          else
+            echo "❌ Failed to update binding"
+            exit 1
+          fi
