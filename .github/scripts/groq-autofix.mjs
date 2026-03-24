@@ -4,7 +4,7 @@ import { join } from "path";
 const SONAR_TOKEN = process.env.SONAR_TOKEN;
 const SONAR_PROJECT_KEY = process.env.SONAR_PROJECT_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = "gemini-pro";
+const GEMINI_MODEL = "gemini-2.0-flash";
 const PAGE_SIZE = 100;
 
 // ── Fetch all open issues from SonarCloud ──────────────────────────────────
