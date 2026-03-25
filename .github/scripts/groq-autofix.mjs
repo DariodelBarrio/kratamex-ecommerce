@@ -317,16 +317,26 @@ async function tryFix(filePath, code, issues) {
     { name: "HuggingFace", fn: () => callHuggingFace(filePath, code, issues) },
   ];
 
-  for (const api of apis) {
+  for (let i = 0; i < apis.length; i++) {
+    const api = apis[i];
+    const isLastApi = i === apis.length - 1;
+
     try {
       const fixed = await api.fn();
       console.log(`  ✓ Fixed with ${api.name}`);
       return fixed;
     } catch (err) {
       console.log(`  ⚠ ${api.name} failed: ${err.message}`);
+
+      // CRITICAL: Last API failed — complete saturation
+      if (isLastApi) {
+        console.log(`  ✗ LAST API FAILED (9/9) — Complete saturation detected`);
+        return { exhausted: true };
+      }
     }
   }
 
+  // Should not reach here, but fallback
   console.log(`  ✗ All APIs exhausted (9/9 failed)`);
   return null;
 }
@@ -361,8 +371,17 @@ async function main() {
     }
 
     try {
-      const fixed_code = await tryFix(filePath, code, fileIssues);
-      if (fixed_code === null) {
+      const result = await tryFix(filePath, code, fileIssues);
+
+      // CRITICAL: Last API failed — stop immediately
+      if (result && result.exhausted) {
+        console.log(`\n🛑 CRITICAL SATURATION: All 9 APIs completely exhausted`);
+        console.log(`Stopping workflow immediately to preserve GitHub minutes...\n`);
+        break;
+      }
+
+      // Normal handling
+      if (result === null) {
         consecutiveFails++;
         console.log(`  → Skipped (all APIs exhausted) [${consecutiveFails}/${MAX_CONSECUTIVE_FAILS}]`);
 
@@ -376,7 +395,7 @@ async function main() {
         skipped++;
       } else {
         consecutiveFails = 0; // Reset si algo funciona
-        writeFileSync(join(process.cwd(), filePath), fixed_code, "utf8");
+        writeFileSync(join(process.cwd(), filePath), result, "utf8");
         console.log(`  → Written to ${filePath}`);
         fixed++;
       }
