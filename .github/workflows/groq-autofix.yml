@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
   schedule:
-    # Run every 3 hours (0:00, 3:00, 6:00, etc) with 60s delay between files
-    - cron: '0 */3 * * *'
+    # Run once daily at midnight (conserve GitHub minutes: ~750/month vs 2000 available)
+    - cron: '0 0 * * *'
 
 jobs:
   sonar-scan:
