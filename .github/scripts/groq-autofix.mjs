@@ -347,6 +347,8 @@ async function main() {
   const byFile = groupByFile(issues);
   let fixed = 0;
   let skipped = 0;
+  let consecutiveFails = 0;
+  const MAX_CONSECUTIVE_FAILS = 3;
 
   for (const [filePath, fileIssues] of byFile.entries()) {
     console.log(`\nProcessing: ${filePath} (${fileIssues.length} issues)`);
@@ -361,9 +363,19 @@ async function main() {
     try {
       const fixed_code = await tryFix(filePath, code, fileIssues);
       if (fixed_code === null) {
-        console.log(`  → Skipped (all APIs exhausted)`);
+        consecutiveFails++;
+        console.log(`  → Skipped (all APIs exhausted) [${consecutiveFails}/${MAX_CONSECUTIVE_FAILS}]`);
+
+        // Detectar saturación: si N archivos seguidos fallan, parar
+        if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
+          console.log(`\n⚠️  SATURATION DETECTED: All APIs exhausted for ${consecutiveFails} consecutive files`);
+          console.log(`Stopping workflow to avoid wasting GitHub minutes...\n`);
+          break;
+        }
+
         skipped++;
       } else {
+        consecutiveFails = 0; // Reset si algo funciona
         writeFileSync(join(process.cwd(), filePath), fixed_code, "utf8");
         console.log(`  → Written to ${filePath}`);
         fixed++;
