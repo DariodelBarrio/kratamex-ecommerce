@@ -327,7 +327,8 @@ async function tryFix(filePath, code, issues) {
     }
   }
 
-  throw new Error("All APIs failed");
+  console.log(`  ✗ All APIs exhausted (9/9 failed)`);
+  return null;
 }
 
 // ── Sleep helper ───────────────────────────────────────────────────────────
@@ -359,9 +360,14 @@ async function main() {
 
     try {
       const fixed_code = await tryFix(filePath, code, fileIssues);
-      writeFileSync(join(process.cwd(), filePath), fixed_code, "utf8");
-      console.log(`  → Written to ${filePath}`);
-      fixed++;
+      if (fixed_code === null) {
+        console.log(`  → Skipped (all APIs exhausted)`);
+        skipped++;
+      } else {
+        writeFileSync(join(process.cwd(), filePath), fixed_code, "utf8");
+        console.log(`  → Written to ${filePath}`);
+        fixed++;
+      }
     } catch (err) {
       console.error(`  → Error: ${err.message}`);
       skipped++;
