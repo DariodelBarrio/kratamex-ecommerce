@@ -1,8 +1,6 @@
 name: Groq Autofix SonarCloud
 
 on:
-  push:
-    branches: [main]
   schedule:
     # Run once daily at midnight (conserve GitHub minutes: ~750/month vs 2000 available)
     - cron: '0 0 * * *'
