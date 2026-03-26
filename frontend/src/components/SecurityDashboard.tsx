@@ -112,14 +112,14 @@ function buildChartData(stats: SecStats | null) {
 // SOC LOGIN FORM (extracted to reduce cognitive complexity)
 // ================================================================
 interface SocLoginFormProps {
-  username: string;
-  setUsername: (v: string) => void;
-  password: string;
-  setPassword: (v: string) => void;
-  showPass: boolean;
-  setShowPass: (fn: (p: boolean) => boolean) => void;
-  loginErr: string;
-  onLogin: () => void;
+  readonly username: string;
+  readonly setUsername: (v: string) => void;
+  readonly password: string;
+  readonly setPassword: (v: string) => void;
+  readonly showPass: boolean;
+  readonly setShowPass: (fn: (p: boolean) => boolean) => void;
+  readonly loginErr: string;
+  readonly onLogin: () => void;
 }
 
 function SocLoginForm({ username, setUsername, password, setPassword, showPass, setShowPass, loginErr, onLogin }: SocLoginFormProps) {
@@ -180,12 +180,12 @@ function SocLoginForm({ username, setUsername, password, setPassword, showPass, 
 // EVENT LOG (extracted to reduce cognitive complexity)
 // ================================================================
 interface EventLogProps {
-  events: SecEvent[];
-  tipoFiltro: string;
-  setTipoFiltro: (v: string) => void;
-  exportEvents: (format: 'csv' | 'json') => void;
-  renderVtBadge: (ip: string) => React.ReactNode;
-  checkVT: (ip: string) => void;
+  readonly events: SecEvent[];
+  readonly tipoFiltro: string;
+  readonly setTipoFiltro: (v: string) => void;
+  readonly exportEvents: (format: 'csv' | 'json') => void;
+  readonly renderVtBadge: (ip: string) => React.ReactNode;
+  readonly checkVT: (ip: string) => void;
 }
 
 function EventLog({ events, tipoFiltro, setTipoFiltro, exportEvents, renderVtBadge, checkVT }: EventLogProps) {
@@ -284,7 +284,7 @@ export default function SecurityDashboard() {
     try {
       const [sRes, eRes] = await Promise.all([
         fetch('/api/security/stats',  { headers: { Authorization: tk } }),
-        fetch(`/api/security/events?limit=100${tipoFiltro ? `&tipo=${tipoFiltro}` : ''}`, { headers: { Authorization: tk } }),
+        fetch(`/api/security/events?limit=100${tipoFiltro ? ('&tipo=' + tipoFiltro) : ''}`, { headers: { Authorization: tk } }),
       ]);
       if (sRes.ok)  setStats(await sRes.json());
       if (eRes.ok)  setEvents(await eRes.json());

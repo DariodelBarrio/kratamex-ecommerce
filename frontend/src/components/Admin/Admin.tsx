@@ -593,7 +593,7 @@ const eliminarPedido = async (id: number) => {
 
               <div className={styles['form-actions']}>
                 <button className={styles['btn-primary']} onClick={guardarProducto} disabled={guardando}>
-                  {(() => { if (guardando) return 'Guardando...'; return editando ? 'Actualizar' : 'Crear producto'; })()}
+                  {(() => { if (guardando) { return 'Guardando...'; } return editando ? 'Actualizar' : 'Crear producto'; })()}
                 </button>
                 {editando && (
                   <button className={styles['btn-secondary']} onClick={() => {
@@ -643,16 +643,15 @@ const eliminarPedido = async (id: number) => {
                             style={{ width: 70, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: 13 }}
                           />
                         ) : (
-                          <span
+                          <button
+                            type="button"
                             onClick={() => { setStockEditando(p.id); setStockValor(String(p.stock ?? 0)); }}
-                            role="button"
-                            tabIndex={0}
                             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { setStockEditando(p.id); setStockValor(String(p.stock ?? 0)); } }}
                             title="Click para editar stock"
                             style={{ cursor: 'pointer', fontWeight: 700, color: stockColor, padding: '2px 8px', borderRadius: 6, background: `${stockColor}18`, border: `1px solid ${stockColor}33` }}
                           >
                             {(p.stock ?? 0) === 0 ? '⊘ Agotado' : p.stock}
-                          </span>
+                          </button>
                         )}
                       </td>
                       <td>
@@ -724,16 +723,15 @@ const eliminarPedido = async (id: number) => {
                               ))}
                             </select>
                           ) : (
-                            <span
+                            <button
+                              type="button"
                               onClick={() => setEstadoEditando(p.id)}
-                              role="button"
-                              tabIndex={0}
                               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { setEstadoEditando(p.id); } }}
                               title="Click para cambiar estado"
                               style={{ cursor: 'pointer', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: `${estadoColors[p.estado] || '#94a3b8'}22`, color: estadoColors[p.estado] || '#94a3b8', border: `1px solid ${estadoColors[p.estado] || '#94a3b8'}44` }}
                             >
                               {p.estado || 'pendiente'}
-                            </span>
+                            </button>
                           )}
                         </td>
                         <td style={{ color: 'var(--text-light)', whiteSpace: 'nowrap' }}>{new Date(p.fecha).toLocaleDateString('es-ES')}</td>

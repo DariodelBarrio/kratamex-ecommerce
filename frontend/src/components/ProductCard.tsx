@@ -16,6 +16,24 @@ interface ProductCardProps {
   vistaLista?: boolean;
 }
 
+// -- Shared add-to-cart handler factory ---------------------------
+function makeHandleAdd(
+  added: boolean,
+  stock: number,
+  onAddToCart: (producto: Producto) => void,
+  producto: Producto,
+  setAdded: (v: boolean) => void,
+) {
+  return (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!added && stock > 0) {
+      onAddToCart(producto);
+      setAdded(true);
+      setTimeout(() => setAdded(false), 1600);
+    }
+  };
+}
+
 // -- StockBadge helper (eliminates nested ternary) ----------------
 function StockBadge({ stock }: Readonly<{ stock: number }>) {
   if (stock > 10) return <span style={{ color: '#10b981' }}>En stock</span>;
@@ -28,14 +46,7 @@ function ProductCardList({ producto, onAddToCart, index, isWishlisted = false, o
   const [added, setAdded] = useState(false);
   const navigate = useNavigate();
 
-  const handleAdd = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!added && producto.stock > 0) {
-      onAddToCart(producto);
-      setAdded(true);
-      setTimeout(() => setAdded(false), 1600);
-    }
-  };
+  const handleAdd = makeHandleAdd(added, producto.stock, onAddToCart, producto, setAdded);
 
   return (
     <motion.div
@@ -137,14 +148,7 @@ export function ProductCard({ producto, onAddToCart, index, isWishlisted = false
 
   const handleMouseLeave = () => setTilt({ x: 0, y: 0 });
 
-  const handleAdd = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!added && producto.stock > 0) {
-      onAddToCart(producto);
-      setAdded(true);
-      setTimeout(() => setAdded(false), 1600);
-    }
-  };
+  const handleAdd = makeHandleAdd(added, producto.stock, onAddToCart, producto, setAdded);
 
   if (vistaLista) {
     return (
