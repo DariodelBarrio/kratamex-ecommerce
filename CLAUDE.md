@@ -22,48 +22,17 @@ Antes de cada tarea pregúntate:
 ¿Necesita razonamiento profundo? → Sonnet
 ¿Es crítico para el negocio? → Sonnet
 
-## Sistema de delegación de tareas
+## ⚠️ Delegación de tareas — DESACTIVADA (temporalmente)
 
-Antes de cualquier tarea evalúa la complejidad y SIEMPRE pregúntame
-antes de delegar con este formato exacto:
-"Esta tarea [descripción] es [mecánica/análisis/refactor/compleja].
-¿La delego a [modelo] para ahorrar tokens?"
+**MOTIVO**: Las APIs gratuitas (Groq, Gemini, etc.) se gastan en el autofix nocturno.
+Mejor preservarlas íntegras para la ejecución automática del autofix cada medianoche.
 
-### Delega a Groq — mecánico y predecible:
-- Issues SonarCloud Minor/Major (replaceAll, Readonly, globalThis, parseInt)
-- Cambios repetitivos en múltiples archivos
-- Tests simples con patrón fijo
-- Formateo y limpieza de código
+Mientras el autofix esté activo:
+- **Todo lo maneja Claude** (yo) durante el día
+- Las APIs se regeneran para el autofix nocturno
+- Máxima capacidad para fixes automáticos
 
-### Delega a Codestral — refactors de código:
-- Reducir cognitive complexity
-- Extraer funciones anidadas
-- Ternarios anidados
-- Refactors sin lógica de negocio
-
-### Delega a Gemini — análisis y lectura:
-- Explicar reportes de CI
-- Analizar cobertura de tests
-- Resumir documentación
-- Cualquier tarea de solo lectura
-
-### Delega a OpenRouter — fallback:
-- Cuando otro modelo falla
-- Como segunda opinión
-
-### NUNCA delegues — siempre Claude:
-- Carrito, pagos, checkout
-- Auth, permisos, sesiones
-- Bugs con lógica compleja
-- Seguridad en general
-- Cuando el resultado no es fácil de verificar
-- Cuando otro modelo ha fallado ya
-
-### Verificación obligatoria tras cada delegación:
-1. npx tsc --noEmit
-2. npx vitest run
-3. Si falla → reviértelo y hazlo tú Claude
-4. Si pasa → commitea
+Si después se agota el autofix o hay cambios de estrategia, reactivar delegación.
 
 ### Reglas de conversación para no quemar tokens:
 - Máximo 15 mensajes por conversación
