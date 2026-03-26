@@ -30,7 +30,7 @@ import { db, pool } from './db/index';
 import {
   productos, pedidos, pedidoItems, usuarios, comentarios,
   categorias, valoraciones, favoritos, cupones, productoImagenes,
-  pushSubscriptions, securityEvents, blockedIps, passwordResetTokens,
+  pushSubscriptions, securityEvents, blockedIps, passwordResetTokens, auditLog,
 } from './db/schema';
 import {
   ProductoBodySchema, ProductosQuerySchema, LoginSchema, RegisterSchema,
@@ -577,6 +577,15 @@ async function logSecEvent(tipo: string, data: {
 }
 
 // =================================================================
+// AUDIT LOGGER
+// =================================================================
+async function logAudit(adminId: number, adminUsername: string, accion: string, entidad: string, entidadId?: number, detalles?: string) {
+  try {
+    await db.insert(auditLog).values({ adminId, adminUsername, accion, entidad, entidadId, detalles });
+  } catch {}
+}
+
+// =================================================================
 // RUTAS — HEALTH CHECK
 // =================================================================
 app.get('/api/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }));
@@ -690,6 +699,7 @@ app.post('/api/productos', authenticate, requireAdmin, zValidator('json', Produc
       destacado:   data.destacado ?? false,
       activo:      data.activo ?? true,
     }).returning({ id: productos.id });
+    const u = c.get('user'); await logAudit(u.id, u.username, 'crear', 'producto', row.id, `Nombre: ${sanitizeText(data.nombre)}`);
     return c.json({ id: row.id, mensaje: 'Producto creado' });
   } catch (err) {
     console.error(err);
@@ -716,6 +726,7 @@ app.put('/api/productos/:id', authenticate, requireAdmin, zValidator('json', Pro
     }).where(eq(productos.id, id)).returning({ id: productos.id });
 
     if (!result.length) return c.json({ error: 'Producto no encontrado' }, 404);
+    const u = c.get('user'); await logAudit(u.id, u.username, 'actualizar', 'producto', id, `Nombre: ${sanitizeText(data.nombre)}`);
     return c.json({ mensaje: 'Producto actualizado' });
   } catch (err) {
     console.error(err);
@@ -821,6 +832,7 @@ app.delete('/api/productos/:id', authenticate, requireAdmin, async (c) => {
     if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
     const result = await db.delete(productos).where(eq(productos.id, id)).returning({ id: productos.id });
     if (!result.length) return c.json({ error: 'Producto no encontrado' }, 404);
+    const u = c.get('user'); await logAudit(u.id, u.username, 'eliminar', 'producto', id);
     return c.json({ mensaje: 'Producto eliminado' });
   } catch (err) {
     console.error(err);
@@ -1101,6 +1113,7 @@ app.patch('/api/pedidos/:id/estado', authenticate, requireAdmin, zValidator('jso
 
     const result = await db.update(pedidos).set(updateData).where(eq(pedidos.id, id)).returning({ id: pedidos.id });
     if (!result.length) return c.json({ error: 'Pedido no encontrado' }, 404);
+    const u = c.get('user'); await logAudit(u.id, u.username, 'cambio_estado', 'pedido', id, `Estado: ${estado}`);
     return c.json({ mensaje: 'Estado actualizado' });
   } catch (err) {
     console.error(err);
@@ -1129,6 +1142,7 @@ app.delete('/api/admin/pedidos/:id', authenticate, requireAdmin, async (c) => {
     if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
     const result = await db.delete(pedidos).where(eq(pedidos.id, id)).returning({ id: pedidos.id });
     if (!result.length) return c.json({ error: 'Pedido no encontrado' }, 404);
+    const u = c.get('user'); await logAudit(u.id, u.username, 'eliminar', 'pedido', id);
     return c.json({ mensaje: 'Pedido eliminado' });
   } catch (err) {
     console.error(err);
@@ -1143,7 +1157,7 @@ app.delete('/api/admin/pedidos/:id', authenticate, requireAdmin, async (c) => {
 /** Escapa un valor para CSV previniendo inyección de fórmulas */
 function csvEscape(v: unknown): string {
   if (v == null) return '';
-  let s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+  let s = typeof v === 'object' ? JSON.stringify(v) : `${v as string | number | boolean | bigint}`;
   // Prevenir formula injection: prefijo con comilla si empieza con =, +, -, @, tab, CR
   if (s.length > 0 && ['=', '+', '-', '@', '\t', '\r'].includes(s[0])) {
     s = `'${s}`;
@@ -1216,6 +1230,7 @@ app.post('/api/categorias', authenticate, requireAdmin, zValidator('json', Categ
       orden:       data.orden ?? 0,
       activa:      data.activa ?? true,
     }).returning({ id: categorias.id });
+    const u = c.get('user'); await logAudit(u.id, u.username, 'crear', 'categoria', row.id, `Nombre: ${sanitizeText(data.nombre)}`);
     return c.json({ id: row.id, mensaje: 'Categoría creada' });
   } catch (err) {
     console.error(err);
@@ -1236,6 +1251,7 @@ app.put('/api/categorias/:id', authenticate, requireAdmin, zValidator('json', Ca
       activa:      data.activa ?? true,
     }).where(eq(categorias.id, id)).returning({ id: categorias.id });
     if (!result.length) return c.json({ error: 'Categoría no encontrada' }, 404);
+    const u = c.get('user'); await logAudit(u.id, u.username, 'actualizar', 'categoria', id, `Nombre: ${sanitizeText(data.nombre)}`);
     return c.json({ mensaje: 'Categoría actualizada' });
   } catch (err) {
     console.error(err);
@@ -1248,6 +1264,7 @@ app.delete('/api/categorias/:id', authenticate, requireAdmin, async (c) => {
     const id = Number.parseInt(c.req.param('id'));
     if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
     await db.delete(categorias).where(eq(categorias.id, id));
+    const u = c.get('user'); await logAudit(u.id, u.username, 'eliminar', 'categoria', id);
     return c.json({ mensaje: 'Categoría eliminada' });
   } catch (err) {
     console.error(err);
@@ -1281,6 +1298,7 @@ app.post('/api/admin/cupones', authenticate, requireAdmin, zValidator('json', Cu
       fechaInicio: data.fechaInicio ? new Date(data.fechaInicio) : null,
       fechaFin:    data.fechaFin ? new Date(data.fechaFin) : null,
     }).returning({ id: cupones.id });
+    const u = c.get('user'); await logAudit(u.id, u.username, 'crear', 'cupon', row.id, `Código: ${data.codigo.toUpperCase()}`);
     return c.json({ id: row.id, mensaje: 'Cupón creado' });
   } catch (err) {
     console.error(err);
@@ -1293,6 +1311,7 @@ app.delete('/api/admin/cupones/:id', authenticate, requireAdmin, async (c) => {
     const id = Number.parseInt(c.req.param('id'));
     if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
     await db.delete(cupones).where(eq(cupones.id, id));
+    const u = c.get('user'); await logAudit(u.id, u.username, 'eliminar', 'cupon', id);
     return c.json({ mensaje: 'Cupón eliminado' });
   } catch (err) {
     console.error(err);
@@ -1798,11 +1817,29 @@ app.delete('/api/admin/valoraciones/:id', authenticate, requireAdmin, async (c) 
   if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
   try {
     await db.delete(valoraciones).where(eq(valoraciones.id, id));
+    const u = c.get('user'); await logAudit(u.id, u.username, 'eliminar', 'valoracion', id);
     return c.json({ ok: true });
   } catch (err) {
     console.error(err);
     return c.json({ error: 'Error interno del servidor' }, 500);
   }
+});
+
+// =================================================================
+// RUTAS — AUDIT LOG
+// =================================================================
+app.get('/api/admin/audit-log', authenticate, requireAdmin, async (c) => {
+  try {
+    const limit  = Math.min(Number(c.req.query('limit') || 200), 500);
+    const offset = Math.max(Number(c.req.query('offset') || 0), 0);
+    const entidad = c.req.query('entidad');
+    const rows = await db.select().from(auditLog)
+      .where(entidad ? eq(auditLog.entidad, entidad) : undefined)
+      .orderBy(desc(auditLog.fecha))
+      .limit(limit)
+      .offset(offset);
+    return c.json(rows);
+  } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
 });
 
 // =================================================================
@@ -2223,21 +2260,21 @@ async function seedProductos() {
   const result = await pool.query('SELECT COUNT(*) AS count FROM productos');
   if (Number.parseInt(result.rows[0].count) > 0) return;
   const data = [
-    ['MacBook Pro 14"',           'Apple M3 Pro, 18GB RAM, 512GB SSD, Pantalla Liquid Retina XDR',                    2249.00, 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&h=300&fit=crop',   'Portátiles', 25, 'MBP-14-M3'],
-    ['Dell XPS 15',               'Intel Core i7-13700H, 32GB RAM, 1TB SSD, NVIDIA RTX 4060, 15.6" 3.5K OLED',       1899.00, 'https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?w=400&h=300&fit=crop',   'Portátiles', 30, 'DELL-XPS15'],
-    ['HP Spectre x360',           'Intel Core i7-1255U, 16GB RAM, 512GB SSD, Pantalla 14" FHD Táctil 2-en-1',        1499.00, 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400&h=300&fit=crop',   'Portátiles', 20, 'HP-SPEC360'],
-    ['Lenovo ThinkPad X1 Carbon', 'Intel Core i7-1365U, 16GB RAM, 512GB SSD, Pantalla 14" 2.8K OLED',                1799.00, 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?w=400&h=300&fit=crop',   'Portátiles', 15, 'LEN-X1C'],
-    ['LG Gram 17',                'Intel Core i7-1360P, 32GB RAM, 1TB SSD, Pantalla 17" WQXGA, Peso 1.35kg',         2199.00, 'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=400&h=300&fit=crop',     'Portátiles', 10, 'LG-GRAM17'],
-    ['Samsung Galaxy Book4 Pro',  'Intel Core Ultra 7 155H, 16GB RAM, 512GB SSD, Pantalla 14" AMOLED 120Hz',         1449.00, 'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?w=400&h=300&fit=crop',   'Portátiles', 35, 'SAM-GB4P'],
-    ['ASUS ROG Strix G16',        'Intel Core i9-13980HX, 32GB RAM, 1TB SSD, NVIDIA RTX 4070, 16" FHD 165Hz',        2199.00, 'https://images.unsplash.com/photo-1603302576837-37561b2e2302?w=400&h=300&fit=crop',   'Gaming', 18, 'ASUS-ROGG16'],
-    ['Alienware m18',             'Intel Core i9-13980HX, 64GB RAM, 2TB SSD, NVIDIA RTX 4090, 18" QHD+ 165Hz',       3499.00, 'https://images.unsplash.com/photo-1587614382346-4ec70e388b28?w=400&h=300&fit=crop',   'Gaming', 8, 'AW-M18'],
-    ['MSI Titan GT77',            'Intel Core i9-13900HX, 64GB RAM, 2TB SSD, NVIDIA RTX 4090, 17.3" 4K 144Hz',       3799.00, 'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?w=400&h=300&fit=crop',   'Gaming', 5, 'MSI-GT77'],
-    ['Razer Blade 15',            'Intel Core i7-13800H, 16GB RAM, 1TB SSD, NVIDIA RTX 4070, 15.6" QHD 240Hz',       2499.00, 'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?w=400&h=300&fit=crop',   'Gaming', 12, 'RAZ-BL15'],
-    ['HP Omen 16',                'AMD Ryzen 9 7940HS, 32GB RAM, 1TB SSD, NVIDIA RTX 4070, 16.1" QHD 165Hz',         1699.00, 'https://images.unsplash.com/photo-1618424181497-157f25b6ddd5?w=400&h=300&fit=crop',   'Gaming', 22, 'HP-OMEN16'],
-    ['Acer Predator Helios 18',   'Intel Core i9-13900HX, 32GB RAM, 1TB SSD, NVIDIA RTX 4080, 18" WQXGA 240Hz',      2699.00, 'https://images.unsplash.com/photo-1620283085439-39620a119571?w=400&h=300&fit=crop',   'Gaming', 7, 'ACER-PH18'],
-    ['Apple iMac 24"',            'Apple M3, 8GB RAM, 256GB SSD, Pantalla 4.5K Retina 24", Cámara 1080p',             1499.00, 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=400&h=300&fit=crop',   'Sobremesa', 20, 'IMAC-24-M3'],
-    ['Dell Inspiron 24',          'Intel Core i7-1355U, 16GB RAM, 512GB SSD, Pantalla 23.8" FHD Táctil',             1099.00, 'https://images.unsplash.com/photo-1547082299-de196ea013d6?w=400&h=300&fit=crop',     'Sobremesa', 28, 'DELL-I24'],
-    ['HP Pavilion 27',            'AMD Ryzen 7 7735HS, 16GB RAM, 512GB SSD, Pantalla 27" QHD',                       1199.00, 'https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=400&h=300&fit=crop',   'Sobremesa', 16, 'HP-PAV27'],
+    ['MacBook Pro 14"',           'Apple M3 Pro, 18GB RAM, 512GB SSD, Pantalla Liquid Retina XDR',                    2249, 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&h=300&fit=crop',   'Portátiles', 25, 'MBP-14-M3'],
+    ['Dell XPS 15',               'Intel Core i7-13700H, 32GB RAM, 1TB SSD, NVIDIA RTX 4060, 15.6" 3.5K OLED',       1899, 'https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?w=400&h=300&fit=crop',   'Portátiles', 30, 'DELL-XPS15'],
+    ['HP Spectre x360',           'Intel Core i7-1255U, 16GB RAM, 512GB SSD, Pantalla 14" FHD Táctil 2-en-1',        1499, 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400&h=300&fit=crop',   'Portátiles', 20, 'HP-SPEC360'],
+    ['Lenovo ThinkPad X1 Carbon', 'Intel Core i7-1365U, 16GB RAM, 512GB SSD, Pantalla 14" 2.8K OLED',                1799, 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?w=400&h=300&fit=crop',   'Portátiles', 15, 'LEN-X1C'],
+    ['LG Gram 17',                'Intel Core i7-1360P, 32GB RAM, 1TB SSD, Pantalla 17" WQXGA, Peso 1.35kg',         2199, 'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=400&h=300&fit=crop',     'Portátiles', 10, 'LG-GRAM17'],
+    ['Samsung Galaxy Book4 Pro',  'Intel Core Ultra 7 155H, 16GB RAM, 512GB SSD, Pantalla 14" AMOLED 120Hz',         1449, 'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?w=400&h=300&fit=crop',   'Portátiles', 35, 'SAM-GB4P'],
+    ['ASUS ROG Strix G16',        'Intel Core i9-13980HX, 32GB RAM, 1TB SSD, NVIDIA RTX 4070, 16" FHD 165Hz',        2199, 'https://images.unsplash.com/photo-1603302576837-37561b2e2302?w=400&h=300&fit=crop',   'Gaming', 18, 'ASUS-ROGG16'],
+    ['Alienware m18',             'Intel Core i9-13980HX, 64GB RAM, 2TB SSD, NVIDIA RTX 4090, 18" QHD+ 165Hz',       3499, 'https://images.unsplash.com/photo-1587614382346-4ec70e388b28?w=400&h=300&fit=crop',   'Gaming', 8, 'AW-M18'],
+    ['MSI Titan GT77',            'Intel Core i9-13900HX, 64GB RAM, 2TB SSD, NVIDIA RTX 4090, 17.3" 4K 144Hz',       3799, 'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?w=400&h=300&fit=crop',   'Gaming', 5, 'MSI-GT77'],
+    ['Razer Blade 15',            'Intel Core i7-13800H, 16GB RAM, 1TB SSD, NVIDIA RTX 4070, 15.6" QHD 240Hz',       2499, 'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?w=400&h=300&fit=crop',   'Gaming', 12, 'RAZ-BL15'],
+    ['HP Omen 16',                'AMD Ryzen 9 7940HS, 32GB RAM, 1TB SSD, NVIDIA RTX 4070, 16.1" QHD 165Hz',         1699, 'https://images.unsplash.com/photo-1618424181497-157f25b6ddd5?w=400&h=300&fit=crop',   'Gaming', 22, 'HP-OMEN16'],
+    ['Acer Predator Helios 18',   'Intel Core i9-13900HX, 32GB RAM, 1TB SSD, NVIDIA RTX 4080, 18" WQXGA 240Hz',      2699, 'https://images.unsplash.com/photo-1620283085439-39620a119571?w=400&h=300&fit=crop',   'Gaming', 7, 'ACER-PH18'],
+    ['Apple iMac 24"',            'Apple M3, 8GB RAM, 256GB SSD, Pantalla 4.5K Retina 24", Cámara 1080p',             1499, 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=400&h=300&fit=crop',   'Sobremesa', 20, 'IMAC-24-M3'],
+    ['Dell Inspiron 24',          'Intel Core i7-1355U, 16GB RAM, 512GB SSD, Pantalla 23.8" FHD Táctil',             1099, 'https://images.unsplash.com/photo-1547082299-de196ea013d6?w=400&h=300&fit=crop',     'Sobremesa', 28, 'DELL-I24'],
+    ['HP Pavilion 27',            'AMD Ryzen 7 7735HS, 16GB RAM, 512GB SSD, Pantalla 27" QHD',                       1199, 'https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=400&h=300&fit=crop',   'Sobremesa', 16, 'HP-PAV27'],
   ];
   for (const [nombre, descripcion, precio, imagen, categoria, stock, sku] of data) {
     await pool.query(
@@ -2284,18 +2321,18 @@ async function seedPedidos() {
   const result = await pool.query('SELECT COUNT(*) AS count FROM pedidos');
   if (Number.parseInt(result.rows[0].count) > 0) return;
   const data = [
-    { cliente: 'Juan Pérez',      email: 'juan@email.com',    direccion: 'Calle Mayor 123, Madrid',         total: 2249.00, daysAgo: 6 },
-    { cliente: 'María García',    email: 'maria@email.com',   direccion: 'Av. Roma 45, Barcelona',          total: 1899.00, daysAgo: 6 },
-    { cliente: 'Carlos López',    email: 'carlos@email.com',  direccion: 'Plaza España 10, Valencia',       total: 1499.00, daysAgo: 5 },
-    { cliente: 'Ana Martínez',    email: 'ana@email.com',     direccion: 'Gran Vía 88, Madrid',             total: 3499.00, daysAgo: 5 },
-    { cliente: 'Pedro Sánchez',   email: 'pedro@email.com',   direccion: 'Paseo de Gracia 32, Barcelona',   total: 2199.00, daysAgo: 4 },
-    { cliente: 'Laura Gómez',     email: 'laura@email.com',   direccion: 'Calle Sierpes 7, Sevilla',        total: 1099.00, daysAgo: 4 },
-    { cliente: 'Roberto Díaz',    email: 'roberto@email.com', direccion: 'Av. Constitución 15, Sevilla',    total: 1799.00, daysAgo: 3 },
-    { cliente: 'Elena Fernández', email: 'elena@email.com',   direccion: 'C/ Larios 22, Málaga',            total: 2499.00, daysAgo: 2 },
-    { cliente: 'Miguel Torres',   email: 'miguel@email.com',  direccion: 'Rúa do Vilar 5, Santiago',        total: 1449.00, daysAgo: 2 },
-    { cliente: 'Sofía Ruiz',      email: 'sofia@email.com',   direccion: 'Calle Mayor 55, Zaragoza',        total: 2699.00, daysAgo: 1 },
-    { cliente: 'David Moreno',    email: 'david@email.com',   direccion: 'Paseo Castellana 100, Madrid',    total: 3799.00, daysAgo: 1 },
-    { cliente: 'Carmen Jiménez',  email: 'carmen@email.com',  direccion: 'Av. Diagonal 200, Barcelona',     total: 1199.00, daysAgo: 0 },
+    { cliente: 'Juan Pérez',      email: 'juan@email.com',    direccion: 'Calle Mayor 123, Madrid',         total: 2249, daysAgo: 6 },
+    { cliente: 'María García',    email: 'maria@email.com',   direccion: 'Av. Roma 45, Barcelona',          total: 1899, daysAgo: 6 },
+    { cliente: 'Carlos López',    email: 'carlos@email.com',  direccion: 'Plaza España 10, Valencia',       total: 1499, daysAgo: 5 },
+    { cliente: 'Ana Martínez',    email: 'ana@email.com',     direccion: 'Gran Vía 88, Madrid',             total: 3499, daysAgo: 5 },
+    { cliente: 'Pedro Sánchez',   email: 'pedro@email.com',   direccion: 'Paseo de Gracia 32, Barcelona',   total: 2199, daysAgo: 4 },
+    { cliente: 'Laura Gómez',     email: 'laura@email.com',   direccion: 'Calle Sierpes 7, Sevilla',        total: 1099, daysAgo: 4 },
+    { cliente: 'Roberto Díaz',    email: 'roberto@email.com', direccion: 'Av. Constitución 15, Sevilla',    total: 1799, daysAgo: 3 },
+    { cliente: 'Elena Fernández', email: 'elena@email.com',   direccion: 'C/ Larios 22, Málaga',            total: 2499, daysAgo: 2 },
+    { cliente: 'Miguel Torres',   email: 'miguel@email.com',  direccion: 'Rúa do Vilar 5, Santiago',        total: 1449, daysAgo: 2 },
+    { cliente: 'Sofía Ruiz',      email: 'sofia@email.com',   direccion: 'Calle Mayor 55, Zaragoza',        total: 2699, daysAgo: 1 },
+    { cliente: 'David Moreno',    email: 'david@email.com',   direccion: 'Paseo Castellana 100, Madrid',    total: 3799, daysAgo: 1 },
+    { cliente: 'Carmen Jiménez',  email: 'carmen@email.com',  direccion: 'Av. Diagonal 200, Barcelona',     total: 1199, daysAgo: 0 },
   ];
   for (const p of data) {
     const fecha = new Date();
