@@ -120,8 +120,8 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
   useEffect(() => {
     if (!carritoAbierto) return
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') cerrarCarrito() }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
+    globalThis.addEventListener('keydown', handleKey)
+    return () => globalThis.removeEventListener('keydown', handleKey)
   }, [carritoAbierto])
 
   const addToast = (nombre: string) => {
@@ -401,7 +401,7 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
 
               <div className="view-toggle">
                 <button
-                  className={`view-toggle-btn ${!vistaLista ? 'active' : ''}`}
+                  className={`view-toggle-btn ${vistaLista ? '' : 'active'}`}
                   onClick={() => setVistaLista(false)}
                   title="Vista cuadrícula"
                 >
@@ -432,7 +432,7 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
         >
           <ParticleCanvas />
           <div className="hero-eyebrow">
-            <span className="hero-eyebrow-dot" />
+            <span className="hero-eyebrow-dot" />{' '}
             Tecnología de primer nivel
           </div>
 
@@ -483,7 +483,7 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
           <div className="section-header">
             <h2 className="section-title">Catálogo</h2>
             <span className="section-count">
-              {productosFiltrados.length} producto{productosFiltrados.length !== 1 ? 's' : ''}
+              {productosFiltrados.length} producto{productosFiltrados.length === 1 ? '' : 's'}
             </span>
 
             {hayFiltrosActivos && (
@@ -520,40 +520,48 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
           </div>
         )}
 
-        {loading ? (
-          <div className={vistaLista ? 'products-list' : 'products-grid'}>
-            {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
-          </div>
-        ) : productosFiltrados.length === 0 ? (
-          <div className="no-results">
-            <div className="no-results-icon">
-              {filtrarFavoritos ? <Heart size={52} /> : <Search size={52} />}
+        {(() => {
+          if (loading) {
+            return (
+              <div className={vistaLista ? 'products-list' : 'products-grid'}>
+                {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={`skeleton-${i}`} />)}
+              </div>
+            )
+          }
+          if (productosFiltrados.length === 0) {
+            return (
+              <div className="no-results">
+                <div className="no-results-icon">
+                  {filtrarFavoritos ? <Heart size={52} /> : <Search size={52} />}
+                </div>
+                <h3>{filtrarFavoritos ? 'Sin favoritos aún' : 'Sin resultados'}</h3>
+                <p>
+                  {filtrarFavoritos
+                    ? 'Guarda productos con el corazón para verlos aquí'
+                    : `No hay productos para "${busqueda || categoriaFiltro}"`}
+                </p>
+                <button className="btn-secondary" onClick={limpiarFiltros}>
+                  Limpiar filtros
+                </button>
+              </div>
+            )
+          }
+          return (
+            <div className={vistaLista ? 'products-list' : 'products-grid'}>
+              {productosFiltrados.map((producto, index) => (
+                <ProductCard
+                  key={producto.id}
+                  producto={producto}
+                  onAddToCart={agregarAlCarrito}
+                  index={index}
+                  isWishlisted={wishlistExterno.includes(producto.id)}
+                  onToggleWishlist={onToggleWishlistExterno}
+                  vistaLista={vistaLista}
+                />
+              ))}
             </div>
-            <h3>{filtrarFavoritos ? 'Sin favoritos aún' : 'Sin resultados'}</h3>
-            <p>
-              {filtrarFavoritos
-                ? 'Guarda productos con el corazón para verlos aquí'
-                : `No hay productos para "${busqueda || categoriaFiltro}"`}
-            </p>
-            <button className="btn-secondary" onClick={limpiarFiltros}>
-              Limpiar filtros
-            </button>
-          </div>
-        ) : (
-          <div className={vistaLista ? 'products-list' : 'products-grid'}>
-            {productosFiltrados.map((producto, index) => (
-              <ProductCard
-                key={producto.id}
-                producto={producto}
-                onAddToCart={agregarAlCarrito}
-                index={index}
-                isWishlisted={wishlistExterno.includes(producto.id)}
-                onToggleWishlist={onToggleWishlistExterno}
-                vistaLista={vistaLista}
-              />
-            ))}
-          </div>
-        )}
+          )
+        })()}
       </main>
 
       {/* ═══════ FOOTER ═══════ */}
@@ -590,7 +598,7 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
                 <div className="cart-header-left">
                   <h2>Tu Carrito</h2>
                   {cantidadItems > 0 && (
-                    <span className="cart-header-count">{cantidadItems} item{cantidadItems !== 1 ? 's' : ''}</span>
+                    <span className="cart-header-count">{cantidadItems} item{cantidadItems === 1 ? '' : 's'}</span>
                   )}
                 </div>
                 <button className="cart-close-btn" onClick={cerrarCarrito}>
@@ -642,7 +650,7 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
                                 min={1}
                                 max={item.stock}
                                 onBlur={e => {
-                                  const val = parseInt(e.target.value)
+                                  const val = Number.parseInt(e.target.value)
                                   if (!Number.isNaN(val) && val >= 1) setCantidad(item.id, val)
                                   else e.target.value = String(item.cantidad)
                                 }}
@@ -806,7 +814,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-tema', tema)
+    document.documentElement.dataset['tema'] = tema
     localStorage.setItem('kratamex_tema', tema)
   }, [tema])
 
