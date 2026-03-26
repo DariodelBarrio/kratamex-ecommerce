@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Lock, Eye, EyeOff, Package, TrendingUp, LayoutDashboard, Trash2, ShoppingBag, DollarSign, Users, Upload, X, ImageIcon, Star, MessageSquare, Tag, Download, AlertCircle, CheckCircle } from 'lucide-react';
+import { Lock, Eye, EyeOff, Package, TrendingUp, LayoutDashboard, Trash2, ShoppingBag, DollarSign, Users, Upload, X, ImageIcon, Star, MessageSquare, Tag, Download, AlertCircle, CheckCircle, ClipboardList } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import styles from './Admin.module.css';
 import type { Producto } from '../../interfaces';
@@ -9,7 +9,7 @@ import { PasswordStrength } from '../PasswordStrength';
 import {
   patchPedidoEstado, getAdminAnalytics, getAdminUsuarios,
   getAdminCupones, postAdminCupon, deleteAdminCupon,
-  exportPedidosCsv, exportProductosCsv, patchProductoStock,
+  exportPedidosCsv, exportProductosCsv, patchProductoStock, getAuditLog,
 } from '../../api';
 
 function Admin() {
@@ -21,7 +21,7 @@ function Admin() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [token, setToken] = useState('');
-  const [vista, setVista] = useState<'dashboard' | 'productos' | 'pedidos' | 'reseñas' | 'cupones' | 'usuarios'>('dashboard');
+  const [vista, setVista] = useState<'dashboard' | 'productos' | 'pedidos' | 'reseñas' | 'cupones' | 'usuarios' | 'auditoria'>('dashboard');
   const [editando, setEditando] = useState<Producto | null>(null);
   const [formProducto, setFormProducto] = useState({
     nombre: '', descripcion: '', precio: '', imagen: '', categoria: '', stock: '0', activo: true,
@@ -113,9 +113,16 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
   const [estadoEditando, setEstadoEditando] = useState<number | null>(null);
   const [stockEditando, setStockEditando] = useState<number | null>(null);
   const [stockValor, setStockValor] = useState('');
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { cargarDatos(); }, [token]);
+
+  useEffect(() => {
+    if (vista === 'auditoria') {
+      getAuditLog().then(setAuditLogs).catch(console.error);
+    }
+  }, [vista]);
 
   const cargarDatos = () => {
     fetch('/api/productos').then(r => r.json()).then(setProductos).catch(console.error);
@@ -306,6 +313,10 @@ const eliminarPedido = async (id: number) => {
           <button className={`${styles['tab-btn']} ${vista === 'usuarios' ? styles.active : ''}`}
             onClick={() => setVista('usuarios')}>
             <Users size={18} /> Usuarios
+          </button>
+          <button className={`${styles['tab-btn']} ${vista === 'auditoria' ? styles.active : ''}`}
+            onClick={() => setVista('auditoria')}>
+            <ClipboardList size={18} /> Auditoría
           </button>
         </div>
 
@@ -671,7 +682,7 @@ const eliminarPedido = async (id: number) => {
                           setImagenPreview(p.imagen || '');
                           if (fileInputRef.current) fileInputRef.current.value = '';
                           setMensajeForm('');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          globalThis.scrollTo({ top: 0, behavior: 'smooth' });
                         }}>Editar</button>
                         <button className={styles['btn-delete']} onClick={() => eliminarProducto(p.id)}>Eliminar</button>
                       </td>
@@ -870,6 +881,53 @@ const eliminarPedido = async (id: number) => {
                 </tbody>
               </table>
               {usuarios.length === 0 && <p style={{ padding: '20px', textAlign: 'center' }}>No hay usuarios</p>}
+            </div>
+          </div>
+        )}
+
+        {/* AUDITORÍA */}
+        {vista === 'auditoria' && (
+          <div className={styles['admin-section']}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ClipboardList size={20} /> Registro de Auditoría
+              </h3>
+              <button className={styles['btn-secondary']} onClick={() => getAuditLog().then(setAuditLogs).catch(console.error)}
+                style={{ padding: '6px 14px', fontSize: 13 }}>
+                Actualizar
+              </button>
+            </div>
+            <div className={styles['admin-table']}>
+              <table>
+                <thead>
+                  <tr><th>Fecha</th><th>Admin</th><th>Acción</th><th>Entidad</th><th>ID</th><th>Detalles</th></tr>
+                </thead>
+                <tbody>
+                  {auditLogs.map((entry: any) => (
+                    <tr key={entry.id}>
+                      <td style={{ color: 'var(--text-light)', whiteSpace: 'nowrap', fontSize: 12 }}>
+                        {new Date(entry.fecha).toLocaleString('es-ES')}
+                      </td>
+                      <td style={{ fontWeight: 600 }}>{sanitize(entry.adminUsername)}</td>
+                      <td>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                          background: entry.accion === 'crear' ? '#10b98122' : entry.accion === 'eliminar' ? '#ef444422' : entry.accion === 'cambio_estado' ? '#f59e0b22' : '#3b82f622',
+                          color: entry.accion === 'crear' ? '#10b981' : entry.accion === 'eliminar' ? '#ef4444' : entry.accion === 'cambio_estado' ? '#f59e0b' : '#3b82f6',
+                        }}>
+                          {entry.accion}
+                        </span>
+                      </td>
+                      <td>{sanitize(entry.entidad)}</td>
+                      <td style={{ color: 'var(--text-light)' }}>{entry.entidadId ?? '—'}</td>
+                      <td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--text-light)' }}>
+                        {sanitize(entry.detalles) || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {auditLogs.length === 0 && <p style={{ padding: '20px', textAlign: 'center' }}>No hay registros de auditoría</p>}
             </div>
           </div>
         )}
