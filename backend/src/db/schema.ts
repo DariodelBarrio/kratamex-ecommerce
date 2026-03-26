@@ -192,6 +192,20 @@ export const blockedIps = pgTable('blocked_ips', {
 });
 
 // =================================================================
+// AUDIT LOG (acciones de administrador)
+// =================================================================
+export const auditLog = pgTable('audit_log', {
+  id:            serial('id').primaryKey(),
+  adminId:       integer('admin_id').references(() => usuarios.id, { onDelete: 'set null' }),
+  adminUsername: text('admin_username').notNull(),
+  accion:        text('accion').notNull(), // 'crear' | 'actualizar' | 'eliminar' | 'cambio_estado'
+  entidad:       text('entidad').notNull(), // 'producto' | 'pedido' | 'categoria' | 'cupon' | 'valoracion'
+  entidadId:     integer('entidad_id'),
+  detalles:      text('detalles'),
+  fecha:         timestamp('fecha', { withTimezone: true }).defaultNow(),
+});
+
+// =================================================================
 // Tipos inferidos
 // =================================================================
 export type Producto      = typeof productos.$inferSelect;
@@ -206,3 +220,4 @@ export type Cupon         = typeof cupones.$inferSelect;
 export type ProductoImagen = typeof productoImagenes.$inferSelect;
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type BlockedIp        = typeof blockedIps.$inferSelect;
+export type AuditLogEntry    = typeof auditLog.$inferSelect;
