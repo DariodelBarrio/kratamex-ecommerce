@@ -306,9 +306,9 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
   const categoriaURL = searchParams.get('categoria') || ''
 
   useEffect(() => {
-    const handleScroll = () => setShowBackTop(window.scrollY > 420)
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
+    const handleScroll = () => setShowBackTop(globalThis.scrollY > 420)
+    globalThis.addEventListener('scroll', handleScroll, { passive: true })
+    return () => globalThis.removeEventListener('scroll', handleScroll)
   }, [])
 
   // Escape cierra el carrito
@@ -744,7 +744,7 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
         {showBackTop && (
           <motion.button
             className="back-to-top"
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            onClick={() => globalThis.scrollTo({ top: 0, behavior: 'smooth' })}
             title="Volver arriba"
             initial={{ opacity: 0, scale: 0.85 }}
             animate={{ opacity: 1, scale: 1 }}
