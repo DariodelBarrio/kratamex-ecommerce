@@ -2,8 +2,8 @@ name: Groq Autofix SonarCloud
 
 on:
   schedule:
-    # Run once daily at midnight (conserve GitHub minutes: ~750/month vs 2000 available)
-    - cron: '0 0 * * *'
+    # Run every 4 hours — public repo = unlimited minutes, APIs recover daily limits
+    - cron: '0 */4 * * *'
 
 jobs:
   sonar-scan:
@@ -83,6 +83,7 @@ jobs:
           exit 1
 
       - name: Commit fixes
+        id: commit
         if: steps.tsc.outcome == 'success'
         run: |
           git config user.name  "groq-autofix[bot]"
@@ -90,7 +91,20 @@ jobs:
           git add -A
           if git diff --cached --quiet; then
             echo "No changes to commit"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             git commit -m "fix: autofix issues SonarCloud via Groq 🤖"
             git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: SonarCloud Scan (actualiza issues tras fixes)
+        if: steps.tsc.outcome == 'success'
+        uses: SonarSource/sonarcloud-github-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.javascript.lcov.reportPaths=
+            -Dsonar.coverage.exclusions=**/*
