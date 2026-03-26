@@ -135,3 +135,7 @@ export const exportProductosCsv = () =>
 // Push
 export const subscribePush = (subscription: any) =>
   request('/push/subscribe', { method: 'POST', body: JSON.stringify(subscription) });
+
+// Audit log
+export const getAuditLog = (limit = 200) =>
+  request<any[]>(`/admin/audit-log?limit=${limit}`);
