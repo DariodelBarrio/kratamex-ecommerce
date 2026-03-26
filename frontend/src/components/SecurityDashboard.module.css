@@ -394,7 +394,7 @@
 .ev-ok  .logBadge,
 .ev-ok.logBadge  {
   background: rgba(16,185,129,0.12);
-  color: #10b981;
+  color: #065f46;
   border-color: rgba(16,185,129,0.25);
   box-shadow: 0 0 6px rgba(16,185,129,0.1);
 }
@@ -404,7 +404,7 @@
 .ev-fail  .logBadge,
 .ev-fail.logBadge  {
   background: rgba(245,158,11,0.12);
-  color: #fbbf24;
+  color: #92400e;
   border-color: rgba(245,158,11,0.25);
   box-shadow: 0 0 6px rgba(245,158,11,0.1);
 }
@@ -414,7 +414,7 @@
 .ev-critical  .logBadge,
 .ev-critical.logBadge  {
   background: rgba(239,68,68,0.15);
-  color: #f87171;
+  color: #991b1b;
   border-color: rgba(239,68,68,0.35);
   box-shadow: 0 0 8px rgba(239,68,68,0.2);
   animation: pulse-red 2s ease-in-out infinite;
@@ -430,7 +430,7 @@
 .ev-warn  .logBadge,
 .ev-warn.logBadge  {
   background: rgba(99,102,241,0.12);
-  color: #a5b4fc;
+  color: #3730a3;
   border-color: rgba(99,102,241,0.25);
 }
 .ev-warn { border-left-color: #6366f1 !important; }
@@ -439,7 +439,7 @@
 .ev-info  .logBadge,
 .ev-info.logBadge  {
   background: rgba(148,163,184,0.08);
-  color: #94a3b8;
+  color: #475569;
   border-color: rgba(148,163,184,0.15);
 }
 
@@ -579,7 +579,7 @@
 .passWrap button:hover { color: var(--soc-text); }
 
 .loginErr {
-  color: #f87171;
+  color: #991b1b;
   font-size: 0.7rem;
   letter-spacing: 0.5px;
   background: rgba(239,68,68,0.08);
@@ -696,7 +696,7 @@
 
 .vtMalicious {
   background: rgba(239,68,68,0.15);
-  color: #f87171;
+  color: #991b1b;
   border-color: rgba(239,68,68,0.4);
   box-shadow: 0 0 8px rgba(239,68,68,0.2);
   animation: pulse-red 2s ease-in-out infinite;
@@ -704,19 +704,19 @@
 
 .vtSuspicious {
   background: rgba(245,158,11,0.12);
-  color: #fbbf24;
+  color: #92400e;
   border-color: rgba(245,158,11,0.3);
 }
 
 .vtWarn {
   background: rgba(234,179,8,0.1);
-  color: #facc15;
+  color: #713f12;
   border-color: rgba(234,179,8,0.25);
 }
 
 .vtClean {
   background: rgba(16,185,129,0.1);
-  color: #34d399;
+  color: #065f46;
   border-color: rgba(16,185,129,0.25);
 }
 
@@ -784,7 +784,7 @@
 .blockedCount {
   margin-left: 8px;
   background: rgba(239,68,68,0.15);
-  color: #f87171;
+  color: #991b1b;
   border: 1px solid rgba(239,68,68,0.3);
   border-radius: 10px;
   padding: 1px 8px;
@@ -819,7 +819,7 @@
 .blockBtn {
   background: rgba(239,68,68,0.12);
   border: 1px solid rgba(239,68,68,0.3);
-  color: #f87171;
+  color: #991b1b;
   padding: 5px 14px;
   border-radius: 5px;
   cursor: pointer;
@@ -898,7 +898,7 @@
 
 .unblockBtn:hover {
   border-color: rgba(239,68,68,0.5);
-  color: #f87171;
+  color: #991b1b;
   background: rgba(239,68,68,0.1);
 }
 
