@@ -270,20 +270,22 @@ export default function ProductoDetalle({ onAddToCart, carritoCount, onOpenCart 
 
             {/* Stock */}
             <div style={{ margin: '8px 0' }}>
-              {producto.stock > 10 ? (
-                <span className="stock-badge in-stock">En stock ({producto.stock} uds)</span>
-              ) : producto.stock > 0 ? (
-                <span className="stock-badge low-stock">Últimas {producto.stock} unidades</span>
-              ) : (
-                <span className="stock-badge out-of-stock">Sin stock</span>
-              )}
+              {(() => {
+                if (producto.stock > 10) {
+                  return <span className="stock-badge in-stock">En stock ({producto.stock} uds)</span>;
+                }
+                if (producto.stock > 0) {
+                  return <span className="stock-badge low-stock">Últimas {producto.stock} unidades</span>;
+                }
+                return <span className="stock-badge out-of-stock">Sin stock</span>;
+              })()}
             </div>
 
             {/* Image gallery */}
             {(producto as any).imagenes?.length > 0 && (
               <div style={{ display: 'flex', gap: '8px', margin: '12px 0', flexWrap: 'wrap' }}>
                 {(producto as any).imagenes.map((img: string, i: number) => (
-                  <img key={i} src={img} alt={`${producto.nombre} ${i + 1}`}
+                  <img key={img} src={img} alt={`${producto.nombre} ${i + 1}`}
                     style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer' }}
                   />
                 ))}
@@ -297,7 +299,7 @@ export default function ProductoDetalle({ onAddToCart, carritoCount, onOpenCart 
                 <ul className="detalle-specs-list">
                   {specs.map((spec, i) => (
                     <motion.li
-                      key={i}
+                      key={spec}
                       className="detalle-spec-item"
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}

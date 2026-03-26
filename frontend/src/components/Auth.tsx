@@ -177,8 +177,14 @@ export default function Auth({ onAuth, defaultMode = 'login' }: Readonly<AuthPro
 
             {/* Submit */}
             {(() => {
-              const submitIcon = loading ? <span style={styles.spinner} /> : isRegister ? <UserPlus size={16} /> : <LogIn size={16} />;
-              const submitText = loading ? t('general.loading') : isRegister ? t('auth.register') : t('auth.login');
+              let submitIcon: React.ReactNode;
+              if (loading) { submitIcon = <span style={styles.spinner} />; }
+              else if (isRegister) { submitIcon = <UserPlus size={16} />; }
+              else { submitIcon = <LogIn size={16} />; }
+              let submitText: string;
+              if (loading) { submitText = t('general.loading'); }
+              else if (isRegister) { submitText = t('auth.register'); }
+              else { submitText = t('auth.login'); }
               return (
                 <motion.button
                   type="submit"
