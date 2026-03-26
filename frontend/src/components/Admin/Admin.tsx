@@ -59,15 +59,15 @@ function Admin() {
           <p>Ingresa tus credenciales para continuar</p>
           <div className={styles['login-form']}>
             <div className={styles['input-group']}>
-              <label className={styles['input-label']}>Usuario</label>
-              <input type="text" placeholder="Nombre de usuario" className={styles['form-input']}
+              <label htmlFor="admin-username" className={styles['input-label']}>Usuario</label>
+              <input id="admin-username" type="text" placeholder="Nombre de usuario" className={styles['form-input']}
                 value={username} onChange={e => setUsername(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && verificarPassword()} />
             </div>
             <div className={styles['input-group']}>
-              <label className={styles['input-label']}>Contraseña</label>
+              <label htmlFor="admin-password" className={styles['input-label']}>Contraseña</label>
               <div className={styles['password-input-wrapper']}>
-                <input type={mostrarPassword ? 'text' : 'password'} placeholder="••••••••"
+                <input id="admin-password" type={mostrarPassword ? 'text' : 'password'} placeholder="••••••••"
                   className={styles['form-input']} value={password}
                   onChange={e => setPassword(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && verificarPassword()} />
@@ -432,7 +432,7 @@ const eliminarPedido = async (id: number) => {
                 <div className={styles['chart-card']}>
                   <h4 className={styles['chart-title']}><AlertCircle size={15} style={{ display: 'inline', marginRight: 6, color: '#f59e0b' }} />Stock bajo (≤5 unidades)</h4>
                   {analytics.stockBajo?.length === 0 ? (
-                    <p style={{ color: '#10b981', padding: '20px 0', display: 'flex', alignItems: 'center', gap: 6 }}><CheckCircle size={15} /> Todo el stock es correcto</p>
+                    <p style={{ color: '#10b981', padding: '20px 0', display: 'flex', alignItems: 'center', gap: 6 }}><CheckCircle size={15} />{' '}Todo el stock es correcto</p>
                   ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                       <thead>
@@ -536,7 +536,7 @@ const eliminarPedido = async (id: number) => {
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14, color: 'var(--text-primary)' }}>
                   <input type="checkbox" checked={formProducto.activo}
                     onChange={e => setFormProducto({ ...formProducto, activo: e.target.checked })}
-                    style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                    style={{ width: 16, height: 16, cursor: 'pointer' }} />{' '}
                   Producto activo (visible en tienda)
                 </label>
                 {!formProducto.activo && (

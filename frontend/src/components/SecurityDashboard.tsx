@@ -137,7 +137,7 @@ function SocLoginForm({ username, setUsername, password, setPassword, showPass, 
         <input type="password" name="password" style={{ display: 'none' }} tabIndex={-1} readOnly />
 
         <div className={styles.loginField}>
-          <label>USUARIO</label>
+          <label htmlFor="soc-user">USUARIO</label>
           <input
             value={username}
             onChange={e => setUsername(e.target.value)}
@@ -149,7 +149,7 @@ function SocLoginForm({ username, setUsername, password, setPassword, showPass, 
           />
         </div>
         <div className={styles.loginField}>
-          <label>CONTRASE&Ntilde;A</label>
+          <label htmlFor="soc-pass">CONTRASE&Ntilde;A</label>
           <div className={styles.passWrap}>
             <input
               type={showPass ? 'text' : 'password'}
