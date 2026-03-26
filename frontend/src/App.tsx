@@ -67,13 +67,15 @@ function ToastContainer({ toasts }: Readonly<{ toasts: Toast[] }>) {
 // =================================================================
 // ACTIVE FILTERS
 // =================================================================
+type OrdenPrecio = '' | 'asc' | 'desc'
+
 interface ActiveFiltersProps {
   readonly categoriaFiltro: string
   readonly setCategoriaFiltro: (v: string) => void
   readonly busqueda: string
   readonly setBusqueda: (v: string) => void
   readonly ordenPrecio: string
-  readonly setOrdenPrecio: (v: '' | 'asc' | 'desc') => void
+  readonly setOrdenPrecio: (v: OrdenPrecio) => void
   readonly filtrarFavoritos: boolean
   readonly setFiltrarFavoritos: (v: boolean) => void
   readonly precioMin: string
@@ -100,6 +102,8 @@ function ActiveFilters({ categoriaFiltro, setCategoriaFiltro, busqueda, setBusqu
 // =================================================================
 // TIENDA PRODUCTS CONTENT
 // =================================================================
+const SKELETON_KEYS = ['skeleton-card-0', 'skeleton-card-1', 'skeleton-card-2', 'skeleton-card-3', 'skeleton-card-4', 'skeleton-card-5', 'skeleton-card-6', 'skeleton-card-7']
+
 interface TiendaProductsContentProps {
   readonly loading: boolean
   readonly productosFiltrados: Producto[]
@@ -116,7 +120,7 @@ function TiendaProductsContent({ loading, productosFiltrados, vistaLista, filtra
   if (loading) {
     return (
       <div className={vistaLista ? 'products-list' : 'products-grid'}>
-        {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={`skeleton-${i}`} />)}
+        {SKELETON_KEYS.map((key) => <SkeletonCard key={key} />)}
       </div>
     )
   }
