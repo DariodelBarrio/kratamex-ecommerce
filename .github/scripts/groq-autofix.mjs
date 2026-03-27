@@ -12,6 +12,7 @@ const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 const REPLICATE_API_KEY = process.env.REPLICATE_API_KEY;
 const COHERE_API_KEY = process.env.COHERE_API_KEY;
 const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const PAGE_SIZE = 100;
 
 // ── Fetch all open issues from SonarCloud ──────────────────────────────────
@@ -302,6 +303,28 @@ async function callHuggingFace(filePath, code, issues) {
   return data[0]?.generated_text?.replace(prompt, "").trim() || data[0]?.generated_text;
 }
 
+async function callClaude(filePath, code, issues) {
+  const prompt = buildPrompt(filePath, code, issues);
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 8192,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Claude error ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return data.content[0].text;
+}
+
 // ── Try fix with fallback ──────────────────────────────────────────────────
 
 async function tryFix(filePath, code, issues) {
@@ -314,6 +337,7 @@ async function tryFix(filePath, code, issues) {
     { name: "Mistral", fn: () => callMistral(filePath, code, issues) },
     { name: "Cohere", fn: () => callCohere(filePath, code, issues) },
     { name: "Replicate", fn: () => callReplicate(filePath, code, issues) },
+    { name: "Claude", fn: () => callClaude(filePath, code, issues) },
     { name: "HuggingFace", fn: () => callHuggingFace(filePath, code, issues) },
   ];
 
