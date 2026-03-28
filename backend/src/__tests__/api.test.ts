@@ -122,7 +122,7 @@ let selectCallCount = 0;
 function mockUserSelectWith2FA(enabled = false) {
   selectCallCount = 0;
   const originalMock = vi.mocked(db.select);
-  originalMock.mockImplementation(() => {
+  originalMock.mockImplementation((() => {
     selectCallCount++;
     if (selectCallCount === 1) {
       return {
@@ -132,7 +132,7 @@ function mockUserSelectWith2FA(enabled = false) {
       };
     }
     return makeChain();
-  });
+  }) as any);
 }
 
 describe('Backend API', () => {
