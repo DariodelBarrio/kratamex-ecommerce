@@ -5,50 +5,50 @@ export function StoreFooter() {
         <div className="footer-col">
           <h4 className="footer-col-title">Por qué comprar</h4>
           <ul className="footer-col-list">
-            <li><a href="#" className="footer-link">Cómo comprar</a></li>
-            <li><a href="#" className="footer-link">Formas de pago</a></li>
-            <li><a href="#" className="footer-link">Gastos de envío</a></li>
-            <li><a href="#" className="footer-link">Cupones descuento</a></li>
-            <li><a href="#" className="footer-link">Preguntas frecuentes</a></li>
-            <li><a href="#" className="footer-link">Opiniones de clientes</a></li>
-            <li><a href="#" className="footer-link">Garantía y devoluciones</a></li>
+            <li><button type="button" className="footer-link">Cómo comprar</button></li>
+            <li><button type="button" className="footer-link">Formas de pago</button></li>
+            <li><button type="button" className="footer-link">Gastos de envío</button></li>
+            <li><button type="button" className="footer-link">Cupones descuento</button></li>
+            <li><button type="button" className="footer-link">Preguntas frecuentes</button></li>
+            <li><button type="button" className="footer-link">Opiniones de clientes</button></li>
+            <li><button type="button" className="footer-link">Garantía y devoluciones</button></li>
           </ul>
         </div>
 
         <div className="footer-col">
           <h4 className="footer-col-title">Empresa</h4>
           <ul className="footer-col-list">
-            <li><a href="#" className="footer-link">Quiénes somos</a></li>
-            <li><a href="#" className="footer-link">Compromisos</a></li>
-            <li><a href="#" className="footer-link">Nuestras marcas</a></li>
-            <li><a href="#" className="footer-link">Afiliados</a></li>
-            <li><a href="#" className="footer-link">Aviso legal</a></li>
-            <li><a href="#" className="footer-link">Privacidad</a></li>
-            <li><a href="#" className="footer-link">Condiciones de compra</a></li>
+            <li><button type="button" className="footer-link">Quiénes somos</button></li>
+            <li><button type="button" className="footer-link">Compromisos</button></li>
+            <li><button type="button" className="footer-link">Nuestras marcas</button></li>
+            <li><button type="button" className="footer-link">Afiliados</button></li>
+            <li><button type="button" className="footer-link">Aviso legal</button></li>
+            <li><button type="button" className="footer-link">Privacidad</button></li>
+            <li><button type="button" className="footer-link">Condiciones de compra</button></li>
           </ul>
         </div>
 
         <div className="footer-col">
           <h4 className="footer-col-title">Ayuda</h4>
           <ul className="footer-col-list">
-            <li><a href="#" className="footer-link">Contacto y ayuda</a></li>
-            <li><a href="#" className="footer-link">Devoluciones</a></li>
-            <li><a href="#" className="footer-link">Seguimiento de pedidos</a></li>
-            <li><a href="#" className="footer-link">Trabaja con nosotros</a></li>
-            <li><a href="#" className="footer-link">Canal ético</a></li>
-            <li><a href="#" className="footer-link">Política de cookies</a></li>
+            <li><button type="button" className="footer-link">Contacto y ayuda</button></li>
+            <li><button type="button" className="footer-link">Devoluciones</button></li>
+            <li><button type="button" className="footer-link">Seguimiento de pedidos</button></li>
+            <li><button type="button" className="footer-link">Trabaja con nosotros</button></li>
+            <li><button type="button" className="footer-link">Canal ético</button></li>
+            <li><button type="button" className="footer-link">Política de cookies</button></li>
           </ul>
         </div>
 
         <div className="footer-col">
           <h4 className="footer-col-title">Comunidad</h4>
           <ul className="footer-col-list">
-            <li><a href="#" className="footer-link">Blog</a></li>
-            <li><a href="#" className="footer-link">Instagram</a></li>
-            <li><a href="#" className="footer-link">Twitter / X</a></li>
-            <li><a href="#" className="footer-link">Facebook</a></li>
-            <li><a href="#" className="footer-link">YouTube</a></li>
-            <li><a href="#" className="footer-link">TikTok</a></li>
+            <li><button type="button" className="footer-link">Blog</button></li>
+            <li><button type="button" className="footer-link">Instagram</button></li>
+            <li><button type="button" className="footer-link">Twitter / X</button></li>
+            <li><button type="button" className="footer-link">Facebook</button></li>
+            <li><button type="button" className="footer-link">YouTube</button></li>
+            <li><button type="button" className="footer-link">TikTok</button></li>
           </ul>
         </div>
 

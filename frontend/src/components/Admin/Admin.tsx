@@ -116,6 +116,15 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const getAccionColor = (accion: string) => {
+    const colors: Record<string, { bg: string; text: string }> = {
+      crear: { bg: '#10b98122', text: '#10b981' },
+      eliminar: { bg: '#ef444422', text: '#ef4444' },
+      cambio_estado: { bg: '#f59e0b22', text: '#f59e0b' },
+    };
+    return colors[accion] || { bg: '#3b82f622', text: '#3b82f6' };
+  };
+
   useEffect(() => { cargarDatos(); }, [token]);
 
   useEffect(() => {
@@ -912,8 +921,7 @@ const eliminarPedido = async (id: number) => {
                       <td>
                         <span style={{
                           padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-                          background: entry.accion === 'crear' ? '#10b98122' : entry.accion === 'eliminar' ? '#ef444422' : entry.accion === 'cambio_estado' ? '#f59e0b22' : '#3b82f622',
-                          color: entry.accion === 'crear' ? '#10b981' : entry.accion === 'eliminar' ? '#ef4444' : entry.accion === 'cambio_estado' ? '#f59e0b' : '#3b82f6',
+                          ...getAccionColor(entry.accion),
                         }}>
                           {entry.accion}
                         </span>

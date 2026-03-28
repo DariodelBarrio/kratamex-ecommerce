@@ -157,6 +157,9 @@ export function BrandCarousel() {
       <div
         className="bc-track"
         ref={trackRef}
+        role="region"
+        aria-label="Carrusel de marcas"
+        tabIndex={0}
         onMouseDown={e => startDrag(e.pageX)}
         onMouseMove={e => moveDrag(e.pageX)}
         onMouseUp={stopDrag}
@@ -164,6 +167,10 @@ export function BrandCarousel() {
         onTouchStart={e => startDrag(e.touches[0].pageX)}
         onTouchMove={e => moveDrag(e.touches[0].pageX)}
         onTouchEnd={stopDrag}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowLeft') trackRef.current!.scrollLeft -= 200;
+          if (e.key === 'ArrowRight') trackRef.current!.scrollLeft += 200;
+        }}
       >
         {BRANDS_DOUBLED.map(brand => (
           <div key={brand.id} className="bc-item">
