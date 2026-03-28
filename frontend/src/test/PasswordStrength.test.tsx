@@ -22,4 +22,33 @@ describe('PasswordStrength', () => {
     render(<PasswordStrength password="MiPass123!" />);
     expect(screen.getByText('Fuerte')).toBeInTheDocument();
   });
+
+  it('muestra "Aceptable" para contraseña con longitud, mayúsculas y dígito', () => {
+    // score=3: length>=8 ✓, lowercase+uppercase ✓, digit ✓
+    render(<PasswordStrength password="Abcdefg12" />);
+    expect(screen.getByText('Aceptable')).toBeInTheDocument();
+  });
+
+  it('muestra "Muy fuerte" para contraseña con todos los criterios', () => {
+    // score=5: all criteria met
+    render(<PasswordStrength password="MiContra!123abc" />);
+    expect(screen.getByText('Muy fuerte')).toBeInTheDocument();
+  });
+
+  it('muestra "Muy débil" para contraseña solo con longitud', () => {
+    // score=1: solo length>=8
+    render(<PasswordStrength password="abcdefgh" />);
+    expect(screen.getByText('Muy débil')).toBeInTheDocument();
+  });
+
+  it('renderiza 5 barras de fortaleza', () => {
+    const { container } = render(<PasswordStrength password="test" />);
+    expect(container.querySelectorAll('.password-strength-bar').length).toBe(5);
+  });
+
+  it('muestra la etiqueta de fortaleza con color', () => {
+    render(<PasswordStrength password="MiPass123!" />);
+    const label = screen.getByText('Fuerte');
+    expect(label).toHaveStyle({ color: '#22c55e' });
+  });
 });
