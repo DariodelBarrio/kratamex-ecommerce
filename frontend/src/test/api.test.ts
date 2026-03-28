@@ -430,4 +430,49 @@ describe('API module', () => {
     await deleteCategoria(1);
     expect(mockFetch).toHaveBeenCalledWith('/api/categorias/1', expect.objectContaining({ method: 'DELETE' }));
   });
+
+  it('getAuditLog llama a /api/admin/audit-log', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([{ id: 1, action: 'login' }]),
+      headers: new Headers({ 'content-type': 'application/json' }),
+    });
+    const { getAuditLog } = await import('../api');
+    const res = await getAuditLog();
+    expect(Array.isArray(res)).toBe(true);
+    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/admin/audit-log'), expect.any(Object));
+  });
+
+  it('getAuditLog acepta limit personalizado', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([]),
+      headers: new Headers({ 'content-type': 'application/json' }),
+    });
+    const { getAuditLog } = await import('../api');
+    await getAuditLog(50);
+    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('limit=50'), expect.any(Object));
+  });
+
+  it('request devuelve texto cuando content-type es text/csv', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      text: () => Promise.resolve('col1,col2\nval1,val2'),
+      headers: new Headers({ 'content-type': 'text/csv' }),
+    });
+    const { getProductos } = await import('../api');
+    const res = await getProductos();
+    expect(res).toContain('col1');
+  });
+
+  it('getProductos con params añade query string', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([]),
+      headers: new Headers({ 'content-type': 'application/json' }),
+    });
+    const { getProductos } = await import('../api');
+    await getProductos('categoria=Tech');
+    expect(mockFetch).toHaveBeenCalledWith('/api/productos?categoria=Tech', expect.any(Object));
+  });
 });
