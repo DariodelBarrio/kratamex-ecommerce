@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogIn, UserPlus, Eye, EyeOff } from 'lucide-react';
+import { LogIn, UserPlus, Eye, EyeOff, X } from 'lucide-react';
 import { login, register } from '../api';
 import { t } from '../i18n';
 import { PasswordStrength } from './PasswordStrength';
@@ -71,6 +71,11 @@ export default function Auth({ onAuth, defaultMode = 'login' }: Readonly<AuthPro
           exit={{ opacity: 0, y: -16, scale: 0.96 }}
           transition={{ type: 'spring', stiffness: 380, damping: 28 }}
         >
+          {/* Close */}
+          <Link to="/" style={styles.closeBtn} title="Volver a la tienda" aria-label="Cerrar">
+            <X size={18} />
+          </Link>
+
           {/* Header */}
           <div style={styles.header}>
             <div style={styles.iconCircle}>
@@ -246,6 +251,24 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 'var(--radius)',
     padding: '36px 32px 28px',
     boxShadow: '0 24px 64px rgba(0,0,0,0.35)',
+    position: 'relative',
+  },
+
+  closeBtn: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: '50%',
+    background: 'var(--surface-solid)',
+    border: '1px solid var(--border)',
+    color: 'var(--text-muted)',
+    textDecoration: 'none',
+    transition: 'background 0.18s, color 0.18s',
   },
 
   header: {
