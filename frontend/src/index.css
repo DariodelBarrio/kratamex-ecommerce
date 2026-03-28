@@ -392,8 +392,8 @@ header::before {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-  color: white;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
   border: none;
   padding: 14px 32px;
   border-radius: 12px;
@@ -664,8 +664,8 @@ header::before {
   top: 12px;
   right: 12px;
   z-index: 3;
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: #fff;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #1f2937;
   font-size: 0.575rem;
   font-weight: 800;
   letter-spacing: 1.2px;
@@ -704,9 +704,9 @@ header::before {
   font-weight: 800;
   letter-spacing: 2px;
   text-transform: uppercase;
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(239, 68, 68, 0.5);
   padding: 5px 14px;
   border-radius: 8px;
 }
@@ -1093,9 +1093,9 @@ header::before {
   padding: 2px 8px;
   border-radius: var(--radius-full);
 }
-.stock-badge.in-stock { background: rgba(16, 185, 129, 0.15); color: #065f46; }
-.stock-badge.low-stock { background: rgba(245, 158, 11, 0.15); color: #78350f; }
-.stock-badge.out-of-stock { background: rgba(239, 68, 68, 0.15); color: #991b1b; }
+.stock-badge.in-stock { background: rgba(16, 185, 129, 0.3); color: #047857; }
+.stock-badge.low-stock { background: rgba(245, 158, 11, 0.3); color: #92400e; }
+.stock-badge.out-of-stock { background: rgba(239, 68, 68, 0.3); color: #b91c1c; }
 
 /* Auth page */
 .auth-page {
@@ -1174,11 +1174,11 @@ header::before {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-.order-status.pendiente { background: rgba(245, 158, 11, 0.15); color: #78350f; }
-.order-status.confirmado { background: rgba(59, 130, 246, 0.15); color: #1e40af; }
-.order-status.enviado { background: rgba(168, 85, 247, 0.15); color: #6b21a8; }
-.order-status.entregado { background: rgba(16, 185, 129, 0.15); color: #065f46; }
-.order-status.cancelado { background: rgba(239, 68, 68, 0.15); color: #991b1b; }
+.order-status.pendiente { background: rgba(245, 158, 11, 0.3); color: #92400e; }
+.order-status.confirmado { background: rgba(59, 130, 246, 0.3); color: #1d4ed8; }
+.order-status.enviado { background: rgba(168, 85, 247, 0.3); color: #7e22ce; }
+.order-status.entregado { background: rgba(16, 185, 129, 0.3); color: #047857; }
+.order-status.cancelado { background: rgba(239, 68, 68, 0.3); color: #b91c1c; }
 .order-items {
   border-top: 1px solid var(--border);
   padding-top: 12px;
@@ -2208,9 +2208,9 @@ header::before {
 
 .wishlist-btn--active {
   opacity: 1 !important;
-  color: #be123c;
-  border-color: rgba(244, 63, 94, 0.3);
-  background: rgba(244, 63, 94, 0.12);
+  color: #dc2626;
+  border-color: rgba(244, 63, 94, 0.5);
+  background: rgba(244, 63, 94, 0.25);
 }
 
 .wishlist-btn:hover:not(.wishlist-btn--active) {
@@ -2584,13 +2584,13 @@ header::before {
 }
 
 .category-pill--heart.active {
-  color: #be123c;
-  background: rgba(244, 63, 94, 0.1);
-  border-color: rgba(244, 63, 94, 0.28);
+  color: #dc2626;
+  background: rgba(244, 63, 94, 0.25);
+  border-color: rgba(244, 63, 94, 0.5);
 }
 
 .category-pill--heart.active .category-pill-count {
-  background: rgba(244, 63, 94, 0.15);
+  background: rgba(244, 63, 94, 0.3);
 }
 
 /* =================================================================

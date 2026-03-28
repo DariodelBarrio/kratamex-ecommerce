@@ -613,7 +613,7 @@ const eliminarPedido = async (id: number) => {
 
               <div className={styles['form-actions']}>
                 <button className={styles['btn-primary']} onClick={guardarProducto} disabled={guardando}>
-                  {(() => { if (guardando) { return 'Guardando...'; } return editando ? 'Actualizar' : 'Crear producto'; })()}
+                  {guardando ? 'Guardando...' : editando ? 'Actualizar' : 'Crear producto'}
                 </button>
                 {editando && (
                   <button className={styles['btn-secondary']} onClick={() => {

@@ -48,7 +48,7 @@ export async function verifyTwoFactor(userId: number, code: string): Promise<boo
     twoFactorEnabled: usuarios.twoFactorEnabled,
   }).from(usuarios).where(eq(usuarios.id, userId))
 
-  if (!user || !user.twoFactorEnabled || !user.twoFactorSecret) {
+  if (!user?.twoFactorEnabled || !user?.twoFactorSecret) {
     return false
   }
 
