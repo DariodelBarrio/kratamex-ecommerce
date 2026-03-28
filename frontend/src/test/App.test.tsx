@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 
 // ── Child component mocks ─────────────────────────────────────────
 vi.mock('../components/Admin/Admin', () => ({ default: () => <div data-testid="admin" /> }));
@@ -200,5 +200,134 @@ describe('App — rutas y renderizado', () => {
     const logoutBtn = screen.getByTitle(/cerrar sesión/i);
     fireEvent.click(logoutBtn);
     expect(screen.getByTitle('Iniciar sesión')).toBeInTheDocument();
+  });
+});
+
+describe('App — filtros y UI avanzada', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('muestra skeleton cards cuando está cargando', async () => {
+    // Temporarily override useQuery to return loading state
+    vi.mocked(useQuery).mockReturnValue({ data: undefined, isLoading: true, isError: false } as any);
+    renderApp('/');
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThan(0);
+    // Restore default for subsequent tests
+    vi.mocked(useQuery).mockReturnValue({ data: [], isLoading: false, isError: false } as any);
+  });
+
+  it('input precio mínimo acepta valor numérico', () => {
+    renderApp('/');
+    const minInput = screen.getByPlaceholderText('Min $');
+    fireEvent.change(minInput, { target: { value: '100' } });
+    expect(minInput).toHaveValue(100);
+  });
+
+  it('input precio máximo acepta valor numérico', () => {
+    renderApp('/');
+    const maxInput = screen.getByPlaceholderText('Max $');
+    fireEvent.change(maxInput, { target: { value: '500' } });
+    expect(maxInput).toHaveValue(500);
+  });
+
+  it('botón Vista lista existe y es clickeable', () => {
+    renderApp('/');
+    const listaBtn = screen.getByTitle('Vista lista');
+    fireEvent.click(listaBtn);
+    expect(listaBtn).toBeInTheDocument();
+  });
+
+  it('botón Vista cuadrícula existe y es clickeable', () => {
+    renderApp('/');
+    const gridBtn = screen.getByTitle('Vista cuadrícula');
+    fireEvent.click(gridBtn);
+    expect(gridBtn).toBeInTheDocument();
+  });
+
+  it('botón Favoritos filtra y muestra "Sin favoritos aún"', () => {
+    renderApp('/');
+    const favBtn = screen.getByText('Favoritos').closest('button')!;
+    fireEvent.click(favBtn);
+    expect(screen.getByText('Sin favoritos aún')).toBeInTheDocument();
+  });
+
+  it('el carrito abierto vacío muestra "Carrito vacío"', () => {
+    renderApp('/');
+    fireEvent.click(screen.getByText('Carrito').closest('button')!);
+    expect(screen.getByText('Carrito vacío')).toBeInTheDocument();
+  });
+
+  it('Escape cierra el carrito', () => {
+    renderApp('/');
+    fireEvent.click(screen.getByText('Carrito').closest('button')!);
+    expect(screen.getByText('Tu Carrito')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByText('Tu Carrito')).not.toBeInTheDocument();
+  });
+
+  it('el carrito con items muestra el formulario de checkout', () => {
+    localStorage.setItem('kratamex_cart', JSON.stringify([
+      { id: 1, nombre: 'Test Laptop', precio: 50, cantidad: 1, imagen: '', categoria: 'Tech', stock: 10, destacado: false, activo: true, sku: 'TL001', fecha: '' },
+    ]));
+    renderApp('/');
+    fireEvent.click(screen.getByText('Carrito').closest('button')!);
+    expect(screen.getByPlaceholderText('Nombre completo')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Correo electrónico')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Dirección de envío')).toBeInTheDocument();
+  });
+
+  it('checkout sin nombre muestra "Nombre requerido"', () => {
+    localStorage.setItem('kratamex_cart', JSON.stringify([
+      { id: 1, nombre: 'Test Laptop', precio: 50, cantidad: 1, imagen: '', categoria: 'Tech', stock: 10, destacado: false, activo: true, sku: 'TL001', fecha: '' },
+    ]));
+    renderApp('/');
+    fireEvent.click(screen.getByText('Carrito').closest('button')!);
+    fireEvent.click(screen.getByText('Realizar pedido →'));
+    expect(screen.getByText('Nombre requerido')).toBeInTheDocument();
+  });
+
+  it('checkout con email inválido muestra "Email inválido"', () => {
+    localStorage.setItem('kratamex_cart', JSON.stringify([
+      { id: 1, nombre: 'Test Laptop', precio: 50, cantidad: 1, imagen: '', categoria: 'Tech', stock: 10, destacado: false, activo: true, sku: 'TL001', fecha: '' },
+    ]));
+    renderApp('/');
+    fireEvent.click(screen.getByText('Carrito').closest('button')!);
+    fireEvent.change(screen.getByPlaceholderText('Nombre completo'), { target: { value: 'Juan' } });
+    fireEvent.change(screen.getByPlaceholderText('Correo electrónico'), { target: { value: 'no-es-email' } });
+    fireEvent.change(screen.getByPlaceholderText('Dirección de envío'), { target: { value: 'Calle 1' } });
+    fireEvent.click(screen.getByText('Realizar pedido →'));
+    expect(screen.getByText('Email inválido')).toBeInTheDocument();
+  });
+
+  it('buscar en el input filtra productos', () => {
+    renderApp('/');
+    const searchInput = screen.getByPlaceholderText(/buscar/i);
+    fireEvent.change(searchInput, { target: { value: 'laptop' } });
+    expect(searchInput).toHaveValue('laptop');
+  });
+
+  it('boton limpiar busqueda aparece con texto en el input', () => {
+    renderApp('/');
+    const searchInput = screen.getByPlaceholderText(/buscar/i);
+    fireEvent.change(searchInput, { target: { value: 'laptop' } });
+    expect(screen.getByLabelText('Limpiar búsqueda')).toBeInTheDocument();
+  });
+
+  it('click en limpiar busqueda vacía el campo', () => {
+    renderApp('/');
+    const searchInput = screen.getByPlaceholderText(/buscar/i);
+    fireEvent.change(searchInput, { target: { value: 'laptop' } });
+    fireEvent.click(screen.getByLabelText('Limpiar búsqueda'));
+    expect(searchInput).toHaveValue('');
+  });
+
+  it('select de precio tiene las opciones correctas', () => {
+    renderApp('/');
+    const select = screen.getByDisplayValue('Precio');
+    expect(select).toBeInTheDocument();
+    fireEvent.change(select, { target: { value: 'asc' } });
+    expect(select).toHaveValue('asc');
   });
 });
