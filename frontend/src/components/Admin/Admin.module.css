@@ -405,7 +405,7 @@
 
 .imagen-upload-hint {
   font-size: 0.75rem;
-  opacity: 0.6;
+  opacity: 0.8;
 }
 
 .imagen-preview-wrap {
@@ -495,7 +495,7 @@
   font-size: 0.8rem;
   margin-bottom: 12px;
   padding: 8px 12px;
-  background: rgba(217, 119, 6, 0.08);
+  background: rgba(217, 119, 6, 0.2);
   border-radius: 6px;
 }
 
