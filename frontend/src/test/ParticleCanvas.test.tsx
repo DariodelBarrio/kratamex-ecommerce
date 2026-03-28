@@ -16,13 +16,14 @@ const mockCtx = {
   lineWidth:   0,
 };
 
-const mockCanvas = {
+// mockCanvas kept for reference but patching is done via prototype below
+const _mockCanvas = {
   getContext:       vi.fn(() => mockCtx),
   getBoundingClientRect: vi.fn(() => ({ width: 800, height: 600 })),
   parentElement: null as HTMLElement | null,
   width:  0,
   height: 0,
-};
+}; void _mockCanvas;
 
 // Mock ResizeObserver as a class constructor
 const mockObserve    = vi.fn();
@@ -48,7 +49,8 @@ describe('ParticleCanvas', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Patch HTMLCanvasElement.prototype.getContext
-    HTMLCanvasElement.prototype.getContext = vi.fn(() => mockCtx as unknown as CanvasRenderingContext2D);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (HTMLCanvasElement.prototype as any).getContext = vi.fn(() => mockCtx);
   });
 
   it('renderiza un elemento canvas', () => {

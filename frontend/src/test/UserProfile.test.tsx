@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
 
 // ── Framer-motion mock ───────────────────────────────────────────────
@@ -54,7 +55,7 @@ function setup(user: Usuario = mockUser) {
   const mutate = vi.fn();
   vi.mocked(useQuery).mockReturnValue({ data: { user }, isLoading: false } as never);
   vi.mocked(useMutation).mockReturnValue({ mutate, isPending: false } as never);
-  render(<UserProfile user={user} />);
+  render(<MemoryRouter><UserProfile user={user} /></MemoryRouter>);
   return { mutate };
 }
 
@@ -99,7 +100,7 @@ describe('UserProfile', () => {
   it('muestra error si la contraseña nueva es demasiado corta', () => {
     vi.mocked(useQuery).mockReturnValue({ data: { user: mockUser }, isLoading: false } as never);
     vi.mocked(useMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never);
-    render(<UserProfile user={mockUser} />);
+    render(<MemoryRouter><UserProfile user={mockUser} /></MemoryRouter>);
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'old' } });
     fireEvent.change(screen.getByPlaceholderText('Mínimo 6 caracteres'), { target: { value: '12' } });
     fireEvent.change(screen.getByPlaceholderText('Repite la contraseña'), { target: { value: '12' } });
@@ -111,7 +112,7 @@ describe('UserProfile', () => {
   it('muestra error si las contraseñas no coinciden', () => {
     vi.mocked(useQuery).mockReturnValue({ data: { user: mockUser }, isLoading: false } as never);
     vi.mocked(useMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never);
-    render(<UserProfile user={mockUser} />);
+    render(<MemoryRouter><UserProfile user={mockUser} /></MemoryRouter>);
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'oldpass' } });
     fireEvent.change(screen.getByPlaceholderText('Mínimo 6 caracteres'), { target: { value: 'newpass1' } });
     fireEvent.change(screen.getByPlaceholderText('Repite la contraseña'), { target: { value: 'different' } });

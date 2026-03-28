@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { User, Mail, MapPin, Phone, Globe, Camera, Save, Lock, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, MapPin, Phone, Globe, Camera, Save, Lock, Eye, EyeOff, X } from 'lucide-react';
 import { getUsuario, updatePerfil, cambiarPassword } from '../api';
 import { t, setLang, getLang } from '../i18n';
 import type { Usuario } from '../interfaces';
@@ -15,6 +16,7 @@ interface UserProfileProps {
 }
 
 export default function UserProfile({ user }: Readonly<UserProfileProps>) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   // Fetch latest user data
@@ -151,6 +153,7 @@ export default function UserProfile({ user }: Readonly<UserProfileProps>) {
     maxWidth: 520,
     margin: '0 auto',
     border: '1px solid var(--border-color)',
+    position: 'relative',
   };
 
   const fieldWrapperStyle: React.CSSProperties = {
@@ -298,6 +301,17 @@ export default function UserProfile({ user }: Readonly<UserProfileProps>) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: 'easeOut' }}
       >
+        {/* Close button */}
+        <button
+          onClick={() => navigate(-1)}
+          title="Volver"
+          style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: 8, cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', padding: 6, transition: 'all 0.2s' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.12)'; (e.currentTarget as HTMLButtonElement).style.color = '#ef4444'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(239,68,68,0.3)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.05)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-color)'; }}
+        >
+          <X size={16} />
+        </button>
+
         {/* Title */}
         <h2
           style={{

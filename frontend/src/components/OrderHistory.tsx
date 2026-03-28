@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, ChevronDown, ChevronUp } from 'lucide-react';
+import { Package, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { getMisPedidos } from '../api';
 import { t } from '../i18n';
 import type { Pedido, PedidoItem } from '../interfaces';
@@ -250,6 +251,7 @@ function OrderCard({ pedido }: Readonly<{ pedido: Pedido }>) {
 }
 
 export default function OrderHistory() {
+  const navigate = useNavigate();
   const { data: pedidos, isLoading, isError } = useQuery<Pedido[]>({
     queryKey: ['misPedidos'],
     queryFn: getMisPedidos,
@@ -257,7 +259,16 @@ export default function OrderHistory() {
   });
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px 16px' }}>
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px 16px', position: 'relative' }}>
+      <button
+        onClick={() => navigate(-1)}
+        title="Volver"
+        style={{ position: 'absolute', top: 24, right: 16, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: 8, cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', padding: 6, transition: 'all 0.2s' }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.12)'; (e.currentTarget as HTMLButtonElement).style.color = '#ef4444'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(239,68,68,0.3)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.05)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-color)'; }}
+      >
+        <X size={16} />
+      </button>
       <h2
         style={{
           color: 'var(--text-primary)',

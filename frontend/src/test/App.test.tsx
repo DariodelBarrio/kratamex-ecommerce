@@ -51,6 +51,8 @@ vi.mock('framer-motion', () => ({
       <button onClick={onClick} className={className} title={title}>{children}</button>,
     span:   ({ children, className }: React.HTMLAttributes<HTMLSpanElement>) =>
       <span className={className}>{children}</span>,
+    h1:     ({ children, style }: React.HTMLAttributes<HTMLHeadingElement>) => <h1 style={style}>{children}</h1>,
+    p:      ({ children, style }: React.HTMLAttributes<HTMLParagraphElement>) => <p style={style}>{children}</p>,
   },
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));

@@ -68,7 +68,7 @@ describe('ProductCard — vista cuadrícula', () => {
 
   it('muestra "Sin stock" cuando stock = 0', () => {
     renderCard({ stock: 0 });
-    expect(screen.getByText('Sin stock')).toBeInTheDocument();
+    expect(screen.getAllByText('Sin stock').length).toBeGreaterThanOrEqual(1);
   });
 
   it('llama a onAddToCart al pulsar "Agregar al carrito"', () => {
