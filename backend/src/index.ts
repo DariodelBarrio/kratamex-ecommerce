@@ -38,6 +38,15 @@ import {
   CategoriaSchema, CuponSchema, ValidarCuponSchema, PushSubscriptionSchema,
   PerfilSchema, CambiarPasswordSchema,
 } from './schemas';
+import {
+  generateTwoFactorSecret,
+  generateTwoFactorQR,
+  verifyTwoFactorCode,
+  enableTwoFactor,
+  disableTwoFactor,
+  verifyTwoFactor,
+} from './2fa';
+import { anomalyDetector } from './ip-anomaly';
 
 const PORT = 3001;
 const IVA_RATE = 0.21;
@@ -243,6 +252,7 @@ type SessionData = {
   role: string;
   avatar: string | null;
   createdAt: number;
+  twoFactorVerified?: boolean;
 };
 
 const sessions: Record<string, SessionData> = {};
@@ -479,7 +489,37 @@ const authenticate: MiddlewareHandler<{ Variables: Variables }> = async (c, next
     logSecEvent('auth_invalid', { ip: getClientIP(c), username: session.username, endpoint: c.req.path, metodo: c.req.method, userAgent: c.req.header('user-agent'), detalles: 'Sesión expirada' });
     return c.json({ error: 'Sesión expirada' }, 401);
   }
+
+  const [user] = await db.select({
+    twoFactorEnabled: usuarios.twoFactorEnabled,
+  }).from(usuarios).where(eq(usuarios.id, session.id));
+
+  if (user?.twoFactorEnabled && !session.twoFactorVerified) {
+    if (!c.req.path.startsWith('/api/2fa/') && c.req.path !== '/api/usuario') {
+      return c.json({ error: '2FA requerido', requiresTwoFactor: true }, 403);
+    }
+  }
+
+  // Auto-verify if 2FA is not enabled
+  if (!user?.twoFactorEnabled) {
+    session.twoFactorVerified = true;
+  }
+
   c.set('user', session);
+  await next();
+};
+
+const requireTwoFactorVerified: MiddlewareHandler<{ Variables: Variables }> = async (c, next) => {
+  const user = c.get('user');
+  if (!user?.twoFactorVerified) {
+    return c.json({ error: 'Verificación 2FA requerida', requiresTwoFactor: true }, 403);
+  }
+  await next();
+};
+
+const requireAdmin: MiddlewareHandler<{ Variables: Variables }> = async (c, next) => {
+  if (c.get('user')?.role !== 'admin')
+    return c.json({ error: 'Acceso denegado. Se requiere rol de administrador' }, 403);
   await next();
 };
 
@@ -491,12 +531,6 @@ const optionalAuth: MiddlewareHandler<{ Variables: Variables }> = async (c, next
       c.set('user', session);
     }
   }
-  await next();
-};
-
-const requireAdmin: MiddlewareHandler<{ Variables: Variables }> = async (c, next) => {
-  if (c.get('user')?.role !== 'admin')
-    return c.json({ error: 'Acceso denegado. Se requiere rol de administrador' }, 403);
   await next();
 };
 
@@ -1121,7 +1155,7 @@ app.patch('/api/pedidos/:id/estado', authenticate, requireAdmin, zValidator('jso
   }
 });
 
-app.get('/api/admin/pedidos', authenticate, requireAdmin, async (c) => {
+app.get('/api/admin/pedidos', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   try {
     const limit  = Math.min(Number.parseInt(c.req.query('limit') || '100'), 500);
     const offset = Math.max(Number.parseInt(c.req.query('offset') || '0'), 0);
@@ -1136,7 +1170,7 @@ app.get('/api/admin/pedidos', authenticate, requireAdmin, async (c) => {
   }
 });
 
-app.delete('/api/admin/pedidos/:id', authenticate, requireAdmin, async (c) => {
+app.delete('/api/admin/pedidos/:id', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   try {
     const id = Number.parseInt(c.req.param('id'));
     if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
@@ -1169,7 +1203,7 @@ function csvEscape(v: unknown): string {
   return s;
 }
 
-app.get('/api/admin/pedidos/csv', authenticate, requireAdmin, async (c) => {
+app.get('/api/admin/pedidos/csv', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   try {
     const rows = await db.select().from(pedidos).orderBy(desc(pedidos.fecha));
     const lines = [
@@ -1188,7 +1222,7 @@ app.get('/api/admin/pedidos/csv', authenticate, requireAdmin, async (c) => {
   }
 });
 
-app.get('/api/admin/productos/csv', authenticate, requireAdmin, async (c) => {
+app.get('/api/admin/productos/csv', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   try {
     const rows = await db.select().from(productos).orderBy(asc(productos.id));
     const lines = [
@@ -1275,7 +1309,7 @@ app.delete('/api/categorias/:id', authenticate, requireAdmin, async (c) => {
 // =================================================================
 // RUTAS — CUPONES
 // =================================================================
-app.get('/api/admin/cupones', authenticate, requireAdmin, async (c) => {
+app.get('/api/admin/cupones', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   try {
     const rows = await db.select().from(cupones).orderBy(desc(cupones.createdAt));
     return c.json(rows);
@@ -1285,7 +1319,7 @@ app.get('/api/admin/cupones', authenticate, requireAdmin, async (c) => {
   }
 });
 
-app.post('/api/admin/cupones', authenticate, requireAdmin, zValidator('json', CuponSchema), async (c) => {
+app.post('/api/admin/cupones', authenticate, requireTwoFactorVerified, requireAdmin, zValidator('json', CuponSchema), async (c) => {
   try {
     const data = c.req.valid('json');
     const [row] = await db.insert(cupones).values({
@@ -1306,7 +1340,7 @@ app.post('/api/admin/cupones', authenticate, requireAdmin, zValidator('json', Cu
   }
 });
 
-app.delete('/api/admin/cupones/:id', authenticate, requireAdmin, async (c) => {
+app.delete('/api/admin/cupones/:id', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   try {
     const id = Number.parseInt(c.req.param('id'));
     if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
@@ -1553,7 +1587,7 @@ app.put('/api/usuario/password', authenticate, zValidator('json', CambiarPasswor
 // =================================================================
 // RUTAS — ADMIN USERS
 // =================================================================
-app.get('/api/admin/usuarios', authenticate, requireAdmin, async (c) => {
+app.get('/api/admin/usuarios', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   try {
     const rows = await db.select({
       id:           usuarios.id,
@@ -1578,7 +1612,7 @@ app.get('/api/admin/usuarios', authenticate, requireAdmin, async (c) => {
 // =================================================================
 // RUTAS — SECURITY OPERATIONS CENTER
 // =================================================================
-app.get('/api/security/events', authenticate, requireAdmin, async (c) => {
+app.get('/api/security/events', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   try {
     const limit = Math.min(Number(c.req.query('limit') || 100), 500);
     const tipo  = c.req.query('tipo');
@@ -1590,7 +1624,7 @@ app.get('/api/security/events', authenticate, requireAdmin, async (c) => {
   } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
 });
 
-app.get('/api/security/stats', authenticate, requireAdmin, async (c) => {
+app.get('/api/security/stats', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   try {
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
@@ -1648,7 +1682,7 @@ const VT_CACHE_TTL = 60 * 60 * 1000; // 1h — no quemar cuota en cada refresh
 
 const VALID_IP = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/;
 
-app.get('/api/security/ip/:ip/threat', authenticate, requireAdmin, async (c) => {
+app.get('/api/security/ip/:ip/threat', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   const ip = c.req.param('ip');
 
   if (!VALID_IP.test(ip)) return c.json({ error: 'IP inválida' }, 400);
@@ -1699,14 +1733,14 @@ app.get('/api/security/ip/:ip/threat', authenticate, requireAdmin, async (c) => 
 // =================================================================
 // RUTAS — BLOCKED IPs (SOC)
 // =================================================================
-app.get('/api/security/blocked-ips', authenticate, requireAdmin, async (c) => {
+app.get('/api/security/blocked-ips', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   try {
     const rows = await db.select().from(blockedIps).orderBy(desc(blockedIps.createdAt));
     return c.json(rows);
   } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
 });
 
-app.post('/api/security/blocked-ips', authenticate, requireAdmin, async (c) => {
+app.post('/api/security/blocked-ips', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   try {
     const body = await c.req.json();
     const ip = String(body.ip || '').trim();
@@ -1726,7 +1760,7 @@ app.post('/api/security/blocked-ips', authenticate, requireAdmin, async (c) => {
   } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
 });
 
-app.delete('/api/security/blocked-ips/:ip', authenticate, requireAdmin, async (c) => {
+app.delete('/api/security/blocked-ips/:ip', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   const ip = decodeURIComponent(c.req.param('ip'));
   try {
     await db.delete(blockedIps).where(eq(blockedIps.ip, ip));
@@ -1738,7 +1772,7 @@ app.delete('/api/security/blocked-ips/:ip', authenticate, requireAdmin, async (c
 // =================================================================
 // RUTAS — SOC EXPORT (CSV / JSON)
 // =================================================================
-app.get('/api/security/events/export', authenticate, requireAdmin, async (c) => {
+app.get('/api/security/events/export', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   const format = c.req.query('format') === 'csv' ? 'csv' : 'json';
   const limit  = Math.min(Number(c.req.query('limit') || 1000), 5000);
   try {
@@ -1789,7 +1823,7 @@ for (const hpath of HONEYPOT_PATHS) {
 // =================================================================
 // RUTAS — ADMIN VALORACIONES (reseñas)
 // =================================================================
-app.get('/api/admin/valoraciones', authenticate, requireAdmin, async (c) => {
+app.get('/api/admin/valoraciones', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   try {
     const rows = await db.select({
       id:         valoraciones.id,
@@ -1812,7 +1846,7 @@ app.get('/api/admin/valoraciones', authenticate, requireAdmin, async (c) => {
   }
 });
 
-app.delete('/api/admin/valoraciones/:id', authenticate, requireAdmin, async (c) => {
+app.delete('/api/admin/valoraciones/:id', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   const id = Number(c.req.param('id'));
   if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
   try {
@@ -1828,7 +1862,7 @@ app.delete('/api/admin/valoraciones/:id', authenticate, requireAdmin, async (c) 
 // =================================================================
 // RUTAS — AUDIT LOG
 // =================================================================
-app.get('/api/admin/audit-log', authenticate, requireAdmin, async (c) => {
+app.get('/api/admin/audit-log', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   try {
     const limit  = Math.min(Number(c.req.query('limit') || 200), 500);
     const offset = Math.max(Number(c.req.query('offset') || 0), 0);
@@ -1845,7 +1879,7 @@ app.get('/api/admin/audit-log', authenticate, requireAdmin, async (c) => {
 // =================================================================
 // RUTAS — ADMIN ANALYTICS
 // =================================================================
-app.get('/api/admin/analytics', authenticate, requireAdmin, async (c) => {
+app.get('/api/admin/analytics', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
   try {
     const [productCount] = await db.select({ count: count() }).from(productos);
     const [orderCount] = await db.select({ count: count() }).from(pedidos);
@@ -2383,6 +2417,160 @@ async function waitForDB(maxAttempts = 15, delayMs = 2000) {
     }
   }
 }
+
+// =================================================================
+// RUTAS — 2FA
+// =================================================================
+const TwoFactorSetupSchema = z.object({
+  code: z.string().length(6, 'El código debe tener 6 dígitos'),
+});
+
+const TwoFactorVerifySchema = z.object({
+  code: z.string().length(6, 'El código debe tener 6 dígitos'),
+});
+
+app.post('/api/2fa/setup', authenticate, async (c) => {
+  try {
+    const user = c.get('user');
+    if (!user) return c.json({ error: 'No autenticado' }, 401);
+
+    const [dbUser] = await db.select({
+      twoFactorEnabled: usuarios.twoFactorEnabled,
+      twoFactorSecret: usuarios.twoFactorSecret,
+    }).from(usuarios).where(eq(usuarios.id, user.id));
+
+    if (dbUser?.twoFactorEnabled) {
+      return c.json({ error: '2FA ya está habilitado' }, 400);
+    }
+
+    const secret = generateTwoFactorSecret(user.username);
+    const qr = await generateTwoFactorQR(user.username, secret);
+
+    await db.update(usuarios)
+      .set({ twoFactorSecret: secret })
+      .where(eq(usuarios.id, user.id));
+
+    return c.json({ secret, qr });
+  } catch (err) {
+    console.error('Error configurando 2FA:', err);
+    return c.json({ error: 'Error interno' }, 500);
+  }
+});
+
+app.post('/api/2fa/enable', authenticate, zValidator('json', TwoFactorSetupSchema), async (c) => {
+  try {
+    const user = c.get('user');
+    if (!user) return c.json({ error: 'No autenticado' }, 401);
+
+    const [dbUser] = await db.select({
+      twoFactorSecret: usuarios.twoFactorSecret,
+    }).from(usuarios).where(eq(usuarios.id, user.id));
+
+    if (!dbUser?.twoFactorSecret) {
+      return c.json({ error: 'Primero genera el código QR' }, 400);
+    }
+
+    const { code } = c.req.valid('json');
+
+    if (!verifyTwoFactorCode(dbUser.twoFactorSecret, code)) {
+      logSecEvent('2fa_fail', { ip: getClientIP(c), username: user.username, detalles: 'Código 2FA inválido al habilitar' });
+      return c.json({ error: 'Código inválido' }, 400);
+    }
+
+    await db.update(usuarios)
+      .set({ twoFactorEnabled: true })
+      .where(eq(usuarios.id, user.id));
+
+    sessions[c.req.header('authorization')!] = { ...user, twoFactorVerified: true };
+
+    logSecEvent('2fa_enabled', { ip: getClientIP(c), username: user.username });
+
+    return c.json({ success: true });
+  } catch (err) {
+    console.error('Error habilitando 2FA:', err);
+    return c.json({ error: 'Error interno' }, 500);
+  }
+});
+
+app.post('/api/2fa/disable', authenticate, zValidator('json', TwoFactorSetupSchema), async (c) => {
+  try {
+    const user = c.get('user');
+    if (!user) return c.json({ error: 'No autenticado' }, 401);
+
+    const { code } = c.req.valid('json');
+
+    const [dbUser] = await db.select({
+      twoFactorSecret: usuarios.twoFactorSecret,
+      password: usuarios.password,
+    }).from(usuarios).where(eq(usuarios.id, user.id));
+
+    if (!dbUser?.twoFactorSecret) {
+      return c.json({ error: '2FA no está habilitado' }, 400);
+    }
+
+    if (!verifyTwoFactorCode(dbUser.twoFactorSecret, code)) {
+      logSecEvent('2fa_fail', { ip: getClientIP(c), username: user.username, detalles: 'Código 2FA inválido al deshabilitar' });
+      return c.json({ error: 'Código inválido' }, 400);
+    }
+
+    await disableTwoFactor(user.id);
+
+    logSecEvent('2fa_disabled', { ip: getClientIP(c), username: user.username });
+
+    return c.json({ success: true });
+  } catch (err) {
+    console.error('Error deshabilitando 2FA:', err);
+    return c.json({ error: 'Error interno' }, 500);
+  }
+});
+
+app.post('/api/2fa/verify', authenticate, zValidator('json', TwoFactorVerifySchema), async (c) => {
+  try {
+    const user = c.get('user');
+    if (!user) return c.json({ error: 'No autenticado' }, 401);
+
+    const { code } = c.req.valid('json');
+
+    const [dbUser] = await db.select({
+      twoFactorSecret: usuarios.twoFactorSecret,
+    }).from(usuarios).where(eq(usuarios.id, user.id));
+
+    if (!dbUser?.twoFactorSecret) {
+      return c.json({ error: '2FA no configurado' }, 400);
+    }
+
+    if (!verifyTwoFactorCode(dbUser.twoFactorSecret, code)) {
+      logSecEvent('2fa_fail', { ip: getClientIP(c), username: user.username, detalles: 'Código 2FA inválido en login' });
+      return c.json({ error: 'Código inválido' }, 400);
+    }
+
+    const token = c.req.header('authorization')!;
+    sessions[token] = { ...user, twoFactorVerified: true };
+
+    logSecEvent('2fa_success', { ip: getClientIP(c), username: user.username });
+
+    return c.json({ success: true });
+  } catch (err) {
+    console.error('Error verificando 2FA:', err);
+    return c.json({ error: 'Error interno' }, 500);
+  }
+});
+
+app.get('/api/2fa/status', authenticate, async (c) => {
+  try {
+    const user = c.get('user');
+    if (!user) return c.json({ error: 'No autenticado' }, 401);
+
+    const [dbUser] = await db.select({
+      twoFactorEnabled: usuarios.twoFactorEnabled,
+    }).from(usuarios).where(eq(usuarios.id, user.id));
+
+    return c.json({ enabled: dbUser?.twoFactorEnabled || false });
+  } catch (err) {
+    console.error('Error obteniendo estado 2FA:', err);
+    return c.json({ error: 'Error interno' }, 500);
+  }
+});
 
 export { app };
 
