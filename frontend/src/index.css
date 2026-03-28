@@ -165,6 +165,8 @@ header::before {
   gap: 10px;
   flex: 1;
   max-width: 420px;
+  min-width: 0;
+  box-sizing: border-box;
   transition: border-color 0.25s, box-shadow 0.25s;
 }
 
@@ -1549,8 +1551,17 @@ header::before {
 /* ── 768px: search baja a segunda línea ── */
 @media (max-width: 768px) {
   .container { padding: 0 16px; }
-  .header-main { flex-wrap: wrap; gap: 10px; }
-  .search-bar { max-width: 100%; order: 3; flex-basis: 100%; }
+  .header-main { flex-wrap: wrap; gap: 8px; justify-content: flex-start; }
+  .header-left { flex: 1; }
+  .cart-btn { margin-left: auto; }
+  .search-bar {
+    order: 3;
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
   .hero { padding: 44px 0 36px; }
   .hero-trust { gap: 16px; flex-wrap: wrap; justify-content: center; }
   .products-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
