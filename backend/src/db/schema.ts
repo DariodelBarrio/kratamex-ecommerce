@@ -28,6 +28,10 @@ export const productos = pgTable('productos', {
   destacado:   boolean('destacado').default(false),
   activo:      boolean('activo').default(true),
   fecha:       timestamp('fecha', { withTimezone: true }).defaultNow(),
+  cpu:         text('cpu'),
+  gpu:         text('gpu'),
+  ram:         text('ram'),
+  almacenamiento: text('almacenamiento'),
 });
 
 // =================================================================
@@ -84,6 +88,8 @@ export const usuarios = pgTable('usuarios', {
   avatar:    text('avatar'),
   idioma:    text('idioma').default('es'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  twoFactorSecret: text('two_factor_secret'),
+  twoFactorEnabled: boolean('two_factor_enabled').default(false),
 });
 
 // =================================================================
