@@ -114,6 +114,27 @@ async function loginAs(user: typeof ADMIN_USER | typeof STD_USER): Promise<strin
 // =================================================================
 // Tests
 // =================================================================
+
+let selectCallCount = 0;
+
+// Helper: mock que returns user with twoFactorEnabled: false
+// Only mocks the first call (used by authenticate middleware)
+function mockUserSelectWith2FA(enabled = false) {
+  selectCallCount = 0;
+  const originalMock = vi.mocked(db.select);
+  originalMock.mockImplementation(() => {
+    selectCallCount++;
+    if (selectCallCount === 1) {
+      return {
+        from: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue([{ twoFactorEnabled: enabled }]),
+        })),
+      };
+    }
+    return makeChain();
+  });
+}
+
 describe('Backend API', () => {
   beforeEach(() => {
     vi.mocked(db.select).mockImplementation(() => makeChain() as never);
@@ -278,6 +299,7 @@ describe('Backend API', () => {
   });
 
   it('GET /api/admin/pedidos con token de admin → 200', async () => {
+    mockUserSelectWith2FA(false);
     const token = await loginAs(ADMIN_USER);
     const res   = await app.request('/api/admin/pedidos', { headers: { authorization: token } });
     expect(res.status).toBe(200);
@@ -285,6 +307,7 @@ describe('Backend API', () => {
   });
 
   it('GET /api/admin/usuarios con token de admin → 200', async () => {
+    mockUserSelectWith2FA(false);
     const token = await loginAs(ADMIN_USER);
     const res   = await app.request('/api/admin/usuarios', { headers: { authorization: token } });
     expect(res.status).toBe(200);
@@ -292,12 +315,14 @@ describe('Backend API', () => {
   });
 
   it('GET /api/security/events con token de admin → 200', async () => {
+    mockUserSelectWith2FA(false);
     const token = await loginAs(ADMIN_USER);
     const res   = await app.request('/api/security/events', { headers: { authorization: token } });
     expect(res.status).toBe(200);
   });
 
   it('GET /api/security/blocked-ips con token de admin → 200', async () => {
+    mockUserSelectWith2FA(false);
     const token = await loginAs(ADMIN_USER);
     const res   = await app.request('/api/security/blocked-ips', { headers: { authorization: token } });
     expect(res.status).toBe(200);
@@ -434,6 +459,7 @@ describe('Backend API', () => {
 
   // ── GET /api/admin/cupones con admin ─────────────────────────────
   it('GET /api/admin/cupones con token de admin → 200', async () => {
+    mockUserSelectWith2FA(false);
     const token = await loginAs(ADMIN_USER);
     const res   = await app.request('/api/admin/cupones', {
       headers: { authorization: token },
