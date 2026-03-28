@@ -42,11 +42,8 @@ import {
   generateTwoFactorSecret,
   generateTwoFactorQR,
   verifyTwoFactorCode,
-  enableTwoFactor,
   disableTwoFactor,
-  verifyTwoFactor,
 } from './2fa';
-import { anomalyDetector } from './ip-anomaly';
 
 const PORT = 3001;
 const IVA_RATE = 0.21;

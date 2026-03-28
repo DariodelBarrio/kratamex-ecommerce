@@ -1,6 +1,6 @@
 import { db } from './db/index'
 import { securityEvents, blockedIps } from './db/schema'
-import { sql, eq, and, gte, desc } from 'drizzle-orm'
+import { sql, eq, and, gte } from 'drizzle-orm'
 
 interface IpAnomalyConfig {
   maxFailedAttempts: number
@@ -17,7 +17,7 @@ const DEFAULT_CONFIG: IpAnomalyConfig = {
 }
 
 export class IpAnomalyDetector {
-  private config: IpAnomalyConfig
+  private readonly config: IpAnomalyConfig
 
   constructor(config: Partial<IpAnomalyConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
