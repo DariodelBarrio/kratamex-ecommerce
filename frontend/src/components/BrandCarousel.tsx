@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 
 // ── SVG logos inline ─────────────────────────────────────────────
 function HPLogo() {
@@ -66,20 +66,56 @@ const BRANDS: Brand[] = [
 // Duplicate for visual density when dragging far right
 const BRANDS_DOUBLED = [...BRANDS, ...BRANDS.map(b => ({ ...b, id: b.id + '_2' }))]
 
+const AUTO_SPEED  = 0.8  // px por frame en auto-scroll
+const FRICTION    = 0.92
+const MIN_VELOCITY = 0.4
+
 // ── Component ─────────────────────────────────────────────────────
 export function BrandCarousel() {
-  const trackRef = useRef<HTMLDivElement>(null)
-  const isDragging = useRef(false)
-  const startX = useRef(0)
-  const scrollLeft = useRef(0)
+  const trackRef    = useRef<HTMLDivElement>(null)
+  const isDragging  = useRef(false)
+  const startX      = useRef(0)
+  const scrollLeft  = useRef(0)
+  const lastX       = useRef(0)
+  const lastT       = useRef(0)
+  const velocity    = useRef(0)
+  const rafId       = useRef<number>(0)
+  const autoRafId   = useRef<number>(0)
 
-  const startDrag = useCallback((pageX: number) => {
+  // ── Auto-scroll infinito ──────────────────────────────────────
+  useEffect(() => {
     const el = trackRef.current
     if (!el) return
-    isDragging.current = true
-    startX.current = pageX - el.offsetLeft
-    scrollLeft.current = el.scrollLeft
-    el.style.cursor = 'grabbing'
+
+    const tick = () => {
+      if (!isDragging.current) {
+        el.scrollLeft += AUTO_SPEED
+        // Al llegar a la mitad (items duplicados) vuelve al inicio sin salto
+        if (el.scrollLeft >= el.scrollWidth / 2) {
+          el.scrollLeft -= el.scrollWidth / 2
+        }
+      }
+      autoRafId.current = requestAnimationFrame(tick)
+    }
+    autoRafId.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(autoRafId.current)
+  }, [])
+
+  const cancelMomentum = () => {
+    if (rafId.current) cancelAnimationFrame(rafId.current)
+  }
+
+  const startDrag = useCallback((pageX: number) => {
+    cancelMomentum()
+    const el = trackRef.current
+    if (!el) return
+    isDragging.current   = true
+    startX.current       = pageX - el.offsetLeft
+    scrollLeft.current   = el.scrollLeft
+    lastX.current        = pageX
+    lastT.current        = performance.now()
+    velocity.current     = 0
+    el.style.cursor      = 'grabbing'
   }, [])
 
   const moveDrag = useCallback((pageX: number) => {
@@ -88,11 +124,31 @@ export function BrandCarousel() {
     if (!el) return
     const x = pageX - el.offsetLeft
     el.scrollLeft = scrollLeft.current - (x - startX.current) * 1.4
+
+    const now = performance.now()
+    const dt  = now - lastT.current
+    if (dt > 0) velocity.current = (lastX.current - pageX) / dt
+    lastX.current = pageX
+    lastT.current = now
   }, [])
 
   const stopDrag = useCallback(() => {
+    if (!isDragging.current) return
     isDragging.current = false
     if (trackRef.current) trackRef.current.style.cursor = 'grab'
+
+    let v = velocity.current * 16
+
+    const animate = () => {
+      const el = trackRef.current
+      if (!el || Math.abs(v) < MIN_VELOCITY) return
+      el.scrollLeft += v
+      if (el.scrollLeft >= el.scrollWidth / 2) el.scrollLeft -= el.scrollWidth / 2
+      if (el.scrollLeft < 0) el.scrollLeft += el.scrollWidth / 2
+      v *= FRICTION
+      rafId.current = requestAnimationFrame(animate)
+    }
+    rafId.current = requestAnimationFrame(animate)
   }, [])
 
   return (

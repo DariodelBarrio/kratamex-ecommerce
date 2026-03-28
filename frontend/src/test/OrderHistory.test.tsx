@@ -15,6 +15,7 @@ vi.mock('lucide-react', () => ({
   Package:     ({ size }: { size: number }) => <svg data-testid="icon-package" width={size} />,
   ChevronDown: () => <svg data-testid="icon-chevron-down" />,
   ChevronUp:   () => <svg data-testid="icon-chevron-up" />,
+  X:           () => <svg data-testid="icon-x" />,
 }));
 
 // Mock useQuery directamente para control total del estado
@@ -157,7 +158,10 @@ describe('OrderHistory', () => {
       isLoading: false, isError: false,
     } as never);
     renderOH();
-    fireEvent.click(screen.getByRole('button'));
+    // Click expand button (not the X close button which has title="Volver")
+    const btns = screen.getAllByRole('button');
+    const expandBtn = btns.find(b => b.getAttribute('title') !== 'Volver')!;
+    fireEvent.click(expandBtn);
     expect(screen.getByText('Monitor')).toBeInTheDocument();
   });
 
@@ -174,7 +178,9 @@ describe('OrderHistory', () => {
       isLoading: false, isError: false,
     } as never);
     renderOH();
-    fireEvent.click(screen.getByRole('button'));
+    const btns = screen.getAllByRole('button');
+    const expandBtn = btns.find(b => b.getAttribute('title') !== 'Volver')!;
+    fireEvent.click(expandBtn);
     expect(screen.getByText('Teclado Mecánico')).toBeInTheDocument();
     expect(screen.getByText('Ratón')).toBeInTheDocument();
   });

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Check, Monitor, Heart, Star } from 'lucide-react';
+import { ShoppingCart, Check, Monitor, Heart, Star, Zap } from 'lucide-react';
 import type { Producto } from '../interfaces';
 
 // =================================================================
@@ -164,7 +164,7 @@ export function ProductCard({ producto, onAddToCart, index, isWishlisted = false
 
   return (
     <motion.div
-      className="product-card"
+      className={`product-card${producto.destacado ? ' product-card--destacado' : ''}`}
       onClick={() => navigate(`/producto/${producto.id}`)}
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
@@ -179,6 +179,11 @@ export function ProductCard({ producto, onAddToCart, index, isWishlisted = false
         {producto.categoria && (
           <div className="product-category-pill">{producto.categoria}</div>
         )}
+        {producto.destacado && (
+          <div className="product-badge-destacado">
+            <Zap size={9} /> Destacado
+          </div>
+        )}
         {onToggleWishlist && (
           <motion.button
             className={`wishlist-btn ${isWishlisted ? 'wishlist-btn--active' : ''}`}
@@ -188,6 +193,11 @@ export function ProductCard({ producto, onAddToCart, index, isWishlisted = false
           >
             <Heart size={14} fill={isWishlisted ? 'currentColor' : 'none'} />
           </motion.button>
+        )}
+        {producto.stock === 0 && (
+          <div className="product-out-of-stock-overlay">
+            <span className="product-out-of-stock-label">Sin stock</span>
+          </div>
         )}
         {producto.imagen ? (
           <img src={producto.imagen} alt={producto.nombre} loading="lazy" />
