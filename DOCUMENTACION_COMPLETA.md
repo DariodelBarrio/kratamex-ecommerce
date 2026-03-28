@@ -29,7 +29,7 @@ KRATAMEX es una **tienda online completa** de ordenadores y accesorios construid
 - **Checkout directo**: Formulario validado por Zod → POST `/api/pedidos` → redirige a `/mis-pedidos`
 - **Perfil de usuario**: Avatar editable (Cloudinary o local), nombre, email, dirección, teléfono, idioma (es/en), **cambio de contraseña** con verificación de la actual
 - **Historial de pedidos**: Lista con expand/collapse de items por pedido, estado con badge de color
-- **Panel Admin** (`/admin`): Dashboard con métricas y gráficas, CRUD de productos (con stock y visibilidad), gestión de pedidos con cambio de estado inline, gestión de reseñas, CRUD de cupones, listado de usuarios, exportación CSV
+- **Panel Admin** (`/admin`): Dashboard con métricas y gráficas, CRUD de productos (con stock y visibilidad), gestión de pedidos con cambio de estado inline, gestión de reseñas, CRUD de cupones, listado de usuarios, exportación CSV, **registro de auditoría** de acciones administrativas
 - **Panel SOC** (`/panel`): Centro de operaciones de ciberseguridad con métricas en tiempo real, gráficas, log de eventos filtrable, auto-refresh cada 15 s
 - **Autenticación RBAC**: Roles `admin` y `standard`, tokens de sesión criptográficos (256 bits, TTL 8h)
 - **Seguridad**: argon2id, rate limiting, Drizzle ORM (queries parametrizadas), Zod, HTTPS, CORS, security headers
@@ -198,7 +198,7 @@ Lista de pedidos del usuario autenticado:
 
 #### Admin (`/admin`)
 
-Login propio con rol admin (token guardado en `localStorage` para persistir entre recargas). Seis pestañas:
+Login propio con rol admin (token guardado en `localStorage` para persistir entre recargas). Siete pestañas:
 
 **Dashboard**
 - KPIs: total pedidos, ingresos totales, ticket medio, clientes únicos, productos en catálogo
@@ -236,6 +236,14 @@ Login propio con rol admin (token guardado en `localStorage` para persistir entr
 **Usuarios**
 - Tabla de todos los usuarios registrados
 - Muestra: ID, username, nombre, email, rol (badge de color), total de pedidos, fecha de registro
+
+**Auditoría**
+- Registro inmutable de todas las acciones administrativas
+- Carga lazy (solo al abrir la pestaña) vía `GET /api/admin/audit-log`
+- Tabla con: Fecha, Admin, Acción (badge de color), Entidad, ID afectado, Detalles
+- Badges por acción: 🟢 crear, 🔵 actualizar, 🔴 eliminar, 🟠 cambio\_estado
+- Botón "Actualizar" para refrescar manualmente
+- Acciones registradas: productos (CRUD), pedidos (estado + eliminar), categorías (CRUD), cupones (crear/eliminar), valoraciones (eliminar)
 
 ### Design System
 
@@ -369,9 +377,11 @@ export const pedidos         = pgTable('pedidos',          { id, cliente, email,
 export const pedidoItems     = pgTable('pedido_items',     { id, pedidoId, productoId, nombre, precio, cantidad, imagen });
 export const usuarios        = pgTable('usuarios',         { id, username, password, email, nombre, role, avatar, direccion, telefono, idioma });
 export const comentarios     = pgTable('comentarios',      { id, productoId, usuarioId, autor, titulo, contenido, valoracion, fecha });
+export const valoraciones    = pgTable('valoraciones',     { id, productoId, usuarioId, puntuacion, titulo, comentario, fecha });
 export const cupones         = pgTable('cupones',          { id, codigo, tipo, valor, minCompra, maxUsos, usos, activo, fechaInicio, fechaFin });
 export const favoritos       = pgTable('favoritos',        { id, usuarioId, productoId });
 export const securityEvents  = pgTable('security_events',  { id, tipo, ip, username, endpoint, metodo, userAgent, detalles, fecha });
+export const auditLog        = pgTable('audit_log',        { id, adminId, adminUsername, accion, entidad, entidadId, detalles, fecha });
 ```
 
 ### Campos relevantes de `productos`
@@ -393,6 +403,15 @@ export const securityEvents  = pgTable('security_events',  { id, tipo, ip, usern
 | `auth_invalid` | Token no encontrado o sesión expirada |
 | `register` | Nuevo usuario registrado |
 | `forbidden` | Acceso denegado por RBAC |
+
+### Valores de `accion` en `audit_log`
+
+| accion | Cuándo |
+|--------|--------|
+| `crear` | Admin crea un producto, categoría o cupón |
+| `actualizar` | Admin edita un producto o categoría |
+| `eliminar` | Admin elimina producto, pedido, categoría, cupón o valoración |
+| `cambio_estado` | Admin cambia el estado de un pedido |
 
 ### Comandos Drizzle Kit
 
@@ -465,6 +484,7 @@ Al arrancar, el backend crea las tablas (`CREATE TABLE IF NOT EXISTS`) y hace se
 | POST | `/api/categorias` | Crear categoría |
 | PUT | `/api/categorias/:id` | Actualizar categoría |
 | DELETE | `/api/categorias/:id` | Eliminar categoría |
+| GET | `/api/admin/audit-log` | Registro de auditoría. Query: `entidad`, `limit` (default 200) |
 
 ### Endpoints SOC (admin)
 
@@ -623,6 +643,7 @@ PUT /api/usuario/password  { passwordActual, passwordNueva }
 | Exportar CSV | No | Sí |
 | Panel SOC | No | Sí |
 | Ver eventos de seguridad | No | Sí |
+| Ver registro de auditoría | No | Sí |
 
 ### Capas de seguridad
 
@@ -639,7 +660,7 @@ PUT /api/usuario/password  { passwordActual, passwordNueva }
 | CORS | Solo el origen configurado en `CORS_ORIGIN` del `.env` |
 | Uploads | Solo `image/*`, límite 5 MB, nombre aleatorio |
 | Sesiones | TTL 8h, limpieza automática cada 15 min |
-| Monitorización | Todos los eventos de seguridad → tabla `security_events` |
+| Monitorización | Eventos de seguridad → `security_events`; acciones admin → `audit_log` |
 
 ---
 
@@ -942,6 +963,26 @@ logSecEvent('forbidden', {
 ```
 
 El evento aparece automáticamente en el panel SOC en el próximo refresh (máx. 15 s).
+
+### Añadir un nuevo registro de auditoría
+
+En `backend/src/index.ts`, dentro de cualquier ruta protegida con `authenticate + requireAdmin`:
+
+```typescript
+const u = c.get('user');
+await logAudit(u.id, u.username, 'accion', 'entidad', entidadId, 'detalles opcionales');
+```
+
+| Parámetro | Tipo | Ejemplo |
+|-----------|------|---------|
+| `adminId` | number | `u.id` |
+| `adminUsername` | string | `u.username` |
+| `accion` | string | `'crear'` \| `'actualizar'` \| `'eliminar'` \| `'cambio_estado'` |
+| `entidad` | string | `'producto'` \| `'pedido'` \| `'categoria'` \| `'cupon'` \| `'valoracion'` |
+| `entidadId` | number? | ID del registro afectado |
+| `detalles` | string? | Información adicional (ej. `'Nombre: Portátil HP'`) |
+
+El registro aparece en la pestaña **Auditoría** del panel admin al pulsar "Actualizar".
 
 ---
 
