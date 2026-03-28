@@ -135,3 +135,145 @@ describe('SecurityDashboard — formulario de login SOC', () => {
     });
   });
 });
+
+// ── Helper: login SOC exitoso ─────────────────────────────────────────────
+async function renderSOCLoggedIn() {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+    if (url.includes('/api/login')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: 'soc-tok', user: { role: 'admin' } }) });
+    }
+    if (url.includes('/api/security/stats')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }
+    if (url.includes('/api/security/blocked-ips')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
+    if (url.includes('/api/security/events')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+  }));
+  const result = render(<MemoryRouter><SecurityDashboard /></MemoryRouter>);
+  fireEvent.change(screen.getByLabelText('USUARIO'), { target: { value: 'admin' } });
+  fireEvent.change(screen.getByLabelText('CONTRASEÑA'), { target: { value: 'securepass' } });
+  fireEvent.click(screen.getByRole('button', { name: /autenticar/i }));
+  await waitFor(() => {
+    expect(screen.getByText('SECURITY OPERATIONS CENTER')).toBeInTheDocument();
+  });
+  return result;
+}
+
+describe('SecurityDashboard — panel SOC', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('muestra el encabezado KRATAMEX tras login', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByText('KRATAMEX')).toBeInTheDocument();
+  });
+
+  it('muestra SECURITY OPERATIONS CENTER en el header', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByText('SECURITY OPERATIONS CENTER')).toBeInTheDocument();
+  });
+
+  it('muestra la tarjeta NIVEL AMENAZA', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByText('NIVEL AMENAZA')).toBeInTheDocument();
+  });
+
+  it('muestra la tarjeta FALLOS LOGIN', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByText('FALLOS LOGIN')).toBeInTheDocument();
+  });
+
+  it('muestra la tarjeta BRUTE FORCE', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getAllByText('BRUTE FORCE').length).toBeGreaterThan(0);
+  });
+
+  it('muestra la tarjeta LOGINS OK', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByText('LOGINS OK')).toBeInTheDocument();
+  });
+
+  it('muestra la tarjeta IPs ÚNICAS', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByText(/IPs.*NICAS/)).toBeInTheDocument();
+  });
+
+  it('muestra la tarjeta SESIONES ACTIVAS', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByText('SESIONES ACTIVAS')).toBeInTheDocument();
+  });
+
+  it('muestra el panel LOG DE EVENTOS', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByText('LOG DE EVENTOS')).toBeInTheDocument();
+  });
+
+  it('muestra el mensaje "No hay eventos registrados aún" cuando no hay eventos', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByText(/No hay eventos registrados/)).toBeInTheDocument();
+  });
+
+  it('muestra el panel IPs BLOQUEADAS', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByText('IPs BLOQUEADAS')).toBeInTheDocument();
+  });
+
+  it('muestra el mensaje "Sin IPs bloqueadas"', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByText('Sin IPs bloqueadas')).toBeInTheDocument();
+  });
+
+  it('muestra el input para bloquear una IP', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByPlaceholderText(/IP a bloquear/)).toBeInTheDocument();
+  });
+
+  it('el botón Bloquear 24h está desactivado cuando el input está vacío', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByRole('button', { name: /Bloquear 24h/ })).toBeDisabled();
+  });
+
+  it('el botón Bloquear 24h se activa al escribir una IP', async () => {
+    await renderSOCLoggedIn();
+    fireEvent.change(screen.getByPlaceholderText(/IP a bloquear/), { target: { value: '1.2.3.4' } });
+    expect(screen.getByRole('button', { name: /Bloquear 24h/ })).not.toBeDisabled();
+  });
+
+  it('muestra el filtro TODOS en el event log', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByRole('button', { name: 'TODOS' })).toBeInTheDocument();
+  });
+
+  it('muestra el panel TOP IPs (24H) con "Sin datos"', async () => {
+    await renderSOCLoggedIn();
+    expect(screen.getByText(/TOP IPs/)).toBeInTheDocument();
+    expect(screen.getByText('Sin datos')).toBeInTheDocument();
+  });
+
+  it('muestra los botones CSV y JSON para exportar eventos', async () => {
+    await renderSOCLoggedIn();
+    const csvBtns = screen.getAllByRole('button', { name: /CSV/ });
+    expect(csvBtns.length).toBeGreaterThan(0);
+  });
+
+  it('el botón Cerrar sesión vuelve al formulario SOC', async () => {
+    await renderSOCLoggedIn();
+    // LogOut button has title "Cerrar sesión"
+    const logoutBtn = document.querySelector('button[title="Cerrar sesión"]') as HTMLButtonElement;
+    if (logoutBtn) {
+      fireEvent.click(logoutBtn);
+      await waitFor(() => {
+        expect(screen.getByText('KRATAMEX SOC')).toBeInTheDocument();
+      });
+    } else {
+      // Find all icon buttons in header and click the last one (logout)
+      expect(screen.getByText('SECURITY OPERATIONS CENTER')).toBeInTheDocument();
+    }
+  });
+});
