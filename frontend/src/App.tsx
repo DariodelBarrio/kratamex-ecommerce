@@ -28,7 +28,9 @@ import { StoreHeader } from './components/StoreHeader'
 import { StoreHero } from './components/StoreHero'
 import { StoreFooter } from './components/StoreFooter'
 import { CartPanel } from './components/CartPanel'
+import { StripeCheckoutModal } from './components/StripeCheckoutModal'
 import NotFound from './components/NotFound'
+import { ChatBot } from './components/ChatBot'
 import { useFiltros } from './hooks/useFiltros'
 import { useToasts } from './hooks/useToasts'
 import type { OrdenPrecio } from './hooks/useFiltros'
@@ -183,6 +185,7 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
   const [cuponError, setCuponError] = useState('')
   const [formulario, setFormulario] = useState({ cliente: '', email: '', direccion: '' })
   const [formError, setFormError] = useState('')
+  const [stripeData, setStripeData] = useState<{ clientSecret: string; pedidoId: number; total: number } | null>(null)
 
   useEffect(() => {
     const fn = () => setShowBackTop(globalThis.scrollY > 420)
@@ -266,20 +269,25 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
   }
 
   const checkoutMutation = useMutation({
-    mutationFn: () => api.postPedido({
+    mutationFn: () => api.postStripeCheckout({
       ...formulario,
       items: carritoExterno.map(item => ({ id: item.id, cantidad: item.cantidad })),
       cupon: cuponCodigo || undefined,
     }),
-    onSuccess: () => {
-      setCarritoExterno([])
-      setCuponCodigo('')
-      setCuponDescuento(0)
+    onSuccess: (data) => {
       setCarritoAbiertoExterno(false)
-      navigate('/mis-pedidos')
+      setStripeData(data)
     },
     onError: (err: any) => setFormError(err.message),
   })
+
+  const handleStripeSuccess = () => {
+    setStripeData(null)
+    setCarritoExterno([])
+    setCuponCodigo('')
+    setCuponDescuento(0)
+    navigate('/mis-pedidos')
+  }
 
   const handleCheckout = () => {
     setFormError('')
@@ -364,6 +372,19 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
         )}
       </AnimatePresence>
 
+      {/* ── Stripe Checkout ── */}
+      <AnimatePresence>
+        {stripeData && (
+          <StripeCheckoutModal
+            clientSecret={stripeData.clientSecret}
+            pedidoId={stripeData.pedidoId}
+            total={stripeData.total}
+            onSuccess={handleStripeSuccess}
+            onClose={() => setStripeData(null)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* ── Back to top ── */}
       <AnimatePresence>
         {showBackTop && (
@@ -421,10 +442,11 @@ function App() {
   }, [])
 
   const handleLogout = useCallback(() => {
+    const token = localStorage.getItem('kratamex_token')
     localStorage.removeItem('kratamex_token')
     localStorage.removeItem('kratamex_user')
     setAuthUser(null)
-    fetch('/api/logout', { method: 'POST', headers: { Authorization: localStorage.getItem('kratamex_token') || '' } })
+    fetch('/api/logout', { method: 'POST', headers: { Authorization: token || '' } })
   }, [])
 
   const toggleWishlist = (id: number) => {
@@ -475,6 +497,8 @@ function App() {
         <Route path="/panel"  element={<SecurityDashboard />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+
+      <ChatBot />
     </>
   )
 }
