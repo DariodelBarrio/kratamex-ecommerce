@@ -11,6 +11,8 @@ import { StoreHero } from '@/components/StoreHero'
 import { StoreFooter } from '@/components/StoreFooter'
 import { BrandCarousel } from '@/components/BrandCarousel'
 import { ProductComparator } from '@/components/ProductComparator'
+import { ProductCard } from '@/components/ProductCard'
+import { ProductSkeleton } from '@/components/ProductSkeleton'
 import { useStore } from '@/lib/store-context'
 import { useFiltros } from '@/hooks/useFiltros'
 import { useToasts } from '@/hooks/useToasts'
@@ -87,94 +89,7 @@ function ActiveFilters({ categoriaFiltro, setCategoriaFiltro, busqueda, setBusqu
   )
 }
 
-// =================================================================
-// SKELETON
-// =================================================================
-function SkeletonCard() {
-  return (
-    <div className="skeleton-card">
-      <div className="skeleton-image"><div className="skeleton-shimmer" /></div>
-      <div style={{ padding: '18px 20px 20px' }}>
-        <div className="skeleton-line skeleton-category" />
-        <div className="skeleton-line skeleton-title" />
-        <div className="skeleton-line skeleton-desc" />
-        <div className="skeleton-line skeleton-desc-short" />
-        <div className="skeleton-line skeleton-price" />
-        <div className="skeleton-line skeleton-btn" />
-      </div>
-    </div>
-  )
-}
-
-// =================================================================
-// PRODUCT CARD (minimal — full version in Sprint 1)
-// =================================================================
-interface ProductCardProps {
-  readonly producto: Producto
-  readonly onAddToCart: (p: Producto) => void
-  readonly index: number
-  readonly isWishlisted: boolean
-  readonly onToggleWishlist: (id: number) => void
-  readonly vistaLista: boolean
-  readonly estaEnComparador: boolean
-  readonly onToggleComparador: (p: Producto) => void
-  readonly puedeAgregarComparador: boolean
-}
-
-function ProductCard({ producto, onAddToCart, isWishlisted, onToggleWishlist, estaEnComparador, onToggleComparador, puedeAgregarComparador }: ProductCardProps) {
-  return (
-    <motion.div
-      className={`product-card${producto.destacado ? ' product-card--destacado' : ''}`}
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-    >
-      <a href={`/producto/${producto.id}`} className="product-image-area" style={{ textDecoration: 'none', display: 'block' }}>
-        {producto.imagen
-          ? <img src={producto.imagen} alt={producto.nombre} loading="lazy" />
-          : <div className="product-image-placeholder"><Search size={32} /></div>
-        }
-        {producto.categoria && <span className="product-category-pill">{producto.categoria}</span>}
-        {producto.stock === 0 && (
-          <div className="product-out-of-stock-overlay">
-            <span className="product-out-of-stock-label">Sin stock</span>
-          </div>
-        )}
-      </a>
-      <div className="product-info">
-        <h3 className="product-name">{producto.nombre}</h3>
-        <p className="product-description">{producto.descripcion}</p>
-        <div className="product-card-footer">
-          <span className="product-price">${producto.precio.toFixed(2)}</span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              className="add-to-cart"
-              onClick={() => onAddToCart(producto)}
-              disabled={producto.stock === 0}
-            >
-              Añadir al carrito
-            </button>
-            <button
-              onClick={() => onToggleWishlist(producto.id)}
-              style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 10, padding: '0 10px', cursor: 'pointer', color: isWishlisted ? '#ef4444' : 'var(--text-subtle)', transition: 'color 0.2s' }}
-              aria-label={isWishlisted ? 'Quitar de favoritos' : 'Añadir a favoritos'}
-            >
-              <Heart size={15} fill={isWishlisted ? 'currentColor' : 'none'} />
-            </button>
-            <button
-              className={`compare-btn ${estaEnComparador ? 'compare-btn--active' : ''}`}
-              onClick={() => onToggleComparador(producto)}
-              disabled={!estaEnComparador && !puedeAgregarComparador}
-              title={estaEnComparador ? 'Quitar de comparar' : puedeAgregarComparador ? 'Añadir a comparar' : 'Máximo 3 productos'}
-            >
-              <GitCompare size={14} />
-            </button>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  )
-}
+// ProductCard y ProductSkeleton importados desde components/
 
 // =================================================================
 // CART PANEL (minimal — full version migrated in next step)
@@ -274,7 +189,7 @@ function CatalogContent({ loading, productosFiltrados, vistaLista, filtrarFavori
   categoriaFiltro: string
   limpiarFiltros: () => void
   wishlistExterno: number[]
-  onAddToCart: (p: Producto) => void
+  onAddToCart: (p: Producto, rect: DOMRect) => void
   onToggleWishlist: (id: number) => void
   comparadorIds: number[]
   onToggleComparador: (p: Producto) => void
@@ -283,7 +198,7 @@ function CatalogContent({ loading, productosFiltrados, vistaLista, filtrarFavori
   if (loading) {
     return (
       <div className={vistaLista ? 'products-list' : 'products-grid'}>
-        {SKELETON_KEYS.map(k => <SkeletonCard key={k} />)}
+        {SKELETON_KEYS.map(k => <ProductSkeleton key={k} />)}
       </div>
     )
   }
@@ -330,6 +245,7 @@ function HomeContent() {
   const [formulario, setFormulario] = useState({ cliente: '', email: '', direccion: '' })
   const [formError, setFormError] = useState('')
   const [comparadorAbierto, setComparadorAbierto] = useState(false)
+  const [flyItem, setFlyItem] = useState<{ from: DOMRect; to: DOMRect; imagen: string } | null>(null)
 
   useEffect(() => {
     const fn = () => setShowBackTop(globalThis.scrollY > 420)
@@ -370,13 +286,19 @@ function HomeContent() {
   }, [productos, filtros.filtrarFavoritos, wishlist, filtros.precioMin, filtros.precioMax])
 
   // Cart actions
-  const agregarAlCarrito = (producto: Producto) => {
+  const agregarAlCarrito = (producto: Producto, fromRect: DOMRect) => {
     setCarrito(prev => {
       const existente = prev.find(item => item.id === producto.id)
       if (existente) return prev.map(item => item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item)
       return [...prev, { ...producto, cantidad: 1 }]
     })
     addToast(producto.nombre)
+    // Fly-to-cart animation
+    const cartBtn = typeof document !== 'undefined' ? document.querySelector('.cart-btn') : null
+    if (cartBtn) {
+      const toRect = cartBtn.getBoundingClientRect()
+      setFlyItem({ from: fromRect, to: toRect, imagen: producto.imagen || '' })
+    }
   }
 
   const eliminarItem = (id: number) => setCarrito(prev => prev.filter(item => item.id !== id))
@@ -398,6 +320,7 @@ function HomeContent() {
       setCuponCodigo('')
       setCuponDescuento(0)
       setCarritoAbierto(false)
+      import('canvas-confetti').then(m => m.default({ particleCount: 130, spread: 80, origin: { y: 0.6 } }))
       router.push('/mis-pedidos')
     },
     onError: (err: any) => setFormError(err.message),
@@ -513,6 +436,40 @@ function HomeContent() {
       </AnimatePresence>
 
       <ToastContainer toasts={toasts} />
+
+      {/* Fly-to-cart animation */}
+      <AnimatePresence>
+        {flyItem && (
+          <motion.div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: flyItem.from.width,
+              height: flyItem.from.height,
+              borderRadius: 10,
+              overflow: 'hidden',
+              pointerEvents: 'none',
+              zIndex: 9999,
+            }}
+            initial={{ x: flyItem.from.left, y: flyItem.from.top, opacity: 1, scale: 1 }}
+            animate={{
+              x: flyItem.to.left + flyItem.to.width / 2 - flyItem.from.width / 2,
+              y: flyItem.to.top + flyItem.to.height / 2 - flyItem.from.height / 2,
+              opacity: 0,
+              scale: 0.15,
+            }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.55, ease: [0.25, 0.46, 0.45, 0.94] }}
+            onAnimationComplete={() => setFlyItem(null)}
+          >
+            {flyItem.imagen
+              ? <img src={flyItem.imagen} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <div style={{ width: '100%', height: '100%', background: 'var(--primary)' }} />
+            }
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {comparador.productosSeleccionados.length > 0 && (

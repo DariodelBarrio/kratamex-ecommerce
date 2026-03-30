@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store-context'
 import { updatePerfil, cambiarPassword, getTwoFactorStatus, setupTwoFactor, enableTwoFactor, disableTwoFactor } from '@/lib/api'
-import { Shield, ShieldCheck, ShieldOff, QrCode, Key, Loader2 } from 'lucide-react'
+import { Shield, ShieldCheck, ShieldOff, QrCode, Key, Loader2, Star } from 'lucide-react'
 
 export default function PerfilPage() {
   const router = useRouter()
@@ -118,6 +118,28 @@ function PerfilForm({ user }: { user: { username: string; email?: string; nombre
           <button onClick={handleSave} disabled={saving} className="checkout-btn" style={{ width: '100%', marginTop: 8 }}>
             {saving ? 'Guardando...' : 'Guardar cambios'}
           </button>
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '28px 0' }} />
+
+          {/* Puntos de fidelidad */}
+          <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Star size={18} style={{ color: '#f59e0b' }} />
+            Puntos de fidelidad
+          </h3>
+          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px', marginBottom: 8 }}>
+            <div style={{ fontSize: '2rem', fontWeight: 900, color: '#f59e0b', letterSpacing: '-1px' }}>
+              {user.puntos ?? 0}
+              <span style={{ fontSize: '1rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>puntos</span>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
+              Ganas 1 punto por cada 10 € en compras · 100 puntos = 5 € de descuento
+            </p>
+            {(user.puntos ?? 0) >= 100 && (
+              <p style={{ fontSize: '0.8rem', color: '#10b981', marginTop: 6 }}>
+                ✓ Tienes {Math.floor((user.puntos ?? 0) / 100) * 5} € disponibles para canjear en tu próxima compra
+              </p>
+            )}
+          </div>
 
           <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '28px 0' }} />
 

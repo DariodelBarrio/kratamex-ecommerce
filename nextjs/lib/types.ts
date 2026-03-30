@@ -79,6 +79,7 @@ export interface Usuario {
   direccion?: string
   telefono?: string
   idioma?: string
+  puntos?: number
 }
 
 export interface Categoria {

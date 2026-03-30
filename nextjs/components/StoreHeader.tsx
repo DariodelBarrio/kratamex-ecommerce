@@ -104,7 +104,7 @@ export function StoreHeader({
               <X size={14} />
             </button>
           )}
-          {busquedaFocus && busquedaReciente.length > 0 && !busqueda && (
+          {busquedaFocus && !busqueda && busquedaReciente.length > 0 && (
             <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 999, overflow: 'hidden', marginTop: 4 }}>
               <div style={{ padding: '8px 14px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Búsquedas recientes</div>
               {busquedaReciente.map(s => (
@@ -122,6 +122,34 @@ export function StoreHeader({
               </button>
             </div>
           )}
+          {busquedaFocus && busqueda.length > 0 && (() => {
+            const matches = productos.filter(p =>
+              p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+              (p.categoria ?? '').toLowerCase().includes(busqueda.toLowerCase())
+            ).slice(0, 6)
+            if (!matches.length) return null
+            return (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 999, overflow: 'hidden', marginTop: 4 }}>
+                <div style={{ padding: '8px 14px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Productos</div>
+                {matches.map(p => (
+                  <a key={p.id} href={`/producto/${p.id}`}
+                    onClick={() => { guardarBusqueda(busqueda); setBusquedaFocus(false) }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', textDecoration: 'none', transition: 'background 0.12s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--hover-bg)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <div style={{ width: 38, height: 38, borderRadius: 7, overflow: 'hidden', flexShrink: 0, background: 'rgba(30,41,59,0.5)' }}>
+                      {p.imagen && <img src={p.imagen} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
+                      <p style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{p.categoria ?? ''} · €{p.precio.toFixed(2)}</p>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )
+          })()}
         </div>
 
         <button className="theme-toggle-btn" onClick={onToggleTema} title={tema === 'dark' ? 'Modo claro' : 'Modo oscuro'}>
