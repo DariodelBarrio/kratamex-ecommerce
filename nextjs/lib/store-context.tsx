@@ -20,16 +20,29 @@ interface StoreContextValue {
   // Theme
   tema: 'dark' | 'light'
   toggleTema: () => void
+  // Loyalty points
+  puntosParaCanjear: number
+  setPuntosParaCanjear: (n: number) => void
+  descuentoPuntos: number   // €€ de descuento (100 pts = 5 €)
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null)
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [tema, setTema] = useState<'dark' | 'light'>('dark')
-  const [authUser, setAuthUser] = useState<Usuario | null>(null)
+  const [authUser, setAuthUser] = useState<Usuario | null>(() => {
+    if (typeof window === 'undefined') return null
+    try {
+      const token = localStorage.getItem('kratamex_token')
+      const saved = localStorage.getItem('kratamex_user')
+      if (token && saved) return JSON.parse(saved)
+    } catch {}
+    return null
+  })
   const [carrito, setCarrito] = useState<CarritoItem[]>([])
   const [carritoAbierto, setCarritoAbierto] = useState(false)
   const [wishlist, setWishlist] = useState<number[]>([])
+  const [puntosParaCanjear, setPuntosParaCanjear] = useState(0)
 
   // Hydrate from localStorage (client-only)
   useEffect(() => {
@@ -113,6 +126,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setTema(t => t === 'dark' ? 'light' : 'dark')
   }, [])
 
+  const descuentoPuntos = Math.round((puntosParaCanjear / 100) * 5 * 100) / 100
+
   return (
     <StoreContext.Provider value={{
       authUser, handleAuth, handleLogout,
@@ -120,6 +135,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       carritoAbierto, setCarritoAbierto,
       wishlist, toggleWishlist,
       tema, toggleTema,
+      puntosParaCanjear, setPuntosParaCanjear, descuentoPuntos,
     }}>
       {children}
     </StoreContext.Provider>

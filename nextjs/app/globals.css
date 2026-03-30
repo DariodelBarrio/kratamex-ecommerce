@@ -1,3 +1,4 @@
+@import "tailwindcss/utilities";
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 /* =================================================================
@@ -1382,7 +1383,8 @@ header::before {
   cursor: grab;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  padding: 22px 0;
+  padding: 14px 0;
+  will-change: scroll-position;
 }
 
 .bc-track::-webkit-scrollbar { display: none; }
@@ -1392,11 +1394,11 @@ header::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 36px;
+  padding: 0 24px;
   border-right: 1px solid var(--border);
   opacity: 0.65;
   transition: opacity 0.2s;
-  min-width: 130px;
+  min-width: 100px;
 }
 
 .bc-item:last-child { border-right: none; }
@@ -1406,6 +1408,21 @@ header::before {
 .bc-text {
   white-space: nowrap;
   font-family: inherit;
+}
+
+.brand-logo-img {
+  height: 24px;
+  width: auto;
+  max-width: 80px;
+  object-fit: contain;
+  filter: grayscale(100%) brightness(0.7);
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+
+.bc-item:hover .brand-logo-img {
+  filter: grayscale(0%) brightness(1);
+  opacity: 1;
 }
 
 /* Fade edges */

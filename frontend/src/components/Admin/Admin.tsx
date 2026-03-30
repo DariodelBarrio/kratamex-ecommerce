@@ -21,7 +21,7 @@ function Admin() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [token, setToken] = useState('');
-  const [vista, setVista] = useState<'dashboard' | 'productos' | 'pedidos' | 'reseñas' | 'cupones' | 'usuarios' | 'auditoria'>('dashboard');
+  const [vista, setVista] = useState<'dashboard' | 'productos' | 'pedidos' | 'reseñas' | 'cupones' | 'usuarios' | 'auditoria' | 'papelera'>('dashboard');
   const [editando, setEditando] = useState<Producto | null>(null);
   const [formProducto, setFormProducto] = useState({
     nombre: '', descripcion: '', precio: '', imagen: '', categoria: '', stock: '0', activo: true,
@@ -114,6 +114,7 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
   const [stockEditando, setStockEditando] = useState<number | null>(null);
   const [stockValor, setStockValor] = useState('');
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [papelera, setPapelera] = useState<{ productos: any[]; usuarios: any[] }>({ productos: [], usuarios: [] });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getAccionColor = (accion: string) => {
@@ -130,6 +131,10 @@ function AdminPanel({ token, productos, setProductos, pedidos, setPedidos, vista
   useEffect(() => {
     if (vista === 'auditoria') {
       getAuditLog().then(setAuditLogs).catch(console.error);
+    }
+    if (vista === 'papelera') {
+      fetch('/api/admin/papelera', { headers: { Authorization: token } })
+        .then(r => r.json()).then(setPapelera).catch(console.error);
     }
   }, [vista]);
 
@@ -326,6 +331,10 @@ const eliminarPedido = async (id: number) => {
           <button className={`${styles['tab-btn']} ${vista === 'auditoria' ? styles.active : ''}`}
             onClick={() => setVista('auditoria')}>
             <ClipboardList size={18} /> Auditoría
+          </button>
+          <button className={`${styles['tab-btn']} ${vista === 'papelera' ? styles.active : ''}`}
+            onClick={() => setVista('papelera')}>
+            <Trash2 size={18} /> Papelera
           </button>
         </div>
 
@@ -937,6 +946,85 @@ const eliminarPedido = async (id: number) => {
               </table>
               {auditLogs.length === 0 && <p style={{ padding: '20px', textAlign: 'center' }}>No hay registros de auditoría</p>}
             </div>
+          </div>
+        )}
+
+        {/* PAPELERA */}
+        {vista === 'papelera' && (
+          <div className={styles['admin-section']}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Trash2 size={20} /> Papelera
+              </h3>
+              <button className={styles['btn-secondary']} style={{ padding: '6px 14px', fontSize: 13 }}
+                onClick={() => fetch('/api/admin/papelera', { headers: { Authorization: token } }).then(r => r.json()).then(setPapelera).catch(console.error)}>
+                Actualizar
+              </button>
+            </div>
+
+            <h4 style={{ marginBottom: 10, fontSize: '0.9rem', color: 'var(--text-light)' }}>Productos eliminados ({papelera.productos.length})</h4>
+            {papelera.productos.length === 0
+              ? <p style={{ color: 'var(--text-light)', marginBottom: 24 }}>Sin productos en la papelera</p>
+              : (
+                <div className={styles['admin-table']} style={{ marginBottom: 32 }}>
+                  <table>
+                    <thead>
+                      <tr><th>ID</th><th>Imagen</th><th>Nombre</th><th>Precio</th><th>Eliminado</th><th>Restaurar</th></tr>
+                    </thead>
+                    <tbody>
+                      {papelera.productos.map((p: any) => (
+                        <tr key={p.id}>
+                          <td>{p.id}</td>
+                          <td>{p.imagen ? <img src={p.imagen} alt={p.nombre} style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6 }} /> : '—'}</td>
+                          <td>{sanitize(p.nombre)}</td>
+                          <td>{p.precio?.toFixed(2)} €</td>
+                          <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{new Date(p.deletedAt).toLocaleDateString('es-ES')}</td>
+                          <td>
+                            <button className={styles['btn-secondary']} style={{ padding: '4px 10px', fontSize: 12 }}
+                              onClick={() => fetch(`/api/admin/productos/${p.id}/restaurar`, { method: 'POST', headers: { Authorization: token } })
+                                .then(() => setPapelera(prev => ({ ...prev, productos: prev.productos.filter((x: any) => x.id !== p.id) })))
+                                .catch(console.error)}>
+                              Restaurar
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+            <h4 style={{ marginBottom: 10, fontSize: '0.9rem', color: 'var(--text-light)' }}>Usuarios eliminados ({papelera.usuarios.length})</h4>
+            {papelera.usuarios.length === 0
+              ? <p style={{ color: 'var(--text-light)' }}>Sin usuarios en la papelera</p>
+              : (
+                <div className={styles['admin-table']}>
+                  <table>
+                    <thead>
+                      <tr><th>ID</th><th>Usuario</th><th>Email</th><th>Rol</th><th>Eliminado</th><th>Restaurar</th></tr>
+                    </thead>
+                    <tbody>
+                      {papelera.usuarios.map((u: any) => (
+                        <tr key={u.id}>
+                          <td>{u.id}</td>
+                          <td style={{ fontWeight: 600 }}>{sanitize(u.username)}</td>
+                          <td style={{ fontSize: 13, color: 'var(--text-light)' }}>{u.email || '—'}</td>
+                          <td>{u.role}</td>
+                          <td style={{ fontSize: 12, color: 'var(--text-light)' }}>{new Date(u.deletedAt).toLocaleDateString('es-ES')}</td>
+                          <td>
+                            <button className={styles['btn-secondary']} style={{ padding: '4px 10px', fontSize: 12 }}
+                              onClick={() => fetch(`/api/admin/usuarios/${u.id}/restaurar`, { method: 'POST', headers: { Authorization: token } })
+                                .then(() => setPapelera(prev => ({ ...prev, usuarios: prev.usuarios.filter((x: any) => x.id !== u.id) })))
+                                .catch(console.error)}>
+                              Restaurar
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
           </div>
         )}
 

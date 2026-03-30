@@ -16,6 +16,7 @@ export const ProductoBodySchema = z.object({
 });
 
 export const ProductosQuerySchema = z.object({
+  q:          z.string().max(100).optional(),
   busqueda:   z.string().max(100).optional(),
   categoria:  z.string().max(50).optional(),
   orden:      z.enum(['asc', 'desc', 'rating', 'nuevo', 'popular']).optional(),
@@ -26,7 +27,10 @@ export const ProductosQuerySchema = z.object({
   rating:     z.coerce.number().min(1).max(5).optional(),
   limit:      z.coerce.number().min(1).max(100).optional(),
   offset:     z.coerce.number().min(0).optional(),
-});
+}).transform((data) => ({
+  ...data,
+  busqueda: data.q || data.busqueda,
+}));
 
 // =================================================================
 // AUTH
@@ -54,7 +58,8 @@ export const PedidoSchema = z.object({
     id:       z.number().int().positive(),
     cantidad: z.number().int().min(1).max(999),
   })).min(1).max(50, 'Demasiados artículos'),
-  cupon:     z.string().max(50).optional(),
+  cupon:            z.string().max(50).optional(),
+  puntosCanjeados:  z.number().int().min(0).max(10000).optional().default(0),
 });
 
 export const PedidoEstadoSchema = z.object({

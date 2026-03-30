@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, ShoppingCart, Check, Monitor, Package, Tag, ChevronDown, Share2, Star } from 'lucide-react'
@@ -22,6 +22,76 @@ function StarRating({ rating, count }: { rating: number; count?: number }) {
       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
         {rating.toFixed(1)}{count ? ` (${count})` : ''}
       </span>
+    </div>
+  )
+}
+
+// =================================================================
+// ZOOM IMAGE — lupa inmersiva con seguimiento del ratón
+// =================================================================
+interface ZoomImageProps {
+  src?: string | null
+  alt: string
+  imageError: boolean
+  onImageError: () => void
+  categoria?: string | null
+}
+
+function ZoomImage({ src, alt, imageError, onImageError, categoria }: ZoomImageProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [zoom, setZoom] = useState(false)
+  const [pos, setPos] = useState({ x: 50, y: 50 })
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return
+    const rect = containerRef.current.getBoundingClientRect()
+    const x = ((e.clientX - rect.left) / rect.width) * 100
+    const y = ((e.clientY - rect.top) / rect.height) * 100
+    setPos({ x, y })
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="detalle-imagen-wrap relative overflow-hidden"
+      style={{ cursor: zoom ? 'zoom-out' : 'zoom-in', borderRadius: 'var(--radius)' }}
+      onMouseEnter={() => setZoom(true)}
+      onMouseLeave={() => setZoom(false)}
+      onMouseMove={handleMouseMove}
+    >
+      {src && !imageError ? (
+        <motion.img
+          src={src}
+          alt={alt}
+          className="detalle-imagen"
+          onError={onImageError}
+          animate={zoom
+            ? { scale: 1.55, x: `${-(pos.x - 50) * 0.6}%`, y: `${-(pos.y - 50) * 0.6}%` }
+            : { scale: 1, x: '0%', y: '0%' }
+          }
+          transition={{ type: 'spring', stiffness: 260, damping: 28, mass: 0.6 }}
+          style={{ transformOrigin: `${pos.x}% ${pos.y}%`, willChange: 'transform' }}
+        />
+      ) : (
+        <div className="detalle-imagen-placeholder">
+          <Monitor size={72} stroke="#334155" />
+        </div>
+      )}
+
+      {categoria && (
+        <div className="detalle-categoria-badge"><Tag size={12} /> {categoria}</div>
+      )}
+
+      {/* Hint de lupa al hacer hover */}
+      <motion.div
+        className="absolute bottom-3 right-3 text-xs px-2 py-1 rounded-full pointer-events-none"
+        style={{ background: 'rgba(0,0,0,0.6)', color: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(6px)' }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: zoom ? 0 : 1 }}
+        transition={{ duration: 0.2 }}
+      >
+        🔍 Hover para zoom
+      </motion.div>
     </div>
   )
 }
@@ -203,15 +273,13 @@ export default function ProductoDetallePage() {
         </nav>
 
         <div className="detalle-grid">
-          <div className="detalle-imagen-wrap">
-            {producto.imagen && !imageError
-              ? <img src={producto.imagen} alt={producto.nombre} className="detalle-imagen" onError={() => setImageError(true)} />
-              : <div className="detalle-imagen-placeholder"><Monitor size={72} stroke="#334155" /></div>
-            }
-            {producto.categoria && (
-              <div className="detalle-categoria-badge"><Tag size={12} /> {producto.categoria}</div>
-            )}
-          </div>
+          <ZoomImage
+            src={producto.imagen}
+            alt={producto.nombre}
+            imageError={imageError}
+            onImageError={() => setImageError(true)}
+            categoria={producto.categoria}
+          />
 
           <div className="detalle-info">
             <h1 className="detalle-nombre">{producto.nombre}</h1>

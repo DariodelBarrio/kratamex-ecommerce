@@ -31,10 +31,10 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 }
 
 // Auth
-export const login = (username: string, password: string) =>
-  request<{ token: string; user: any }>('/login', { method: 'POST', body: JSON.stringify({ username, password }) })
+export const login = (username: string, password: string, website = '') =>
+  request<{ token: string; user: any }>('/login', { method: 'POST', body: JSON.stringify({ username, password, website }) })
 
-export const register = (data: { username: string; password: string; email: string; nombre?: string }) =>
+export const register = (data: { username: string; password: string; email: string; nombre?: string; website?: string }) =>
   request<{ token: string; user: any }>('/register', { method: 'POST', body: JSON.stringify(data) })
 
 export const getUsuario = () => request<{ user: any }>('/usuario')

@@ -11,6 +11,7 @@ Imágenes:   Cloudinary con fallback local
 */
 
 import 'dotenv/config';
+import webpush from 'web-push';
 import Stripe from 'stripe';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
@@ -18,7 +19,7 @@ import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { eq, and, or, gte, lte, asc, desc, sql, count, avg } from 'drizzle-orm';
+import { eq, and, or, gte, lte, asc, desc, sql, count, avg, isNull } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -44,9 +45,47 @@ import {
   verifyTwoFactorCode,
   disableTwoFactor,
 } from './2fa';
+import { anomalyDetector } from './ip-anomaly';
 
 const PORT = 3001;
 const IVA_RATE = 0.21;
+
+// =================================================================
+// WEB PUSH (VAPID) — genera claves con: npx web-push generate-vapid-keys
+// .env: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, EMAIL_FROM
+// =================================================================
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    `mailto:${process.env.EMAIL_FROM || 'admin@kratamex.com'}`,
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY,
+  );
+}
+
+async function sendPushToUser(usuarioId: number | null, payload: { title: string; body: string; tag?: string }) {
+  if (!process.env.VAPID_PUBLIC_KEY) return;
+  const query = usuarioId
+    ? db.select().from(pushSubscriptions).where(eq(pushSubscriptions.usuarioId, usuarioId))
+    : Promise.resolve([] as (typeof pushSubscriptions.$inferSelect)[]);
+  const subs = await query;
+  const body = JSON.stringify({ ...payload, icon: '/icon-192.png' });
+  const dead: number[] = [];
+  await Promise.allSettled(subs.map(async (sub, i) => {
+    try {
+      await webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        body,
+      );
+    } catch (err: any) {
+      if (err.statusCode === 410 || err.statusCode === 404) dead.push(sub.id);
+    }
+  }));
+  if (dead.length) {
+    await db.delete(pushSubscriptions).where(
+      sql`id = ANY(ARRAY[${sql.join(dead.map(id => sql`${id}`), sql`, `)}])`,
+    );
+  }
+}
 const ENVIO_GRATIS_MINIMO = 100;
 const ENVIO_ESTANDAR = 5.99;
 
@@ -640,8 +679,9 @@ app.get('/api/productos', generalRateLimiter, zValidator('query', ProductosQuery
     if (hasta !== undefined) conditions.push(lte(productos.precio, hasta) as unknown as ReturnType<typeof sql>);
     if (enStock) conditions.push(sql`${productos.stock} > 0`);
     if (destacado) conditions.push(eq(productos.destacado, true) as unknown as ReturnType<typeof sql>);
-    // Ocultar productos marcados como inactivos
+    // Ocultar productos marcados como inactivos o eliminados (soft delete)
     conditions.push(sql`${productos.activo} = true`);
+    conditions.push(isNull(productos.deletedAt) as unknown as ReturnType<typeof sql>);
 
     let orderBy;
     if (orden === 'asc')        orderBy = asc(productos.precio);
@@ -690,7 +730,7 @@ app.get('/api/productos/:id', async (c) => {
     const id = Number.parseInt(c.req.param('id'));
     if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
 
-    const [producto] = await db.select().from(productos).where(eq(productos.id, id));
+    const [producto] = await db.select().from(productos).where(and(eq(productos.id, id), isNull(productos.deletedAt)));
     if (!producto) return c.json({ error: 'Producto no encontrado' }, 404);
 
     // Get images
@@ -861,7 +901,7 @@ app.delete('/api/productos/:id', authenticate, requireAdmin, async (c) => {
   try {
     const id = Number.parseInt(c.req.param('id'));
     if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
-    const result = await db.delete(productos).where(eq(productos.id, id)).returning({ id: productos.id });
+    const result = await db.update(productos).set({ deletedAt: new Date() }).where(and(eq(productos.id, id), isNull(productos.deletedAt))).returning({ id: productos.id });
     if (!result.length) return c.json({ error: 'Producto no encontrado' }, 404);
     const u = c.get('user'); await logAudit(u.id, u.username, 'eliminar', 'producto', id);
     return c.json({ mensaje: 'Producto eliminado' });
@@ -987,9 +1027,9 @@ app.post('/api/productos/:id/comentarios', comentariosRateLimiter, zValidator('j
 async function crearPedido(data: {
   cliente: string; email: string; direccion: string;
   items: { id: number; cantidad: number }[];
-  cupon?: string; userId?: number | null;
-}): Promise<{ id: number; total: number; subtotal: number; impuestos: number; envio: number; descuento: number }> {
-  return db.transaction(async (tx) => {
+  cupon?: string; userId?: number | null; puntosCanjeados?: number;
+}): Promise<{ id: number; total: number; subtotal: number; impuestos: number; envio: number; descuento: number; puntosGanados: number }> {
+  const result = await db.transaction(async (tx) => {
     let subtotal = 0;
     const itemsValidados: { id: number; precio: number; cantidad: number }[] = [];
 
@@ -1006,7 +1046,21 @@ async function crearPedido(data: {
 
     const { descuento, cuponId } = await applyCupon(tx, data.cupon, subtotal);
 
-    const subtotalConDescuento = subtotal - descuento;
+    // Canje de puntos de fidelidad (100 puntos = 5€)
+    let descuentoPuntos = 0;
+    const puntosCanjeados = data.puntosCanjeados ?? 0;
+    if (puntosCanjeados > 0 && data.userId) {
+      const [u] = await tx.select({ puntos: usuarios.puntos }).from(usuarios).where(eq(usuarios.id, data.userId));
+      const puntosDisponibles = u?.puntos ?? 0;
+      const puntosAUsar = Math.min(puntosCanjeados, puntosDisponibles);
+      if (puntosAUsar > 0) {
+        descuentoPuntos = Math.round((puntosAUsar / 100) * 5 * 100) / 100;
+        await tx.update(usuarios).set({ puntos: sql`${usuarios.puntos} - ${puntosAUsar}` }).where(eq(usuarios.id, data.userId));
+      }
+    }
+
+    const descuentoTotal = descuento + descuentoPuntos;
+    const subtotalConDescuento = subtotal - descuentoTotal;
     const impuestos = calcularImpuestos(subtotalConDescuento);
     const envio = calcularEnvio(subtotalConDescuento);
     const total = Math.round((subtotalConDescuento + impuestos + envio) * 100) / 100;
@@ -1019,7 +1073,7 @@ async function crearPedido(data: {
       subtotal:   subtotalConDescuento,
       impuestos,
       envio,
-      descuento,
+      descuento:  descuentoTotal,
       cuponId,
       total,
       estado:     'pendiente',
@@ -1037,18 +1091,26 @@ async function crearPedido(data: {
       }).where(eq(productos.id, item.id));
     }
 
-    return { id: newPedido.id, total, subtotal: subtotalConDescuento, impuestos, envio, descuento };
+    return { id: newPedido.id, total, subtotal: subtotalConDescuento, impuestos, envio, descuento: descuentoTotal };
   });
+
+  // Puntos ganados: 1 punto por cada 10€ del total final
+  const puntosGanados = data.userId ? Math.floor(result.total / 10) : 0;
+  if (puntosGanados > 0 && data.userId) {
+    await db.update(usuarios).set({ puntos: sql`${usuarios.puntos} + ${puntosGanados}` }).where(eq(usuarios.id, data.userId));
+  }
+
+  return { ...result, puntosGanados };
 }
 
 // =================================================================
 // RUTAS — PEDIDOS
 // =================================================================
 app.post('/api/pedidos', checkoutRateLimiter, optionalAuth, zValidator('json', PedidoSchema), async (c) => {
-  const { cliente, email, direccion, items, cupon } = c.req.valid('json');
+  const { cliente, email, direccion, items, cupon, puntosCanjeados } = c.req.valid('json');
   const user = c.get('user');
   try {
-    const result = await crearPedido({ cliente, email, direccion, items, cupon, userId: user?.id });
+    const result = await crearPedido({ cliente, email, direccion, items, cupon, puntosCanjeados, userId: user?.id });
     return c.json({ ...result, mensaje: 'Pedido creado correctamente' });
   } catch (err: any) {
     if (err.message === 'PRODUCT_NOT_FOUND')
@@ -1142,9 +1204,18 @@ app.patch('/api/pedidos/:id/estado', authenticate, requireAdmin, zValidator('jso
     const updateData: Record<string, unknown> = { estado };
     if (notas !== undefined) updateData.notas = sanitizeText(notas);
 
-    const result = await db.update(pedidos).set(updateData).where(eq(pedidos.id, id)).returning({ id: pedidos.id });
+    const result = await db.update(pedidos).set(updateData).where(eq(pedidos.id, id)).returning({ id: pedidos.id, usuarioId: pedidos.usuarioId });
     if (!result.length) return c.json({ error: 'Pedido no encontrado' }, 404);
     const u = c.get('user'); await logAudit(u.id, u.username, 'cambio_estado', 'pedido', id, `Estado: ${estado}`);
+
+    // Notificación push en estados relevantes
+    if (estado === 'Enviado' || estado === 'Entregado') {
+      const msg = estado === 'Enviado'
+        ? { title: '📦 Pedido en camino', body: `Tu pedido #${id} ha sido enviado y está en camino.`, tag: `pedido-${id}` }
+        : { title: '✅ Pedido entregado', body: `Tu pedido #${id} ha sido entregado. ¡Esperamos que lo disfrutes!`, tag: `pedido-${id}` };
+      sendPushToUser(result[0].usuarioId ?? null, msg).catch(console.error);
+    }
+
     return c.json({ mensaje: 'Estado actualizado' });
   } catch (err) {
     console.error(err);
@@ -1431,9 +1502,27 @@ app.delete('/api/favoritos/:productoId', authenticate, async (c) => {
 });
 
 // =================================================================
+// MIDDLEWARE — Honeypot Auth (detecta bots que rellenan campo oculto)
+// =================================================================
+const honeypotAuth: MiddlewareHandler = async (c, next) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const website = (body.website || '').toString().trim();
+    if (website) {
+      const ip = getClientIP(c);
+      await anomalyDetector.logSecurityEvent(ip, 'bot_detected', undefined, `Honeypot rellenado: "${website.slice(0, 100)}"`);
+      await anomalyDetector.blockIp(ip, 'bot_detected: honeypot rellenado en formulario auth');
+      appendLog(`[${new Date().toISOString()}] BOT_DETECTED ip=${ip} honeypot="${website.slice(0, 50)}"\n`);
+      return c.json({ error: 'Error de validación' }, 400);
+    }
+  } catch {}
+  await next();
+};
+
+// =================================================================
 // RUTAS — AUTH
 // =================================================================
-app.post('/api/register', loginRateLimiter, zValidator('json', RegisterSchema), async (c) => {
+app.post('/api/register', honeypotAuth, loginRateLimiter, zValidator('json', RegisterSchema), async (c) => {
   const { username, password, email, nombre } = c.req.valid('json');
   try {
     const [existing] = await db.select({ id: usuarios.id }).from(usuarios)
@@ -1464,7 +1553,7 @@ app.post('/api/register', loginRateLimiter, zValidator('json', RegisterSchema), 
   }
 });
 
-app.post('/api/login', loginRateLimiter, zValidator('json', LoginSchema), async (c) => {
+app.post('/api/login', honeypotAuth, loginRateLimiter, zValidator('json', LoginSchema), async (c) => {
   const { username, password } = c.req.valid('json');
   const ip = getClientIP(c);
 
@@ -1499,7 +1588,7 @@ app.post('/api/login', loginRateLimiter, zValidator('json', LoginSchema), async 
     return c.json({
       success: true,
       token,
-      user: { id: user.id, username: user.username, role: user.role, avatar: user.avatar, nombre: user.nombre, email: user.email },
+      user: { id: user.id, username: user.username, role: user.role, avatar: user.avatar, nombre: user.nombre, email: user.email, puntos: user.puntos ?? 0 },
       message: 'Inicio de sesión correcto',
     });
   } catch (err) {
@@ -1516,6 +1605,83 @@ app.post('/api/logout', (c) => {
 
 app.get('/api/usuario', authenticate, (c) => {
   return c.json({ user: c.get('user') });
+});
+
+// Puntos de fidelidad del usuario autenticado
+app.get('/api/usuario/puntos', authenticate, async (c) => {
+  try {
+    const user = c.get('user');
+    const [row] = await db.select({ puntos: usuarios.puntos }).from(usuarios).where(eq(usuarios.id, user.id));
+    return c.json({ puntos: row?.puntos ?? 0 });
+  } catch (err) {
+    console.error(err);
+    return c.json({ error: 'Error interno del servidor' }, 500);
+  }
+});
+
+// Soft-delete de usuario (admin)
+app.delete('/api/admin/usuarios/:id', authenticate, requireAdmin, async (c) => {
+  try {
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const result = await db.update(usuarios).set({ deletedAt: new Date() }).where(and(eq(usuarios.id, id), isNull(usuarios.deletedAt))).returning({ id: usuarios.id });
+    if (!result.length) return c.json({ error: 'Usuario no encontrado' }, 404);
+    const u = c.get('user'); await logAudit(u.id, u.username, 'eliminar', 'usuario', id);
+    return c.json({ mensaje: 'Usuario eliminado' });
+  } catch (err) {
+    console.error(err);
+    return c.json({ error: 'Error interno del servidor' }, 500);
+  }
+});
+
+// Restaurar usuario desde papelera (admin)
+app.post('/api/admin/usuarios/:id/restaurar', authenticate, requireAdmin, async (c) => {
+  try {
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const result = await db.update(usuarios).set({ deletedAt: null }).where(eq(usuarios.id, id)).returning({ id: usuarios.id });
+    if (!result.length) return c.json({ error: 'Usuario no encontrado' }, 404);
+    const u = c.get('user'); await logAudit(u.id, u.username, 'restaurar', 'usuario', id);
+    return c.json({ mensaje: 'Usuario restaurado' });
+  } catch (err) {
+    console.error(err);
+    return c.json({ error: 'Error interno del servidor' }, 500);
+  }
+});
+
+// Restaurar producto desde papelera (admin)
+app.post('/api/admin/productos/:id/restaurar', authenticate, requireAdmin, async (c) => {
+  try {
+    const id = Number.parseInt(c.req.param('id'));
+    if (Number.isNaN(id)) return c.json({ error: 'ID inválido' }, 400);
+    const result = await db.update(productos).set({ deletedAt: null }).where(eq(productos.id, id)).returning({ id: productos.id });
+    if (!result.length) return c.json({ error: 'Producto no encontrado' }, 404);
+    const u = c.get('user'); await logAudit(u.id, u.username, 'restaurar', 'producto', id);
+    return c.json({ mensaje: 'Producto restaurado' });
+  } catch (err) {
+    console.error(err);
+    return c.json({ error: 'Error interno del servidor' }, 500);
+  }
+});
+
+// Papelera: productos y usuarios eliminados (admin)
+app.get('/api/admin/papelera', authenticate, requireAdmin, async (c) => {
+  try {
+    const productosEliminados = await db.select({
+      id: productos.id, nombre: productos.nombre, precio: productos.precio,
+      imagen: productos.imagen, deletedAt: productos.deletedAt,
+    }).from(productos).where(sql`${productos.deletedAt} IS NOT NULL`);
+
+    const usuariosEliminados = await db.select({
+      id: usuarios.id, username: usuarios.username, email: usuarios.email,
+      nombre: usuarios.nombre, role: usuarios.role, deletedAt: usuarios.deletedAt,
+    }).from(usuarios).where(sql`${usuarios.deletedAt} IS NOT NULL`);
+
+    return c.json({ productos: productosEliminados, usuarios: usuariosEliminados });
+  } catch (err) {
+    console.error(err);
+    return c.json({ error: 'Error interno del servidor' }, 500);
+  }
 });
 
 app.put('/api/usuario/perfil', authenticate, zValidator('json', PerfilSchema), async (c) => {
@@ -2276,6 +2442,8 @@ async function initDB() {
     `ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS direccion TEXT`,
     `ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono TEXT`,
     `ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS idioma TEXT DEFAULT 'es'`,
+    `ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS puntos INTEGER DEFAULT 0 NOT NULL`,
+    `ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
   ];
   for (const q of alterQueries) {
     try { await pool.query(q); } catch {}
@@ -2566,6 +2734,94 @@ app.get('/api/2fa/status', authenticate, async (c) => {
   } catch (err) {
     console.error('Error obteniendo estado 2FA:', err);
     return c.json({ error: 'Error interno' }, 500);
+  }
+});
+
+// =================================================================
+// CHATBOT
+// =================================================================
+app.post('/api/chat', generalRateLimiter, async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const raw = (body.message || '').toString().slice(0, 300);
+    const msg = raw.toLowerCase().trim();
+
+    if (!msg) return c.json({ reply: 'Por favor escribe tu pregunta.' });
+
+    // Buscar producto por nombre
+    if (
+      msg.includes('busco') || msg.includes('tienes') ||
+      msg.includes('venden') || msg.includes('hay ')
+    ) {
+      const keywords = raw.replace(/busco|tienes|venden|hay/gi, '').trim();
+      if (keywords.length > 1) {
+        const results = await db
+          .select({ id: productos.id, nombre: productos.nombre, precio: productos.precio })
+          .from(productos)
+          .where(sql`lower(${productos.nombre}) like ${'%' + keywords.toLowerCase() + '%'}`)
+          .limit(3);
+        if (results.length > 0) {
+          const lista = results.map(p => `• ${p.nombre} — €${p.precio}`).join('\n');
+          return c.json({ reply: `Encontré estos productos:\n${lista}\n\nPuedes verlos en el catálogo.` });
+        }
+        return c.json({ reply: `No encontré productos con "${keywords}". Prueba otros términos o revisa el catálogo completo.` });
+      }
+    }
+
+    // Envíos
+    if (msg.includes('envío') || msg.includes('envio') || msg.includes('entrega') || msg.includes('shipping')) {
+      return c.json({ reply: 'Ofrecemos envío estándar por €5,99. ¡Envío gratis en pedidos superiores a €100! El plazo habitual es de 2-4 días hábiles.' });
+    }
+
+    // Plazo / tiempo
+    if (msg.includes('tarda') || msg.includes('plazo') || msg.includes('tiempo') || msg.includes('cuándo') || msg.includes('cuando')) {
+      return c.json({ reply: 'Los pedidos suelen llegar en 2-4 días hábiles. Recibirás un email con el número de seguimiento una vez despachado.' });
+    }
+
+    // Devoluciones
+    if (msg.includes('devol') || msg.includes('cambio') || msg.includes('reembolso') || msg.includes('garantía') || msg.includes('garantia')) {
+      return c.json({ reply: 'Aceptamos devoluciones hasta 14 días desde la entrega. El producto debe estar sin usar y en su embalaje original. Escríbenos a soporte@kratamex.com para gestionar la devolución.' });
+    }
+
+    // Pago
+    if (msg.includes('pago') || msg.includes('pagar') || msg.includes('tarjeta') || msg.includes('stripe') || msg.includes('método') || msg.includes('metodo')) {
+      return c.json({ reply: 'Aceptamos tarjetas Visa, Mastercard y American Express a través de Stripe (pago 100% seguro). También puedes usar cupones de descuento.' });
+    }
+
+    // Cupón
+    if (msg.includes('cupón') || msg.includes('cupon') || msg.includes('descuento') || msg.includes('código') || msg.includes('codigo')) {
+      return c.json({ reply: 'Puedes introducir tu código de descuento en el carrito antes de finalizar la compra. Los cupones no son acumulables entre sí.' });
+    }
+
+    // Contacto
+    if (msg.includes('contacto') || msg.includes('contactar') || msg.includes('email') || msg.includes('ayuda') || msg.includes('soporte')) {
+      return c.json({ reply: 'Puedes contactarnos en soporte@kratamex.com o a través de este chat. Atendemos de lunes a viernes de 9:00 a 18:00.' });
+    }
+
+    // Cuenta / registro
+    if (msg.includes('cuenta') || msg.includes('registro') || msg.includes('registrar') || msg.includes('contraseña') || msg.includes('password')) {
+      return c.json({ reply: 'Para crear una cuenta haz clic en "Entrar" → "Crear cuenta". Si olvidaste tu contraseña, usa la opción "¿Olvidaste tu contraseña?" en el login.' });
+    }
+
+    // Pedido
+    if (msg.includes('pedido') || msg.includes('orden') || msg.includes('compra')) {
+      return c.json({ reply: 'Puedes ver el estado de tus pedidos en "Mis pedidos" (necesitas estar logueado). Si tienes algún problema con un pedido, contáctanos en soporte@kratamex.com.' });
+    }
+
+    // Saludo
+    if (msg.includes('hola') || msg.includes('buenas') || msg.includes('hey') || msg === 'hi') {
+      return c.json({ reply: '¡Hola! ¿En qué puedo ayudarte? Puedo informarte sobre envíos, devoluciones, pagos, productos y más.' });
+    }
+
+    // Gracias
+    if (msg.includes('gracias') || msg.includes('perfecto') || msg.includes('genial') || msg.includes('ok')) {
+      return c.json({ reply: '¡De nada! Si necesitas algo más, aquí estoy. ¡Que disfrutes tu compra!' });
+    }
+
+    // Fallback
+    return c.json({ reply: 'No estoy seguro de cómo ayudarte con eso. Puedes preguntarme sobre envíos, devoluciones, pagos o productos. También puedes escribirnos a soporte@kratamex.com.' });
+  } catch {
+    return c.json({ reply: 'Error interno. Por favor intenta de nuevo.' }, 500);
   }
 });
 

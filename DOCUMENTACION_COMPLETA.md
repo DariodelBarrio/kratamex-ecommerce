@@ -25,13 +25,15 @@ KRATAMEX es una **tienda online completa** de ordenadores y accesorios construid
 - **Catálogo**: Búsqueda full-text, filtros por categoría/precio/stock, ordenamiento, vista cuadrícula/lista
 - **Búsquedas recientes**: historial de búsquedas guardado en localStorage con dropdown al hacer foco
 - **Experiencia visual**: Splash screen, partículas animadas, modo oscuro/claro, efecto 3D tilt en tarjetas
+- **ChatBot flotante**: Asistente de soporte con respuestas automáticas sobre envíos, devoluciones, pagos y búsqueda de productos. Botón FAB en esquina inferior derecha, panel de mensajes con typing indicator y sugerencias rápidas
+- **Menú de usuario**: Dropdown con avatar (inicial del nombre), nombre de usuario, accesos a perfil y pedidos, y botón de logout
 - **Carrito**: Agregar, modificar cantidad (input editable), eliminar, cupones de descuento, cálculo de IVA (21%), envío gratis a partir de €100
 - **Checkout directo**: Formulario validado por Zod → POST `/api/pedidos` → redirige a `/mis-pedidos`
 - **Perfil de usuario**: Avatar editable (Cloudinary o local), nombre, email, dirección, teléfono, idioma (es/en), **cambio de contraseña** con verificación de la actual
 - **Historial de pedidos**: Lista con expand/collapse de items por pedido, estado con badge de color
 - **Panel Admin** (`/admin`): Dashboard con métricas y gráficas, CRUD de productos (con stock y visibilidad), gestión de pedidos con cambio de estado inline, gestión de reseñas, CRUD de cupones, listado de usuarios, exportación CSV, **registro de auditoría** de acciones administrativas
 - **Panel SOC** (`/panel`): Centro de operaciones de ciberseguridad con métricas en tiempo real, gráficas, log de eventos filtrable, auto-refresh cada 15 s
-- **Autenticación RBAC**: Roles `admin` y `standard`, tokens de sesión criptográficos (256 bits, TTL 8h)
+- **Autenticación RBAC**: Roles `admin` y `standard`, tokens de sesión criptográficos (256 bits, TTL 8h), **2FA TOTP** (Google Authenticator)
 - **Seguridad**: argon2id, rate limiting, Drizzle ORM (queries parametrizadas), Zod, HTTPS, CORS, security headers
 - **Docker**: 4 servicios (frontend, backend, postgres, nginx) con hot-reload
 - **Página 404**: Ruta catch-all con enlace de vuelta a la tienda
@@ -110,6 +112,8 @@ frontend/src/
 │   │   └── Admin.module.css       # Estilos del panel (CSS Modules)
 │   ├── SecurityDashboard.tsx      # Panel SOC de ciberseguridad
 │   ├── SecurityDashboard.module.css
+│   ├── ChatBot.tsx                # Chatbot flotante de soporte (FAB + panel)
+│   ├── StoreHeader.tsx            # Navbar con menú desplegable de usuario
 │   ├── OrderHistory.tsx           # Historial de pedidos del usuario
 │   ├── UserProfile.tsx            # Perfil editable + cambio de contraseña
 │   ├── ProductCard.tsx            # Tarjeta de producto
@@ -288,7 +292,9 @@ El idioma se persiste en `localStorage` y se sincroniza con el perfil del usuari
 backend/
 ├── src/
 │   ├── __tests__/
-│   │   └── api.test.ts    # Tests de integración API (4 tests, DB mockeada)
+│   │   ├── api.test.ts        # Tests de integración API (DB mockeada)
+│   │   ├── security.test.ts   # Tests de seguridad y rate limiting
+│   │   └── schemas.test.ts    # Tests de validación Zod
 │   ├── index.ts           # Servidor Hono — rutas, middlewares, logger SOC, seed
 │   ├── schemas.ts         # Esquemas Zod compartidos
 │   ├── db/
@@ -759,7 +765,7 @@ if (process.env.NODE_ENV !== 'test') {
 }
 ```
 
-**Tests disponibles** (`backend/src/__tests__/api.test.ts`) — 23 tests:
+**Tests disponibles** (`backend/src/__tests__/`) — 103 tests:
 
 | Test | Resultado esperado |
 |------|--------------------|
@@ -986,4 +992,4 @@ El registro aparece en la pestaña **Auditoría** del panel admin al pulsar "Act
 
 ---
 
-*Última actualización: 22/03/2026*
+*Última actualización: 29/03/2026 — 296 tests frontend · 103 tests backend · ChatBot · menú de usuario · 2FA TOTP · BrandCarousel rediseñado*

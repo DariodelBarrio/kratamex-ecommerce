@@ -52,17 +52,20 @@ export function AuthForm({ defaultMode, onAuth, onDone }: AuthFormProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // Honeypot — invisible para humanos, bots lo rellenan
+  const [honeypot, setHoneypot] = useState('')
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
+
     setLoading(true)
     try {
       let data: { token: string; user: any }
       if (mode === 'login') {
-        data = await api.login(username, password)
+        data = await api.login(username, password, honeypot)
       } else {
-        data = await api.register({ username, password, email, nombre: nombre || undefined })
+        data = await api.register({ username, password, email, nombre: nombre || undefined, website: honeypot })
       }
       onAuth(data)
       onDone()
@@ -110,7 +113,7 @@ export function AuthForm({ defaultMode, onAuth, onDone }: AuthFormProps) {
             )}
           </AnimatePresence>
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 4, position: 'relative' }}>
             <label className="checkout-form-label" style={{ marginTop: 12 }}>Usuario</label>
             <input type="text" value={username} onChange={e => setUsername(e.target.value)} required autoComplete="username" className="form-input" placeholder="Usuario" />
 
@@ -122,6 +125,20 @@ export function AuthForm({ defaultMode, onAuth, onDone }: AuthFormProps) {
                 <input type="text" value={nombre} onChange={e => setNombre(e.target.value)} autoComplete="name" className="form-input" placeholder="Nombre completo" style={{ width: '100%' }} />
               </motion.div>
             )}
+
+            {/* ─── Honeypot ─── oculto para humanos, bots lo rellenan */}
+            <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: 0, height: 0, overflow: 'hidden', opacity: 0 }}>
+              <label htmlFor="hp_website">Website</label>
+              <input
+                id="hp_website"
+                name="website"
+                type="text"
+                value={honeypot}
+                onChange={e => setHoneypot(e.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+              />
+            </div>
 
             <label className="checkout-form-label" style={{ marginTop: 12 }}>Contraseña</label>
             <div style={{ position: 'relative' }}>

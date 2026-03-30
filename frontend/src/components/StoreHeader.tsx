@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { ShoppingCart, X, Search, Sun, Moon, User, LogOut, ClipboardList, Heart, LayoutGrid, List } from 'lucide-react'
+import { ShoppingCart, X, Search, Sun, Moon, User, LogOut, ClipboardList, Heart, LayoutGrid, List, ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SecurityBadge } from './SecurityBadge'
 import type { Producto, Usuario } from '../interfaces'
@@ -49,9 +49,21 @@ export function StoreHeader({
   vistaLista, setVistaLista,
 }: StoreHeaderProps) {
   const [busquedaFocus, setBusquedaFocus] = useState(false)
+  const [menuAbierto, setMenuAbierto] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const [busquedaReciente, setBusquedaReciente] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('kratamex_searches') || '[]') } catch { return [] }
   })
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuAbierto(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   const guardarBusqueda = (q: string) => {
     if (!q.trim()) return
@@ -112,10 +124,49 @@ export function StoreHeader({
         </button>
 
         {authUser ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Link to="/mis-pedidos" className="theme-toggle-btn" title="Mis pedidos"><ClipboardList size={16} /></Link>
-            <Link to="/perfil" className="theme-toggle-btn" title="Mi perfil"><User size={16} /></Link>
-            <button className="theme-toggle-btn" onClick={onLogout} title="Cerrar sesión"><LogOut size={16} /></button>
+          <div ref={menuRef} className="user-menu-wrapper">
+            <button
+              className={`user-menu-trigger ${menuAbierto ? 'active' : ''}`}
+              onClick={() => setMenuAbierto(v => !v)}
+              aria-expanded={menuAbierto}
+              aria-label="Menú de usuario"
+            >
+              <div className="user-menu-avatar">
+                {authUser.nombre?.charAt(0).toUpperCase() ?? <User size={14} />}
+              </div>
+              <span className="user-menu-name">{authUser.nombre?.split(' ')[0]}</span>
+              <ChevronDown size={13} className={`user-menu-chevron ${menuAbierto ? 'rotated' : ''}`} />
+            </button>
+
+            <AnimatePresence>
+              {menuAbierto && (
+                <motion.div
+                  className="user-menu-dropdown"
+                  initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <div className="user-menu-header">
+                    <p className="user-menu-fullname">{authUser.nombre}</p>
+                    <p className="user-menu-email">{authUser.email}</p>
+                  </div>
+                  <div className="user-menu-items">
+                    <Link to="/perfil" className="user-menu-item" title="Mi perfil" onClick={() => setMenuAbierto(false)}>
+                      <User size={14} /> Mi perfil
+                    </Link>
+                    <Link to="/mis-pedidos" className="user-menu-item" onClick={() => setMenuAbierto(false)}>
+                      <ClipboardList size={14} /> Mis pedidos
+                    </Link>
+                  </div>
+                  <div className="user-menu-footer">
+                    <button className="user-menu-logout" title="Cerrar sesión" onClick={() => { setMenuAbierto(false); onLogout() }}>
+                      <LogOut size={14} /> Cerrar sesión
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         ) : (
           <Link to="/login" className="theme-toggle-btn" title="Iniciar sesión" style={{ textDecoration: 'none' }}>

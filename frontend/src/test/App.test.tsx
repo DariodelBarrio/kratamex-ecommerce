@@ -191,7 +191,8 @@ describe('App — rutas y renderizado', () => {
   it('handleAuth: al hacer login se muestra el enlace al perfil', () => {
     renderApp('/login');
     fireEvent.click(screen.getByRole('button', { name: 'Login' }));
-    // After auth, "Mi perfil" link appears
+    // Open user menu dropdown to access the profile link
+    fireEvent.click(screen.getByRole('button', { name: 'Menú de usuario' }));
     expect(screen.getByTitle('Mi perfil')).toBeInTheDocument();
   });
 
@@ -199,6 +200,8 @@ describe('App — rutas y renderizado', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
     renderApp('/login');
     fireEvent.click(screen.getByRole('button', { name: 'Login' }));
+    // Open user menu dropdown to access the logout button
+    fireEvent.click(screen.getByRole('button', { name: 'Menú de usuario' }));
     const logoutBtn = screen.getByTitle(/cerrar sesión/i);
     fireEvent.click(logoutBtn);
     expect(screen.getByTitle('Iniciar sesión')).toBeInTheDocument();
