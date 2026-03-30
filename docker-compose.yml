@@ -66,6 +66,9 @@ services:
       - ./frontend/src:/app/src            # hot-reload: HMR de Vite
       - ./frontend/public:/app/public      # hot-reload: assets públicos
       - frontend_modules:/app/node_modules # named volume: preserva node_modules
+    env_file:
+      - path: ./frontend/.env
+        required: false
     environment:
       VITE_BACKEND_URL:    http://backend:3001  # NOSONAR - tráfico interno Docker, no expuesto
       CHOKIDAR_USEPOLLING: "true"          # polling para Docker en WSL

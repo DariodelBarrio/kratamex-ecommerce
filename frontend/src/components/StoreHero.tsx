@@ -5,9 +5,10 @@ import { ParticleCanvas } from './ParticleCanvas'
 
 interface StoreHeroProps {
   readonly onScrollToProductos: () => void
+  readonly isLoggedIn?: boolean
 }
 
-export function StoreHero({ onScrollToProductos }: StoreHeroProps) {
+export function StoreHero({ onScrollToProductos, isLoggedIn }: StoreHeroProps) {
   return (
     <div className="container">
       <motion.div
@@ -57,9 +58,11 @@ export function StoreHero({ onScrollToProductos }: StoreHeroProps) {
             Ver catálogo
             <ArrowDown size={16} className="hero-cta-arrow" />
           </button>
-          <Link to="/login" className="hero-cta-secondary">
-            <UserPlus size={15} /> Crear cuenta
-          </Link>
+          {!isLoggedIn && (
+            <Link to="/login" className="hero-cta-secondary">
+              <UserPlus size={15} /> Crear cuenta
+            </Link>
+          )}
         </motion.div>
 
         <div className="hero-trust">
