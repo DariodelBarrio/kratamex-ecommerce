@@ -12,11 +12,14 @@ Aplicación web full-stack de e-commerce construida desde cero. Incluye catálog
 ## Características principales
 
 - **Tienda completa** — catálogo con filtros, búsqueda, favoritos, cupones de descuento y carrito persistente
-- **Autenticación segura** — JWT de 256 bits, argon2id, rate limiting con bloqueo automático, recuperación de contraseña
-- **Panel Admin** — CRUD de productos, pedidos, reseñas, cupones y usuarios; exportación CSV; dashboard con KPIs y gráficas
-- **SOC Panel** — Centro de operaciones de seguridad con métricas en tiempo real, log de eventos y detección de fuerza bruta
-- **Tests** — 296 tests en frontend + 23 tests de integración en backend (sin BD real requerida)
-- **CI/CD** — GitHub Actions con escaneo de secrets (Gitleaks), typecheck, cobertura y SonarCloud
+- **Pagos con Stripe** — modal de pago con PaymentElement (tarjeta, Klarna, Amazon Pay…), PaymentIntent + webhook para confirmar estado
+- **Autenticación segura** — tokens de 256 bits, argon2id, rate limiting con bloqueo automático, 2FA TOTP, recuperación de contraseña
+- **Panel Admin** — CRUD de productos, pedidos, reseñas, cupones y usuarios; exportación CSV; dashboard con KPIs y gráficas; registro de auditoría
+- **SOC Panel** — Centro de operaciones de seguridad con métricas en tiempo real, log de eventos, detección de fuerza bruta e integración VirusTotal
+- **ChatBot** — Asistente flotante con respuestas automáticas sobre envíos, devoluciones, pagos y productos
+- **Menú de usuario** — Dropdown accesible con avatar, nombre, accesos rápidos y cierre de sesión
+- **Tests** — 296 tests en frontend + 103 tests de integración en backend (sin BD real requerida)
+- **CI/CD** — GitHub Actions con escaneo de secrets (Gitleaks), typecheck, cobertura y SonarCloud (cada 4 h)
 - **Containerizado** — Docker Compose con 4 servicios: frontend, backend, PostgreSQL y nginx TLS
 
 ---
@@ -33,7 +36,8 @@ Aplicación web full-stack de e-commerce construida desde cero. Incluye catálog
 | React Router v6 | Routing SPA |
 | Zod | Validación de formularios client-side |
 | Recharts | Gráficas en Admin y SOC |
-| Vitest + Testing Library | 296 tests unitarios |
+| Stripe.js + React Stripe.js | Modal de pago con PaymentElement |
+| Vitest + Testing Library | 296 tests |
 
 ### Backend
 | Tecnología | Uso |
@@ -43,8 +47,9 @@ Aplicación web full-stack de e-commerce construida desde cero. Incluye catálog
 | PostgreSQL 16 | Base de datos relacional |
 | argon2id | Hashing de contraseñas |
 | Zod | Validación de requests por ruta |
+| Stripe Node.js SDK | PaymentIntents + verificación de webhooks |
 | Cloudinary | CDN de imágenes (fallback local) |
-| Vitest | 23 tests de integración |
+| Vitest | 103 tests de integración |
 
 ### Infraestructura
 | Tecnología | Uso |
@@ -149,6 +154,23 @@ Genera fallos de login masivos, fuerza bruta desde IP fija, tokens inválidos y 
 | GET | `/api/mis-pedidos` | Pedidos del usuario |
 | POST/DELETE | `/api/favoritos/:id` | Gestión de favoritos |
 | POST | `/api/cupones/validar` | Validar cupón |
+| POST | `/api/chat` | Chatbot de soporte (rate limited) |
+
+### Pagos — Stripe
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/api/pedidos/checkout` | Crea pedido + PaymentIntent; devuelve `clientSecret` |
+| POST | `/api/webhook` | Webhook Stripe — marca pedido como `pagado` al recibir `payment_intent.succeeded` |
+
+**Tarjetas de test:**
+
+| Número | Resultado |
+|---|---|
+| `4242 4242 4242 4242` | Pago aprobado |
+| `4000 0000 0000 9995` | Fondos insuficientes |
+
+Fecha `12/34` · CVC `123` · CP `12345`
 
 ### Administración
 
@@ -175,7 +197,7 @@ cd frontend && npm run test:run
 
 Cubren: componentes de UI, validaciones de formulario, lógica de carrito, autenticación, panel admin, SOC dashboard, rutas protegidas y utilidades.
 
-### Backend — 23 tests de integración (Vitest + Hono)
+### Backend — 103 tests de integración (Vitest + Hono)
 
 ```bash
 cd backend && npm test
@@ -239,8 +261,8 @@ cd frontend && npm install && npm run dev
 
 | Username | Password | Rol |
 |---|---|---|
-| `admin` | `admin123` | Admin |
-| `user` | `user123` | Usuario |
+| `admin` | `admin` | Admin |
+| `user` | `admin` | Usuario |
 
 > Contraseñas almacenadas como hashes argon2id — nunca en texto plano.
 
@@ -265,6 +287,7 @@ proyecto/
 │   │   ├── components/
 │   │   │   ├── Admin/           # Panel de administración
 │   │   │   ├── SecurityDashboard.tsx  # SOC
+│   │   │   ├── ChatBot.tsx            # Chatbot flotante de soporte
 │   │   │   ├── BrandCarousel.tsx      # Carrusel de marcas draggable
 │   │   │   ├── Auth.tsx               # Login / Registro
 │   │   │   ├── ProductCard.tsx        # Tarjeta de producto
@@ -297,4 +320,4 @@ proyecto/
 
 ---
 
-*Última actualización: 28/03/2026 — 296 tests frontend · 23 tests backend · SOC panel · CI/CD completo*
+*Última actualización: 29/03/2026 — 296 tests frontend · 103 tests backend · ChatBot · menú de usuario · SOC panel · CI/CD completo*

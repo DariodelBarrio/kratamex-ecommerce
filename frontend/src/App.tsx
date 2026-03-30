@@ -269,14 +269,33 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
   }
 
   const checkoutMutation = useMutation({
-    mutationFn: () => api.postStripeCheckout({
-      ...formulario,
-      items: carritoExterno.map(item => ({ id: item.id, cantidad: item.cantidad })),
-      cupon: cuponCodigo || undefined,
-    }),
+    mutationFn: async () => {
+      const payload = {
+        ...formulario,
+        items: carritoExterno.map(item => ({ id: item.id, cantidad: item.cantidad })),
+        cupon: cuponCodigo || undefined,
+      }
+      try {
+        return await api.postStripeCheckout(payload)
+      } catch (err: any) {
+        // Stripe no configurado → fallback a pedido directo
+        if (err.message?.includes('Stripe no configurado')) {
+          await api.postPedido(payload)
+          return null
+        }
+        throw err
+      }
+    },
     onSuccess: (data) => {
       setCarritoAbiertoExterno(false)
-      setStripeData(data)
+      if (data) {
+        setStripeData(data)
+      } else {
+        setCarritoExterno([])
+        setCuponCodigo('')
+        setCuponDescuento(0)
+        navigate('/mis-pedidos')
+      }
     },
     onError: (err: any) => setFormError(err.message),
   })
@@ -314,7 +333,7 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
         vistaLista={vistaLista}               setVistaLista={setVistaLista}
       />
 
-      <StoreHero onScrollToProductos={() => productosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />
+      <StoreHero onScrollToProductos={() => productosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} isLoggedIn={!!authUser} />
 
       <BrandCarousel />
 
