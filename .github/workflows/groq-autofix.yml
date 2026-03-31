@@ -1,6 +1,7 @@
 name: Groq Autofix SonarCloud
 
 on:
+  workflow_dispatch:
   schedule:
     # Run every 4 hours — public repo = unlimited minutes, APIs recover daily limits
     - cron: '0 */4 * * *'
@@ -54,6 +55,9 @@ jobs:
       - name: Install frontend deps
         run: cd frontend && npm ci --legacy-peer-deps
 
+      - name: Install backend deps
+        run: cd backend && npm ci
+
       - name: Fetch issues and autofix (9 APIs fallback)
         id: autofix
         env:
@@ -70,9 +74,11 @@ jobs:
           HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY }}
         run: node .github/scripts/groq-autofix.mjs
 
-      - name: Verify TypeScript
+      - name: Verify TypeScript (frontend + backend)
         id: tsc
-        run: cd frontend && npx tsc --noEmit
+        run: |
+          cd frontend && npx tsc --noEmit
+          cd ../backend && npx tsc --noEmit
         continue-on-error: true
 
       - name: Revert if tsc fails
