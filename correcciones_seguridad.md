@@ -40,6 +40,7 @@
 | ID-034 | Validaciones manuales inconsistentes → Zod | 🟡 Medio | ✅ Corregido |
 | ID-035 | CSP misconfiguration — Google Fonts bloqueadas | 🟡 Medio | ✅ Corregido |
 | ID-036 | Sesiones y rate limits en memoria RAM — pérdida en restart | 🟠 Alto | ⚠️ Conocido |
+| ID-037 | handleLogout no invalida sesión en servidor | 🔴 Crítico | ✅ Corregido |
 
 ---
 
@@ -1012,3 +1013,54 @@ Alternativa: usar **Redis** como store de sesiones para mayor rendimiento (O(1) 
 ### 5. Mitigación actual
 - TTL de 8 horas por sesión reduce la ventana de exposición (ID-023)
 - El rate limiting de nginx actúa como primera línea independiente del proceso Node.js
+
+---
+
+## [ID-037] handleLogout no invalida sesión en servidor
+**Fecha:** 29/03/2026
+**Nivel de Riesgo:** 🔴 Crítico
+**Estado:** ✅ Corregido
+
+### 1. Descripción del fallo
+En `frontend/src/App.tsx`, la función `handleLogout` eliminaba el token del `localStorage` **antes** de usarlo en la llamada `fetch('/api/logout')`:
+
+```typescript
+// ❌ Antes — VULNERABLE
+const handleLogout = useCallback(() => {
+  localStorage.removeItem('kratamex_token')   // token eliminado aquí
+  localStorage.removeItem('kratamex_user')
+  setAuthUser(null)
+  fetch('/api/logout', {
+    method: 'POST',
+    headers: { Authorization: localStorage.getItem('kratamex_token') || '' }
+    // ↑ siempre envía cadena vacía — sesión nunca invalidada en servidor
+  })
+}, [])
+```
+
+### 2. Impacto
+- La sesión del usuario permanecía activa en el servidor hasta que expirara su TTL de 8 horas
+- Un atacante con acceso al token podía continuar usándolo tras el logout visible del usuario
+- El `POST /api/logout` recibía `Authorization: ''`, nunca encontraba la sesión y no la eliminaba de `sessions{}`
+
+### 3. Solución (Parche)
+
+```typescript
+// ✅ Después — CORREGIDO
+const handleLogout = useCallback(() => {
+  const token = localStorage.getItem('kratamex_token')  // guardar antes de borrar
+  localStorage.removeItem('kratamex_token')
+  localStorage.removeItem('kratamex_user')
+  setAuthUser(null)
+  fetch('/api/logout', {
+    method: 'POST',
+    headers: { Authorization: token || '' }  // token correcto
+  })
+}, [])
+```
+
+### 4. Archivos afectados
+- `frontend/src/App.tsx` — función `handleLogout`
+
+### 5. Tests actualizados
+Se corrigieron 2 tests en `frontend/src/test/App.test.tsx` que verifican el flujo de login/logout. Los tests ahora abren el menú desplegable de usuario antes de interactuar con sus elementos, alineándose con el nuevo diseño de `StoreHeader`.
