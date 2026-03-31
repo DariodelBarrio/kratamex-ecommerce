@@ -1,0 +1,12 @@
+[allowlist]
+  description = "Global allowlist for false positives"
+  paths = [
+    '''\.github/workflows/sonar-rebind\.yml$''',
+    '''nginx/certs/.*\.pem$''',
+    '''nginx/certs/.*\.key$''',
+    '''nginx/certs/.*\.crt$''',
+  ]
+  regexes = [
+    '''project_key=\$''',
+    '''npm run db:''',
+  ]
