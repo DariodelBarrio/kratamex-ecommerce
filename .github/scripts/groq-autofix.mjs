@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
+import { execSync } from "child_process";
 
 const SONAR_TOKEN = process.env.SONAR_TOKEN;
 const SONAR_PROJECT_KEY = process.env.SONAR_PROJECT_KEY;
@@ -345,6 +346,81 @@ async function tryFix(filePath, code, issues) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// ── Validate fix with tsc before writing ───────────────────────────────────
+
+function validateAndWrite(filePath, originalCode, fixedCode) {
+  const fullPath = join(process.cwd(), filePath);
+
+  // Write the fixed code temporarily
+  writeFileSync(fullPath, fixedCode, "utf8");
+
+  try {
+    // Determine which tsc to run based on file path
+    const tscDir = filePath.startsWith("src/") || filePath.startsWith("backend/")
+      ? "backend"
+      : "frontend";
+
+    execSync("npx tsc --noEmit", {
+      cwd: join(process.cwd(), tscDir),
+      stdio: "pipe",
+      timeout: 60000,
+    });
+
+    console.log(`  ✓ tsc passed — keeping fix`);
+    return true;
+  } catch {
+    // Revert to original
+    writeFileSync(fullPath, originalCode, "utf8");
+    return false;
+  }
+}
+
+// ── Try fix with validation across all APIs ────────────────────────────────
+
+async function tryFixWithValidation(filePath, code, issues) {
+  const apis = [
+    { name: "Groq", fn: () => callGroq(filePath, code, issues) },
+    { name: "Gemini", fn: () => callGemini(filePath, code, issues) },
+    { name: "DeepSeek", fn: () => callDeepSeek(filePath, code, issues) },
+    { name: "Together", fn: () => callTogether(filePath, code, issues) },
+    { name: "OpenRouter", fn: () => callOpenRouter(filePath, code, issues) },
+    { name: "Mistral", fn: () => callMistral(filePath, code, issues) },
+    { name: "Cohere", fn: () => callCohere(filePath, code, issues) },
+    { name: "Replicate", fn: () => callReplicate(filePath, code, issues) },
+    { name: "HuggingFace", fn: () => callHuggingFace(filePath, code, issues) },
+  ];
+
+  for (let i = 0; i < apis.length; i++) {
+    const api = apis[i];
+    const isLastApi = i === apis.length - 1;
+
+    try {
+      const fixed = await api.fn();
+      console.log(`  ${api.name} responded — validating...`);
+
+      if (validateAndWrite(filePath, code, fixed)) {
+        console.log(`  ✓ Fixed with ${api.name}`);
+        return { success: true, api: api.name };
+      }
+
+      // tsc failed — try next API
+      if (isLastApi) {
+        console.log(`  ✗ LAST API FAILED (9/9) — all generated invalid code`);
+        return { exhausted: true };
+      }
+    } catch (err) {
+      console.log(`  ⚠ ${api.name} failed: ${err.message}`);
+
+      if (isLastApi) {
+        console.log(`  ✗ LAST API FAILED (9/9) — Complete saturation detected`);
+        return { exhausted: true };
+      }
+    }
+  }
+
+  return null;
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -371,7 +447,7 @@ async function main() {
     }
 
     try {
-      const result = await tryFix(filePath, code, fileIssues);
+      const result = await tryFixWithValidation(filePath, code, fileIssues);
 
       // CRITICAL: Last API failed — stop immediately
       if (result && result.exhausted) {
@@ -381,7 +457,7 @@ async function main() {
       }
 
       // Normal handling
-      if (result === null) {
+      if (result === null || !result.success) {
         consecutiveFails++;
         console.log(`  → Skipped (all APIs exhausted) [${consecutiveFails}/${MAX_CONSECUTIVE_FAILS}]`);
 
@@ -394,8 +470,7 @@ async function main() {
 
         skipped++;
       } else {
-        consecutiveFails = 0; // Reset si algo funciona
-        writeFileSync(join(process.cwd(), filePath), result, "utf8");
+        consecutiveFails = 0;
         console.log(`  → Written to ${filePath}`);
         fixed++;
       }
