@@ -19,7 +19,7 @@ import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { eq, and, or, gte, lte, asc, desc, sql, count, avg, isNull } from 'drizzle-orm';
+import { eq, and, or, gte, lte, asc, desc, sql, count, avg, isNull, inArray } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -112,7 +112,7 @@ async function uploadToCloudinary(buffer: Buffer, folder: string): Promise<strin
     cloudinary.uploader
       .upload_stream(
         { folder, resource_type: 'image', transformation: [{ width: 800, height: 800, crop: 'limit' }] },
-        (err, result) => (err ? reject(err) : resolve(result!.secure_url))
+        (err, result) => (err ? reject(err) : result ? resolve(result.secure_url) : reject(new Error('Cloudinary upload failed')))
       )
       .end(buffer);
   });
@@ -315,7 +315,7 @@ async function refreshBlockedCache() {
       .where(sql`${blockedIps.bloqueadoHasta} IS NULL OR ${blockedIps.bloqueadoHasta} > ${now}`);
     blockedIpSet = new Set(rows.map(r => r.ip));
     blockedIpCacheTs = Date.now();
-  } catch {}
+  } catch (err) { console.error('[blockedIpCache]', err); }
 }
 
 async function autoBlockIp(ip: string, motivo: string) {
@@ -329,7 +329,7 @@ async function autoBlockIp(ip: string, motivo: string) {
       [ip, motivo, hasta.toISOString()]
     );
     blockedIpSet.add(ip);
-  } catch {}
+  } catch (err) { console.error('[autoBlockIp]', err); }
 }
 
 // =================================================================
@@ -643,7 +643,7 @@ async function logSecEvent(tipo: string, data: {
 }) {
   try {
     await db.insert(securityEvents).values({ tipo, ...data });
-  } catch {}
+  } catch (err) { console.error('[logSecEvent]', err); }
 }
 
 // =================================================================
@@ -652,7 +652,7 @@ async function logSecEvent(tipo: string, data: {
 async function logAudit(adminId: number, adminUsername: string, accion: string, entidad: string, entidadId?: number, detalles?: string) {
   try {
     await db.insert(auditLog).values({ adminId, adminUsername, accion, entidad, entidadId, detalles });
-  } catch {}
+  } catch (err) { console.error('[logAudit]', err); }
 }
 
 // =================================================================
@@ -1130,20 +1130,30 @@ app.get('/api/mis-pedidos', authenticate, async (c) => {
       .where(eq(pedidos.usuarioId, user.id))
       .orderBy(desc(pedidos.fecha));
 
-    const result = [];
-    for (const pedido of rows) {
-      const items = await db.select({
-        id:         pedidoItems.id,
-        productoId: pedidoItems.productoId,
-        cantidad:   pedidoItems.cantidad,
-        precio:     pedidoItems.precio,
-        nombre:     productos.nombre,
-        imagen:     productos.imagen,
-      }).from(pedidoItems)
-        .innerJoin(productos, eq(pedidoItems.productoId, productos.id))
-        .where(eq(pedidoItems.pedidoId, pedido.id));
-      result.push({ ...pedido, items });
+    const pedidoIds = rows.map(p => p.id);
+
+    // Single query for all items instead of N+1
+    const allItems = pedidoIds.length > 0
+      ? await db.select({
+          pedidoId:   pedidoItems.pedidoId,
+          id:         pedidoItems.id,
+          productoId: pedidoItems.productoId,
+          cantidad:   pedidoItems.cantidad,
+          precio:     pedidoItems.precio,
+          nombre:     productos.nombre,
+          imagen:     productos.imagen,
+        }).from(pedidoItems)
+          .innerJoin(productos, eq(pedidoItems.productoId, productos.id))
+          .where(inArray(pedidoItems.pedidoId, pedidoIds))
+      : [];
+
+    const itemsByPedido = new Map<number, typeof allItems>();
+    for (const item of allItems) {
+      if (!itemsByPedido.has(item.pedidoId)) itemsByPedido.set(item.pedidoId, []);
+      itemsByPedido.get(item.pedidoId)!.push(item);
     }
+
+    const result = rows.map(p => ({ ...p, items: itemsByPedido.get(p.id) ?? [] }));
     return c.json(result);
   } catch (err) {
     console.error(err);
@@ -1515,7 +1525,7 @@ const honeypotAuth: MiddlewareHandler = async (c, next) => {
       appendLog(`[${new Date().toISOString()}] BOT_DETECTED ip=${ip} honeypot="${website.slice(0, 50)}"\n`);
       return c.json({ error: 'Error de validación' }, 400);
     }
-  } catch {}
+  } catch (err) { console.error('[honeypotAuth]', err); }
   await next();
 };
 
@@ -1714,8 +1724,8 @@ app.post('/api/usuario/avatar', authenticate, async (c) => {
     const avatarUrl = await handleFileUpload(file as File, 'avatars', 2 * 1024 * 1024);
     await db.update(usuarios).set({ avatar: avatarUrl }).where(eq(usuarios.id, user.id));
 
-    const token = c.req.header('authorization')!;
-    if (sessions[token]) sessions[token].avatar = avatarUrl;
+    const token = c.req.header('authorization') ?? '';
+    if (token && sessions[token]) sessions[token].avatar = avatarUrl;
 
     return c.json({ success: true, avatar: avatarUrl, message: 'Avatar actualizado' });
   } catch (err: any) {
@@ -2168,9 +2178,8 @@ app.post('/api/webhook', async (c) => {
   const secret  = process.env.STRIPE_WEBHOOK_SECRET || '';
 
   if (!secret || secret.startsWith('whsec_REEMPLAZA')) {
-    // Sin secret configurado: aceptar en dev sin verificar firma
-    console.warn('[webhook] STRIPE_WEBHOOK_SECRET no configurado — saltando verificación');
-    return c.json({ received: true });
+    console.error('[webhook] STRIPE_WEBHOOK_SECRET no configurado — rechazando webhook');
+    return c.json({ error: 'Webhook secret not configured' }, 500);
   }
 
   let event: Stripe.Event;
@@ -2446,7 +2455,7 @@ async function initDB() {
     `ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
   ];
   for (const q of alterQueries) {
-    try { await pool.query(q); } catch {}
+    try { await pool.query(q); } catch (err) { console.error('[migration]', (err as Error).message); }
   }
 
   // Set default stock for existing products
@@ -2489,9 +2498,14 @@ async function seedUsuarios() {
   const cnt = Number.parseInt(result.rows[0].count);
 
   const adminUser = process.env.ADMIN_USER    ?? 'admin';
-  const adminPass = process.env.ADMIN_PASS    ?? 'Kr@tamex_adm1n!';
+  const adminPass = process.env.ADMIN_PASS;
   const stdUser   = process.env.USER_STANDARD ?? 'user';
-  const stdPass   = process.env.USER_PASS     ?? 'Kr@tamex_usr1!';
+  const stdPass   = process.env.USER_PASS;
+
+  if (!adminPass || !stdPass) {
+    console.error('BLOCKER: ADMIN_PASS and USER_PASS env vars are required');
+    process.exit(1);
+  }
 
   if (cnt === 0) {
     await pool.query(
