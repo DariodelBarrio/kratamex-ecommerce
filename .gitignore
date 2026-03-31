@@ -22,7 +22,14 @@ frontend/.env
 # IDE
 .vscode/
 .idea/
+.obsidian/
 *.swp
+
+# Claude local settings (puede contener paths/sensibles)
+.claude/settings.local.json
+
+# Windows accidental files
+nul
 
 # OS
 .DS_Store
