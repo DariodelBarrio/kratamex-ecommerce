@@ -1209,8 +1209,8 @@ app.patch('/api/pedidos/:id/estado', authenticate, requireAdmin, zValidator('jso
     const u = c.get('user'); await logAudit(u.id, u.username, 'cambio_estado', 'pedido', id, `Estado: ${estado}`);
 
     // Notificación push en estados relevantes
-    if (estado === 'Enviado' || estado === 'Entregado') {
-      const msg = estado === 'Enviado'
+    if (estado === 'enviado' || estado === 'entregado') {
+      const msg = estado === 'enviado'
         ? { title: '📦 Pedido en camino', body: `Tu pedido #${id} ha sido enviado y está en camino.`, tag: `pedido-${id}` }
         : { title: '✅ Pedido entregado', body: `Tu pedido #${id} ha sido entregado. ¡Esperamos que lo disfrutes!`, tag: `pedido-${id}` };
       sendPushToUser(result[0].usuarioId ?? null, msg).catch(console.error);
