@@ -164,7 +164,22 @@
       "mcp__sonarqube__get_duplications",
       "Bash(grep -rn cupon.*z. C:/Users/dapio/Documents/Proyecto_web/backend/src/)",
       "mcp__fetch__fetch_json",
-      "Bash(setx:*)"
+      "Bash(setx:*)",
+      "Bash(DB_HOST=localhost DB_PORT=5432 DB_NAME=kratamex DB_USER=kratamex DB_PASSWORD=kratamex_dev npm run db:push)",
+      "Bash(npx vite:*)",
+      "Bash(wc -l C:/Users/dapio/Documents/Proyecto_web/frontend/src/components/*.tsx C:/Users/dapio/Documents/Proyecto_web/frontend/src/components/Admin/Admin.tsx)",
+      "Bash(node_modules/.bin/tsc --noEmit 2>&1)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(node_modules/.bin/next build:*)",
+      "Bash(cd:*)",
+      "Bash(Start-Process \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\")",
+      "Bash(cat /c/Users/dapio/Documents/Proyecto_web/nextjs/app/producto/[id]/page.tsx)",
+      "Bash(ls /c/Users/dapio/Documents/Proyecto_web/nextjs/postcss.config*)",
+      "Bash(ls /c/Users/dapio/Documents/Proyecto_web/nextjs/tailwind.config*)",
+      "Bash(find /c/Users/dapio/Documents/Proyecto_web/nextjs/app -name *.tsx)",
+      "mcp__playwright__playwright_get_visible_html",
+      "mcp__playwright__playwright_iframe_fill"
     ]
   }
 }

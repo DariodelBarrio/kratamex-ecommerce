@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "CLAUDE.md",
+                "file": "DOCUMENTACION_COMPLETA.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "CLAUDE"
+              "title": "DOCUMENTACION_COMPLETA"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "CLAUDE.md",
+                "file": "DOCUMENTACION_COMPLETA.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Enlaces entrantes de CLAUDE"
+              "title": "Enlaces entrantes de DOCUMENTACION_COMPLETA"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "CLAUDE.md",
+                "file": "DOCUMENTACION_COMPLETA.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Enlaces salientes de CLAUDE"
+              "title": "Enlaces salientes de DOCUMENTACION_COMPLETA"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "CLAUDE.md",
+                "file": "DOCUMENTACION_COMPLETA.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Esquema de CLAUDE"
+              "title": "Esquema de DOCUMENTACION_COMPLETA"
             }
           }
         ]
@@ -185,9 +185,9 @@
   },
   "active": "50b08a202f281041",
   "lastOpenFiles": [
-    "frontend/coverage/lcov-report/favicon.png",
     "correcciones_seguridad.md",
     "CLAUDE.md",
-    "nginx/certs/README.md"
+    "nginx/certs/README.md",
+    "frontend/coverage/lcov-report/favicon.png"
   ]
 }
