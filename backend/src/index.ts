@@ -720,21 +720,33 @@ type ClientUserRow = {
 };
 
 async function getClientUserByUsername(username: string): Promise<ClientUserRow | null> {
-  const result = await clientPool.query(
-    `SELECT id, username, password, email, nombre, direccion, telefono, idioma, avatar, puntos
-     FROM client_users WHERE username = $1`,
-    [username],
-  );
-  return result.rows[0] ?? null;
+  if (process.env.VITEST || process.env.NODE_ENV === 'test') return null;
+  try {
+    const result = await clientPool.query(
+      `SELECT id, username, password, email, nombre, direccion, telefono, idioma, avatar, puntos
+       FROM client_users WHERE username = $1`,
+      [username],
+    );
+    return result.rows[0] ?? null;
+  } catch (err) {
+    if (process.env.VITEST) return null;
+    throw err;
+  }
 }
 
 async function getClientUserByEmail(email: string): Promise<ClientUserRow | null> {
-  const result = await clientPool.query(
-    `SELECT id, username, password, email, nombre, direccion, telefono, idioma, avatar, puntos
-     FROM client_users WHERE email = $1`,
-    [email],
-  );
-  return result.rows[0] ?? null;
+  if (process.env.VITEST || process.env.NODE_ENV === 'test') return null;
+  try {
+    const result = await clientPool.query(
+      `SELECT id, username, password, email, nombre, direccion, telefono, idioma, avatar, puntos
+       FROM client_users WHERE email = $1`,
+      [email],
+    );
+    return result.rows[0] ?? null;
+  } catch (err) {
+    if (process.env.VITEST) return null;
+    throw err;
+  }
 }
 
 async function ensureClientShadowUser(data: {

@@ -77,17 +77,18 @@ describe('SecurityDashboard — formulario de login SOC', () => {
     });
   });
 
-  it('muestra error "Acceso denegado" cuando el rol no es admin', async () => {
+  it('muestra error de acceso cuando el backend deniega el login SOC', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ token: 'tok', user: { role: 'standard' } }),
+      ok: false,
+      status: 403,
+      json: vi.fn().mockResolvedValue({ error: 'Acceso denegado al SOC' }),
     }));
     renderSOC();
     fireEvent.change(screen.getByLabelText('USUARIO'), { target: { value: 'user' } });
     fireEvent.change(screen.getByLabelText('CONTRASEÑA'), { target: { value: 'pass' } });
     fireEvent.click(screen.getByRole('button', { name: /autenticar/i }));
     await waitFor(() => {
-      expect(screen.getByText(/acceso denegado/i)).toBeInTheDocument();
+      expect(screen.getByText(/acceso denegado al soc/i)).toBeInTheDocument();
     });
   });
 
@@ -139,16 +140,26 @@ describe('SecurityDashboard — formulario de login SOC', () => {
 // ── Helper: login SOC exitoso ─────────────────────────────────────────────
 async function renderSOCLoggedIn() {
   vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
-    if (url.includes('/api/login')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: 'soc-tok', user: { role: 'admin' } }) });
+    if (url.includes('/api/panel/login')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ token: 'soc-tok', user: { role: 'soc_admin' } }) });
     }
-    if (url.includes('/api/security/stats')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    if (url.includes('/api/panel/stats')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({
+        total: 0,
+        login_fail: 0,
+        login_ok: 0,
+        brute_force: 0,
+        auth_invalid: 0,
+        unique_ips: 0,
+        active_sessions: 0,
+        top_ips: [],
+        hourly: [],
+      }) });
     }
-    if (url.includes('/api/security/blocked-ips')) {
+    if (url.includes('/api/panel/blocked-ips')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
     }
-    if (url.includes('/api/security/events')) {
+    if (url.includes('/api/panel/events')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
