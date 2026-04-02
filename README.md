@@ -78,27 +78,15 @@ El SOC tiene su propio flujo de autenticacion y sus propias credenciales, separa
 
 ## Capturas de interfaz
 
-Las capturas del proyecto se referencian desde `docs/screenshots/`.
+Las capturas deben guardarse en `docs/screenshots/` para que GitHub las renderice correctamente en este `README`.
 
-### Catalogo principal
+Archivos esperados:
 
-![Catalogo principal](docs/screenshots/home-catalogo.png)
-
-### Login de administracion
-
-![Login de administracion](docs/screenshots/admin-login.png)
-
-### Dashboard de administracion
-
-![Dashboard de administracion](docs/screenshots/admin-dashboard.png)
-
-### Login del SOC
-
-![Login del SOC](docs/screenshots/soc-login.png)
-
-### Vista del SOC
-
-![Vista del SOC](docs/screenshots/soc-panel.png)
+- `docs/screenshots/home-catalogo.png`
+- `docs/screenshots/admin-login.png`
+- `docs/screenshots/admin-dashboard.png`
+- `docs/screenshots/soc-login.png`
+- `docs/screenshots/soc-panel.png`
 
 ## Endpoints destacados
 
