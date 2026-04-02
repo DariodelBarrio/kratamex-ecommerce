@@ -26,6 +26,8 @@ Este repositorio no debe contener bases de datos locales ni artefactos SQLite.
 - La persistencia soportada para la aplicacion es PostgreSQL.
 - Las bases locales deben mantenerse fuera de Git.
 
+El directorio raiz actua como workspace de coordinacion. No contiene una aplicacion React adicional ni una capa de negocio propia: desde ahi se lanzan scripts de desarrollo, build, test y Docker para los proyectos reales (`frontend/` y `backend/`).
+
 ## Stack principal
 
 ### Frontend
@@ -113,6 +115,18 @@ El SOC tiene su propio flujo de autenticacion y sus propias credenciales, separa
 
 ## Puesta en marcha
 
+### Scripts desde la raiz
+
+El `package.json` raiz existe para orquestar el repositorio. Los comandos utiles viven ahi para no tener que recordar rutas manualmente:
+
+```bash
+npm run dev:backend
+npm run dev:frontend
+npm run build
+npm run test
+npm run docker:up
+```
+
 ### Docker Compose
 
 Importante: `docker-compose.yml`, `.env.example` y `backend/.env.example` estan preparados solo para desarrollo local. No deben reutilizarse como configuracion de produccion.
@@ -162,10 +176,18 @@ Los archivos `.env.example` y `backend/.env.example` son plantillas orientadas a
 
 ```text
 proyecto/
-|-- frontend/
-|-- backend/
-|-- nextjs/
-|-- nginx/
-|-- docker-compose.yml
+|-- frontend/                  # SPA principal en React + Vite
+|-- backend/                   # API Hono + Drizzle + PostgreSQL
+|-- nginx/                     # reverse proxy HTTPS para desarrollo local
+|-- docs/                      # capturas, notas y documentos auxiliares
+|-- nextjs/                    # experimento paralelo, no es la app principal desplegada
+|-- docker-compose.yml         # stack local de desarrollo
+|-- package.json               # scripts raiz para coordinar el workspace
+|-- simulate_attacks.mjs       # utilidades puntuales de validacion y testing
+|-- correcciones_seguridad.md  # historial de hardening y remediaciones
 |-- README.md
 ```
+
+## Nota sobre `nextjs/`
+
+Existe una carpeta `nextjs/` porque hubo una exploracion de migracion. A dia de hoy no es el frontend canonico del proyecto ni la superficie que sirve Docker por defecto. La implementacion principal sigue siendo `frontend/`.

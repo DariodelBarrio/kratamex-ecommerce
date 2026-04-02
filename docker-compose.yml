@@ -58,8 +58,8 @@ services:
       SOC_DB_NAME:   ${SOC_DB_NAME:-kratamex_soc}
       SOC_DB_USER:   ${POSTGRES_USER:-kratamex}
       SOC_DB_PASSWORD: ${POSTGRES_PASSWORD:-kratamex_dev}
-      SOC_ADMIN_USER: ${SOC_ADMIN_USER:-soc_admin_local}
-      SOC_ADMIN_PASS: ${SOC_ADMIN_PASS:-CAMBIAR_SOC_ADMIN_PASS_LOCAL}
+      SOC_ADMIN_USER: ${SOC_ADMIN_USER:-admin}
+      SOC_ADMIN_PASS: ${SOC_ADMIN_PASS:-admin}
       CORS_ORIGIN:   https://localhost
     depends_on:
       postgres:
