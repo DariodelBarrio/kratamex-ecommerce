@@ -306,7 +306,10 @@ export default function SecurityDashboard() {
   const loadBlockedIps = useCallback(async (tk: string) => {
     try {
       const res = await fetch(`${SOC_API_BASE}/blocked-ips`, { headers: { Authorization: tk } });
-      if (res.ok) setBlockedList(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setBlockedList(Array.isArray(data) ? data : []);
+      }
     } catch {}
   }, []);
 

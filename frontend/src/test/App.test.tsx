@@ -118,29 +118,29 @@ describe('App — rutas y renderizado', () => {
     expect(screen.getByTitle('Iniciar sesión')).toBeInTheDocument();
   });
 
-  it('ruta /login muestra el componente Auth', () => {
+  it('ruta /login muestra el componente Auth', async () => {
     renderApp('/login');
-    expect(screen.getByTestId('auth')).toBeInTheDocument();
+    expect(await screen.findByTestId('auth')).toBeInTheDocument();
   });
 
-  it('ruta /forgot-password muestra ForgotPassword', () => {
+  it('ruta /forgot-password muestra ForgotPassword', async () => {
     renderApp('/forgot-password');
-    expect(screen.getByTestId('forgot-password')).toBeInTheDocument();
+    expect(await screen.findByTestId('forgot-password')).toBeInTheDocument();
   });
 
-  it('ruta /reset-password muestra ResetPassword', () => {
+  it('ruta /reset-password muestra ResetPassword', async () => {
     renderApp('/reset-password');
-    expect(screen.getByTestId('reset-password')).toBeInTheDocument();
+    expect(await screen.findByTestId('reset-password')).toBeInTheDocument();
   });
 
-  it('ruta /admin muestra el panel de administración', () => {
+  it('ruta /admin muestra el panel de administración', async () => {
     renderApp('/admin');
-    expect(screen.getByTestId('admin')).toBeInTheDocument();
+    expect(await screen.findByTestId('admin')).toBeInTheDocument();
   });
 
-  it('ruta /panel muestra el dashboard de seguridad', () => {
+  it('ruta /panel muestra el dashboard de seguridad', async () => {
     renderApp('/panel');
-    expect(screen.getByTestId('security-dashboard')).toBeInTheDocument();
+    expect(await screen.findByTestId('security-dashboard')).toBeInTheDocument();
   });
 
   it('ruta desconocida muestra la página 404', () => {

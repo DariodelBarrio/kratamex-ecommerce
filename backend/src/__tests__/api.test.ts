@@ -314,18 +314,18 @@ describe('Backend API', () => {
     expect(Array.isArray(await res.json())).toBe(true);
   });
 
-  it('GET /api/security/events con token de admin → 200', async () => {
+  it('GET /api/security/events con token de admin app → 401 (requiere token SOC)', async () => {
     mockUserSelectWith2FA(false);
     const token = await loginAs(ADMIN_USER);
     const res   = await app.request('/api/security/events', { headers: { authorization: token } });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
-  it('GET /api/security/blocked-ips con token de admin → 200', async () => {
+  it('GET /api/security/blocked-ips con token de admin app → 401 (requiere token SOC)', async () => {
     mockUserSelectWith2FA(false);
     const token = await loginAs(ADMIN_USER);
     const res   = await app.request('/api/security/blocked-ips', { headers: { authorization: token } });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
   // ── Recuperación de contraseña ───────────────────────────────────
@@ -429,12 +429,12 @@ describe('Backend API', () => {
     expect(res.status).toBe(403);
   });
 
-  it('GET /api/security/events/export con token standard → 403', async () => {
+  it('GET /api/security/events/export con token standard app → 401 (requiere token SOC)', async () => {
     const token = await loginAs(STD_USER);
     const res   = await app.request('/api/security/events/export', {
       headers: { authorization: token },
     });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   // ── Cupones ──────────────────────────────────────────────────────
