@@ -186,7 +186,7 @@ La carpeta `nextjs/` existe porque hubo una exploración de migración. A día d
 
 ### Catálogo principal
 
-![Catalogo principal](docs/screenshots/home-catalogo.png)
+![Catalogo principal](docs/screenshots/home-catalogo-20260402.png)
 
 ### Panel de administración
 
