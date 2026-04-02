@@ -583,9 +583,9 @@ const threatLevel =
 ### Simulador de ataques
 
 ```bash
-node simulate_attacks.mjs [URL] [ADMIN_PASSWORD]
+node scripts/simulate_attacks.mjs [URL] [ADMIN_PASSWORD]
 # Ejemplo:
-node simulate_attacks.mjs http://localhost:3000 <ADMIN_PASS>
+node scripts/simulate_attacks.mjs http://localhost:3000 <ADMIN_PASS>
 ```
 
 Secuencia de eventos generados:
@@ -914,10 +914,10 @@ cd backend && npm run db:studio
 
 ```bash
 # Genera eventos de seguridad para probar el panel SOC
-node simulate_attacks.mjs http://localhost:3000 <ADMIN_PASS>
+node scripts/simulate_attacks.mjs http://localhost:3000 <ADMIN_PASS>
 
 # Personalizar URL si usas otro puerto
-node simulate_attacks.mjs http://localhost:3001 <ADMIN_PASS>
+node scripts/simulate_attacks.mjs http://localhost:3001 <ADMIN_PASS>
 ```
 
 ### Usuarios de ejemplo
