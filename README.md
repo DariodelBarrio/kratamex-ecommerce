@@ -76,6 +76,16 @@ El SOC tiene su propio flujo de autenticacion y sus propias credenciales, separa
 | `/admin` | Panel de administracion | Admin |
 | `/panel` | Security Operations Center | SOC admin |
 
+## Capturas
+
+### Catalogo principal
+
+![Catalogo principal](docs/screenshots/home-catalogo.png)
+
+### Panel de administracion
+
+![Panel de administracion](docs/screenshots/admin-dashboard.png)
+
 ## Endpoints destacados
 
 ### Aplicacion principal
