@@ -76,18 +76,6 @@ El SOC tiene su propio flujo de autenticacion y sus propias credenciales, separa
 | `/admin` | Panel de administracion | Admin |
 | `/panel` | Security Operations Center | SOC admin |
 
-## Capturas de interfaz
-
-Las capturas deben guardarse en `docs/screenshots/` para que GitHub las renderice correctamente en este `README`.
-
-Archivos esperados:
-
-- `docs/screenshots/home-catalogo.png`
-- `docs/screenshots/admin-login.png`
-- `docs/screenshots/admin-dashboard.png`
-- `docs/screenshots/soc-login.png`
-- `docs/screenshots/soc-panel.png`
-
 ## Endpoints destacados
 
 ### Aplicacion principal
