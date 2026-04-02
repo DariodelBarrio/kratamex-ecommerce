@@ -6,36 +6,37 @@ React 19 + TypeScript + Framer Motion
 =================================================================
 */
 
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { lazy, Suspense, useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { Routes, Route, useSearchParams, useNavigate, Navigate } from 'react-router-dom'
 import { Check, Search, Heart, ArrowUp } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { z } from 'zod'
-import Admin from './components/Admin/Admin'
-import SecurityDashboard from './components/SecurityDashboard'
-import ForgotPassword from './components/ForgotPassword'
-import ResetPassword from './components/ResetPassword'
 import { ProductCard } from './components/ProductCard'
 import { BrandCarousel } from './components/BrandCarousel'
 import { SkeletonCard } from './components/SkeletonCard'
-import ProductoDetalle from './components/ProductoDetalle'
 import { SplashScreen } from './components/SplashScreen'
-import Auth from './components/Auth'
-import OrderHistory from './components/OrderHistory'
-import UserProfile from './components/UserProfile'
 import { StoreHeader } from './components/StoreHeader'
 import { StoreHero } from './components/StoreHero'
 import { StoreFooter } from './components/StoreFooter'
 import { CartPanel } from './components/CartPanel'
-import { StripeCheckoutModal } from './components/StripeCheckoutModal'
 import NotFound from './components/NotFound'
-import { ChatBot } from './components/ChatBot'
 import { useFiltros } from './hooks/useFiltros'
 import { useToasts } from './hooks/useToasts'
 import type { OrdenPrecio } from './hooks/useFiltros'
 import type { Producto, CarritoItem, Usuario } from './interfaces'
 import * as api from './api'
+
+const Admin = lazy(() => import('./components/Admin/Admin'))
+const SecurityDashboard = lazy(() => import('./components/SecurityDashboard'))
+const ForgotPassword = lazy(() => import('./components/ForgotPassword'))
+const ResetPassword = lazy(() => import('./components/ResetPassword'))
+const ProductoDetalle = lazy(() => import('./components/ProductoDetalle'))
+const Auth = lazy(() => import('./components/Auth'))
+const OrderHistory = lazy(() => import('./components/OrderHistory'))
+const UserProfile = lazy(() => import('./components/UserProfile'))
+const ChatBot = lazy(() => import('./components/ChatBot').then(module => ({ default: module.ChatBot })))
+const StripeCheckoutModal = lazy(() => import('./components/StripeCheckoutModal').then(module => ({ default: module.StripeCheckoutModal })))
 
 // =================================================================
 // ZOD — Validación de formulario de checkout
@@ -50,6 +51,10 @@ const CheckoutSchema = z.object({
 // TOAST CONTAINER
 // =================================================================
 interface Toast { id: number; nombre: string }
+
+function RouteLoader() {
+  return <div className="container" style={{ padding: '96px 20px', textAlign: 'center' }}>Cargando...</div>
+}
 
 function ToastContainer({ toasts }: Readonly<{ toasts: Toast[] }>) {
   return (
@@ -165,6 +170,12 @@ interface TiendaProps {
   onToggleTema: () => void
   authUser: Usuario | null
   onLogout: () => void
+}
+
+function RequireAdmin({ user, children }: Readonly<{ user: Usuario | null, children: React.ReactNode }>) {
+  if (!user) return <>{children}</>
+  if (user.role !== 'admin') return <Navigate to="/" replace />
+  return <>{children}</>
 }
 
 function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setCarritoAbiertoExterno, wishlistExterno, onToggleWishlistExterno, tema, onToggleTema, authUser, onLogout }: Readonly<TiendaProps>) {
@@ -394,13 +405,15 @@ function Tienda({ carritoExterno, setCarritoExterno, carritoAbiertoExterno, setC
       {/* ── Stripe Checkout ── */}
       <AnimatePresence>
         {stripeData && (
-          <StripeCheckoutModal
-            clientSecret={stripeData.clientSecret}
-            pedidoId={stripeData.pedidoId}
-            total={stripeData.total}
-            onSuccess={handleStripeSuccess}
-            onClose={() => setStripeData(null)}
-          />
+          <Suspense fallback={<div className="cart-overlay" />}>
+            <StripeCheckoutModal
+              clientSecret={stripeData.clientSecret}
+              pedidoId={stripeData.pedidoId}
+              total={stripeData.total}
+              onSuccess={handleStripeSuccess}
+              onClose={() => setStripeData(null)}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
 
@@ -444,9 +457,21 @@ function App() {
     const token = localStorage.getItem('kratamex_token')
     const saved = localStorage.getItem('kratamex_user')
     if (!token || !saved) return
-    fetch('/api/usuario', { headers: { Authorization: token } }).then(r => {
-      if (r.ok) { try { setAuthUser(JSON.parse(saved)) } catch {} }
-      else { localStorage.removeItem('kratamex_token'); localStorage.removeItem('kratamex_user') }
+    fetch('/api/usuario', { headers: { Authorization: token } }).then(async r => {
+      if (!r.ok) {
+        localStorage.removeItem('kratamex_token')
+        localStorage.removeItem('kratamex_user')
+        return
+      }
+      try {
+        const data = await r.json()
+        if (data.user) {
+          setAuthUser(data.user)
+          localStorage.setItem('kratamex_user', JSON.stringify(data.user))
+          return
+        }
+      } catch {}
+      try { setAuthUser(JSON.parse(saved)) } catch {}
     }).catch(() => { try { setAuthUser(JSON.parse(saved)) } catch {} })
   }, [])
 
@@ -504,20 +529,32 @@ function App() {
           />
         } />
         <Route path="/producto/:id" element={
-          <ProductoDetalle onAddToCart={agregarAlCarrito} carritoCount={cantidadItems} onOpenCart={() => setCarritoAbierto(true)} />
+          <Suspense fallback={<RouteLoader />}>
+            <ProductoDetalle onAddToCart={agregarAlCarrito} carritoCount={cantidadItems} onOpenCart={() => setCarritoAbierto(true)} />
+          </Suspense>
         } />
-        <Route path="/login"    element={authUser ? <Navigate to="/" /> : <Auth onAuth={handleAuth} defaultMode="login" />} />
-        <Route path="/registro" element={authUser ? <Navigate to="/" /> : <Auth onAuth={handleAuth} defaultMode="register" />} />
-        <Route path="/mis-pedidos" element={authUser ? <OrderHistory /> : <Navigate to="/login" />} />
-        <Route path="/perfil"   element={authUser ? <UserProfile user={authUser} /> : <Navigate to="/login" />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password"  element={<ResetPassword />} />
-        <Route path="/admin"  element={<Admin />} />
-        <Route path="/panel"  element={<SecurityDashboard />} />
+        <Route path="/login" element={
+          authUser ? <Navigate to="/" /> : <Suspense fallback={<RouteLoader />}><Auth onAuth={handleAuth} defaultMode="login" /></Suspense>
+        } />
+        <Route path="/registro" element={
+          authUser ? <Navigate to="/" /> : <Suspense fallback={<RouteLoader />}><Auth onAuth={handleAuth} defaultMode="register" /></Suspense>
+        } />
+        <Route path="/mis-pedidos" element={
+          authUser ? <Suspense fallback={<RouteLoader />}><OrderHistory /></Suspense> : <Navigate to="/login" />
+        } />
+        <Route path="/perfil" element={
+          authUser ? <Suspense fallback={<RouteLoader />}><UserProfile user={authUser} /></Suspense> : <Navigate to="/login" />
+        } />
+        <Route path="/forgot-password" element={<Suspense fallback={<RouteLoader />}><ForgotPassword /></Suspense>} />
+        <Route path="/reset-password"  element={<Suspense fallback={<RouteLoader />}><ResetPassword /></Suspense>} />
+        <Route path="/admin"  element={<RequireAdmin user={authUser}><Suspense fallback={<RouteLoader />}><Admin /></Suspense></RequireAdmin>} />
+        <Route path="/panel"  element={<Suspense fallback={<RouteLoader />}><SecurityDashboard /></Suspense>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
 
-      <ChatBot />
+      <Suspense fallback={null}>
+        <ChatBot />
+      </Suspense>
     </>
   )
 }

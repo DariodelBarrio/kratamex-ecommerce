@@ -10,7 +10,7 @@ nextjs/.next/
 *.log
 npm-debug.log*
 
-# Environment — NUNCA subir archivos con credenciales reales
+# Environment - NUNCA subir archivos con credenciales reales
 .env
 .env.local
 .env.*.local
@@ -39,10 +39,12 @@ coverage/
 *.tmp
 *.temp
 
-# Database (Thumbs.db ya está excluido en la sección OS)
-# *.db — permitido para SQLite de desarrollo
+# Database
+*.db
+*.sqlite
+*.sqlite3
 
-# TLS certificates — generar localmente, nunca subir al repo
+# TLS certificates - generar localmente, nunca subir al repo
 nginx/certs/*.pem
 nginx/certs/*.key
 nginx/certs/*.crt
