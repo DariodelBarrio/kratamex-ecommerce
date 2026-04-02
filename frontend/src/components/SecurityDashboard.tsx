@@ -248,6 +248,7 @@ function EventLog({ events, tipoFiltro, setTipoFiltro, exportEvents, renderVtBad
 // MAIN COMPONENT
 // ================================================================
 const SOC_TOKEN_KEY = 'kratamex_soc_token';
+const SOC_API_BASE = '/api/panel';
 
 export default function SecurityDashboard() {
   const [token, setToken] = useState('');
@@ -273,8 +274,8 @@ export default function SecurityDashboard() {
     setLoading(true);
     try {
       const [sRes, eRes] = await Promise.all([
-        fetch('/api/security/stats',  { headers: { Authorization: tk } }),
-        fetch(`/api/security/events?limit=100${tipoFiltro ? ('&tipo=' + tipoFiltro) : ''}`, { headers: { Authorization: tk } }),
+        fetch(`${SOC_API_BASE}/stats`,  { headers: { Authorization: tk } }),
+        fetch(`${SOC_API_BASE}/events?limit=100${tipoFiltro ? ('&tipo=' + tipoFiltro) : ''}`, { headers: { Authorization: tk } }),
       ]);
       if (sRes.ok)  setStats(await sRes.json());
       if (eRes.ok)  setEvents(await eRes.json());
@@ -288,7 +289,7 @@ export default function SecurityDashboard() {
     if (vtResults[ip] === 'loading') return;
     setVtResults(prev => ({ ...prev, [ip]: 'loading' }));
     try {
-      const res = await fetch(`/api/security/ip/${encodeURIComponent(ip)}/threat`, {
+      const res = await fetch(`${SOC_API_BASE}/ip/${encodeURIComponent(ip)}/threat`, {
         headers: { Authorization: token },
       });
       const data = await res.json();
@@ -304,7 +305,7 @@ export default function SecurityDashboard() {
 
   const loadBlockedIps = useCallback(async (tk: string) => {
     try {
-      const res = await fetch('/api/security/blocked-ips', { headers: { Authorization: tk } });
+      const res = await fetch(`${SOC_API_BASE}/blocked-ips`, { headers: { Authorization: tk } });
       if (res.ok) setBlockedList(await res.json());
     } catch {}
   }, []);
@@ -314,7 +315,7 @@ export default function SecurityDashboard() {
     if (!ip) return;
     setBlockLoading(true);
     try {
-      const res = await fetch('/api/security/blocked-ips', {
+      const res = await fetch(`${SOC_API_BASE}/blocked-ips`, {
         method: 'POST',
         headers: { Authorization: token, 'Content-Type': 'application/json' },
         body: JSON.stringify({ ip, motivo: blockMotivo || 'manual', horas: 24 }),
@@ -324,14 +325,14 @@ export default function SecurityDashboard() {
   };
 
   const handleUnblockIp = async (ip: string) => {
-    await fetch(`/api/security/blocked-ips/${encodeURIComponent(ip)}`, {
+    await fetch(`${SOC_API_BASE}/blocked-ips/${encodeURIComponent(ip)}`, {
       method: 'DELETE', headers: { Authorization: token },
     });
     loadBlockedIps(token);
   };
 
   const exportEvents = (format: 'csv' | 'json') => {
-    const exportUrl = `/api/security/events/export?format=${format}&limit=1000`;
+    const exportUrl = `${SOC_API_BASE}/events/export?format=${format}&limit=1000`;
     fetch(exportUrl, { headers: { Authorization: token } })
       .then(r => r.blob())
       .then(blob => {
@@ -359,13 +360,17 @@ export default function SecurityDashboard() {
   const handleLogin = async () => {
     setLoginErr('');
     try {
-      const res = await fetch('/api/security/login', {
+      const res = await fetch(`${SOC_API_BASE}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 404) {
+          setLoginErr('La ruta del panel no existe en el backend activo. Reinicia o reconstruye el backend.');
+          return;
+        }
         setLoginErr(data.error || 'Acceso denegado al SOC');
         return;
       }
@@ -378,7 +383,7 @@ export default function SecurityDashboard() {
   };
 
   const handleLogout = () => {
-    fetch('/api/security/logout', { method: 'POST', headers: { Authorization: token } });
+    fetch(`${SOC_API_BASE}/logout`, { method: 'POST', headers: { Authorization: token } });
     localStorage.removeItem(SOC_TOKEN_KEY);
     setAuthed(false); setToken(''); setUsername(''); setPassword('');
   };

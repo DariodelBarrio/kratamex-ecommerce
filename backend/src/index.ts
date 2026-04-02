@@ -1756,7 +1756,7 @@ app.post('/api/login', honeypotAuth, loginRateLimiter, zValidator('json', LoginS
   }
 });
 
-app.post('/api/security/login', loginRateLimiter, zValidator('json', LoginSchema), async (c) => {
+const socLoginHandler = async (c: any) => {
   const { username, password } = c.req.valid('json');
   const ip = getClientIP(c);
 
@@ -1803,7 +1803,10 @@ app.post('/api/security/login', loginRateLimiter, zValidator('json', LoginSchema
     console.error(err);
     return c.json({ error: 'Error interno del servidor' }, 500);
   }
-});
+};
+
+app.post('/api/security/login', loginRateLimiter, zValidator('json', LoginSchema), socLoginHandler);
+app.post('/api/panel/login', loginRateLimiter, zValidator('json', LoginSchema), socLoginHandler);
 
 app.post('/api/logout', (c) => {
   const token = c.req.header('authorization');
@@ -1812,11 +1815,14 @@ app.post('/api/logout', (c) => {
   return c.json({ message: 'Sesión cerrada' });
 });
 
-app.post('/api/security/logout', (c) => {
+const socLogoutHandler = (c: any) => {
   const token = c.req.header('authorization');
   if (token && socSessions[token]) delete socSessions[token];
   return c.json({ message: 'Sesion SOC cerrada' });
-});
+};
+
+app.post('/api/security/logout', socLogoutHandler);
+app.post('/api/panel/logout', socLogoutHandler);
 
 app.get('/api/usuario', authenticate, (c) => {
   return c.json({ user: c.get('user') });
@@ -2011,7 +2017,7 @@ app.get('/api/admin/usuarios', authenticate, requireTwoFactorVerified, requireAd
 // =================================================================
 // RUTAS — SECURITY OPERATIONS CENTER
 // =================================================================
-app.get('/api/security/events', authenticateSoc, async (c) => {
+const socEventsHandler = async (c: any) => {
   try {
     const limit = Math.min(Number(c.req.query('limit') || 100), 500);
     const tipo  = c.req.query('tipo');
@@ -2021,9 +2027,12 @@ app.get('/api/security/events', authenticateSoc, async (c) => {
       .limit(limit);
     return c.json(rows);
   } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
-});
+};
 
-app.get('/api/security/stats', authenticateSoc, async (c) => {
+app.get('/api/security/events', authenticateSoc, socEventsHandler);
+app.get('/api/panel/events', authenticateSoc, socEventsHandler);
+
+const socStatsHandler = async (c: any) => {
   try {
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
@@ -2071,7 +2080,10 @@ app.get('/api/security/stats', authenticateSoc, async (c) => {
       hourly:         hourly.rows,
     });
   } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
-});
+};
+
+app.get('/api/security/stats', authenticateSoc, socStatsHandler);
+app.get('/api/panel/stats', authenticateSoc, socStatsHandler);
 
 // =================================================================
 // RUTAS — THREAT INTELLIGENCE (VirusTotal)
@@ -2081,7 +2093,7 @@ const VT_CACHE_TTL = 60 * 60 * 1000; // 1h — no quemar cuota en cada refresh
 
 const VALID_IP = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/;
 
-app.get('/api/security/ip/:ip/threat', authenticateSoc, async (c) => {
+const socThreatHandler = async (c: any) => {
   const ip = c.req.param('ip');
 
   if (!VALID_IP.test(ip)) return c.json({ error: 'IP inválida' }, 400);
@@ -2127,19 +2139,25 @@ app.get('/api/security/ip/:ip/threat', authenticateSoc, async (c) => {
     console.error('VirusTotal error:', err);
     return c.json({ error: 'Error consultando VirusTotal' }, 502);
   }
-});
+};
+
+app.get('/api/security/ip/:ip/threat', authenticateSoc, socThreatHandler);
+app.get('/api/panel/ip/:ip/threat', authenticateSoc, socThreatHandler);
 
 // =================================================================
 // RUTAS — BLOCKED IPs (SOC)
 // =================================================================
-app.get('/api/security/blocked-ips', authenticateSoc, async (c) => {
+const socBlockedIpsListHandler = async (c: any) => {
   try {
     const rows = await db.select().from(blockedIps).orderBy(desc(blockedIps.createdAt));
     return c.json(rows);
   } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
-});
+};
 
-app.post('/api/security/blocked-ips', authenticateSoc, async (c) => {
+app.get('/api/security/blocked-ips', authenticateSoc, socBlockedIpsListHandler);
+app.get('/api/panel/blocked-ips', authenticateSoc, socBlockedIpsListHandler);
+
+const socBlockedIpsCreateHandler = async (c: any) => {
   try {
     const body = await c.req.json();
     const ip = String(body.ip || '').trim();
@@ -2157,21 +2175,27 @@ app.post('/api/security/blocked-ips', authenticateSoc, async (c) => {
     logSecEvent('blocked_request', { ip, detalles: `Bloqueada manualmente: ${motivo}` });
     return c.json({ ok: true });
   } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
-});
+};
 
-app.delete('/api/security/blocked-ips/:ip', authenticateSoc, async (c) => {
+app.post('/api/security/blocked-ips', authenticateSoc, socBlockedIpsCreateHandler);
+app.post('/api/panel/blocked-ips', authenticateSoc, socBlockedIpsCreateHandler);
+
+const socBlockedIpsDeleteHandler = async (c: any) => {
   const ip = decodeURIComponent(c.req.param('ip'));
   try {
     await db.delete(blockedIps).where(eq(blockedIps.ip, ip));
     blockedIpSet.delete(ip);
     return c.json({ ok: true });
   } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
-});
+};
+
+app.delete('/api/security/blocked-ips/:ip', authenticateSoc, socBlockedIpsDeleteHandler);
+app.delete('/api/panel/blocked-ips/:ip', authenticateSoc, socBlockedIpsDeleteHandler);
 
 // =================================================================
 // RUTAS — SOC EXPORT (CSV / JSON)
 // =================================================================
-app.get('/api/security/events/export', authenticateSoc, async (c) => {
+const socEventsExportHandler = async (c: any) => {
   const format = c.req.query('format') === 'csv' ? 'csv' : 'json';
   const limit  = Math.min(Number(c.req.query('limit') || 1000), 5000);
   try {
@@ -2199,7 +2223,10 @@ app.get('/api/security/events/export', authenticateSoc, async (c) => {
       },
     });
   } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
-});
+};
+
+app.get('/api/security/events/export', authenticateSoc, socEventsExportHandler);
+app.get('/api/panel/events/export', authenticateSoc, socEventsExportHandler);
 
 // =================================================================
 // RUTAS — HONEYPOT (trampa para bots / scanners)
