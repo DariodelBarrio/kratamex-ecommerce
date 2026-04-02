@@ -5,32 +5,22 @@
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=DariodelBarrio_Proyecto_web&metric=coverage)](https://sonarcloud.io/project/overview?id=DariodelBarrio_Proyecto_web)
 [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=DariodelBarrio_Proyecto_web&metric=bugs)](https://sonarcloud.io/project/overview?id=DariodelBarrio_Proyecto_web)
 
-Kratamex es una aplicacion web full-stack de e-commerce construida alrededor de un catalogo de productos, carrito, pagos, panel de administracion y un Security Operations Center (SOC) independiente para monitorizacion de eventos de seguridad.
+Kratamex es un proyecto full-stack de e-commerce con tres superficies claramente separadas: la tienda principal para clientes, un panel de administración y un panel SOC orientado a monitorización y respuesta básica ante eventos de seguridad.
 
-El proyecto esta organizado como un entorno de desarrollo completo, con frontend, backend, persistencia en PostgreSQL y soporte para paneles separados de administracion y SOC.
+La base actual del proyecto está construida sobre React en el frontend, Hono + Drizzle en el backend y PostgreSQL como persistencia. El repositorio también incluye el entorno local de desarrollo con Docker, nginx y documentación operativa.
 
-## Que incluye
+## Qué incluye
 
-- Una tienda con catalogo, filtros, busqueda, favoritos y carrito persistente.
-- Flujo de pago con Stripe mediante `PaymentIntent` y webhook.
-- Autenticacion con tokens de sesion opacos generados en backend.
-- Panel de administracion con operaciones CRUD, analitica y auditoria.
-- Panel SOC con metricas, eventos, bloqueo de IPs y consulta de threat intel.
-- Tests en frontend y backend.
+- Catálogo de productos con filtros, búsqueda, favoritos y carrito persistente.
+- Checkout con Stripe mediante `PaymentIntent` y webhook.
+- Autenticación con tokens de sesión opacos generados en backend.
+- Panel de administración con operaciones CRUD, analítica y auditoría.
+- Panel SOC independiente con métricas, eventos, bloqueo de IPs y threat intel.
+- Cobertura de tests en frontend y backend.
 
-## Estado del repositorio
+## Arquitectura actual
 
-Este repositorio no debe contener bases de datos locales ni artefactos SQLite.
-
-- `tienda.db` y cualquier fichero `*.db`, `*.sqlite` o `*.sqlite3` se consideran residuos de desarrollo.
-- La persistencia soportada para la aplicacion es PostgreSQL.
-- Las bases locales deben mantenerse fuera de Git.
-
-El directorio raiz actua como workspace de coordinacion. No contiene una aplicacion React adicional ni una capa de negocio propia: desde ahi se lanzan scripts de desarrollo, build, test y Docker para los proyectos reales (`frontend/` y `backend/`).
-
-## Stack principal
-
-### Frontend
+### Frontend principal
 
 - React 19
 - TypeScript
@@ -51,7 +41,7 @@ El directorio raiz actua como workspace de coordinacion. No contiene una aplicac
 - Stripe Node SDK
 - Cloudinary
 
-### Infraestructura
+### Infraestructura local
 
 - Docker Compose
 - nginx
@@ -59,65 +49,40 @@ El directorio raiz actua como workspace de coordinacion. No contiene una aplicac
 - SonarCloud
 - Gitleaks
 
-## Autenticacion
+## Autenticación
 
-La aplicacion principal usa tokens de sesion opacos de 256 bits generados en backend y almacenados en memoria del proceso. En el estado actual del proyecto no se usan JWT para las sesiones de usuario.
+La aplicación principal usa tokens de sesión opacos de 256 bits generados en backend y almacenados en memoria del proceso. En el estado actual del proyecto no se usan JWT para las sesiones de usuario.
 
-El SOC tiene su propio flujo de autenticacion y sus propias credenciales, separado del acceso del panel de administracion.
+El panel SOC tiene su propio flujo de autenticación y sus propias credenciales. No comparte acceso con el panel de administración ni con el login de cliente.
 
 ## Accesos principales
 
-| Ruta | Descripcion | Acceso |
+| Ruta | Descripción | Acceso |
 |---|---|---|
-| `/` | Catalogo principal | Publico |
-| `/producto/:id` | Detalle de producto | Publico |
-| `/login` | Acceso a la aplicacion principal | Publico |
-| `/registro` | Registro de clientes | Publico |
+| `/` | Catálogo principal | Público |
+| `/producto/:id` | Detalle de producto | Público |
+| `/login` | Acceso a la aplicación principal | Público |
+| `/registro` | Registro de clientes | Público |
 | `/perfil` | Perfil del usuario | Usuario autenticado |
 | `/mis-pedidos` | Historial de pedidos | Usuario autenticado |
-| `/admin` | Panel de administracion | Admin |
+| `/admin` | Panel de administración | Admin |
 | `/panel` | Security Operations Center | SOC admin |
 
-## Capturas
+## Estado del repositorio
 
-### Catalogo principal
+El directorio raíz funciona como workspace de coordinación. No es una aplicación adicional: desde ahí se lanzan scripts de desarrollo, build, test y Docker para los proyectos reales, que viven en `frontend/` y `backend/`.
 
-![Catalogo principal](docs/screenshots/home-catalogo.png)
+Este repositorio no debe contener bases de datos locales ni artefactos SQLite:
 
-### Panel de administracion
-
-![Panel de administracion](docs/screenshots/admin-dashboard.png)
-
-## Endpoints destacados
-
-### Aplicacion principal
-
-| Metodo | Ruta | Descripcion |
-|---|---|---|
-| GET | `/api/productos` | Lista de productos |
-| GET | `/api/productos/:id` | Detalle de producto |
-| POST | `/api/login` | Login de la aplicacion principal |
-| POST | `/api/register` | Registro de clientes |
-| POST | `/api/logout` | Cierre de sesion |
-| GET | `/api/usuario` | Usuario autenticado |
-| PUT | `/api/usuario/perfil` | Actualizacion de perfil |
-| PUT | `/api/usuario/password` | Cambio de contrasena |
-| GET | `/api/mis-pedidos` | Pedidos del usuario |
-
-### SOC
-
-| Metodo | Ruta | Descripcion |
-|---|---|---|
-| POST | `/api/security/login` | Login independiente del SOC |
-| POST | `/api/security/logout` | Logout independiente del SOC |
-| GET | `/api/security/stats` | Metricas del SOC |
-| GET | `/api/security/events` | Eventos de seguridad |
+- `tienda.db` y cualquier fichero `*.db`, `*.sqlite` o `*.sqlite3` se consideran residuos de desarrollo.
+- La persistencia soportada por la aplicación es PostgreSQL.
+- Las bases locales deben mantenerse fuera de Git.
 
 ## Puesta en marcha
 
-### Scripts desde la raiz
+### Scripts desde la raíz
 
-El `package.json` raiz existe para orquestar el repositorio. Los comandos utiles viven ahi para no tener que recordar rutas manualmente:
+El `package.json` raíz existe para orquestar el workspace:
 
 ```bash
 npm run dev:backend
@@ -129,7 +94,7 @@ npm run docker:up
 
 ### Docker Compose
 
-Importante: `docker-compose.yml`, `.env.example` y `backend/.env.example` estan preparados solo para desarrollo local. No deben reutilizarse como configuracion de produccion.
+Importante: `docker-compose.yml`, `.env.example` y `backend/.env.example` están preparados solo para desarrollo local. No deben reutilizarse como configuración de producción.
 
 ```bash
 cp .env.example .env
@@ -146,7 +111,7 @@ Servicios esperados en local:
 | Backend | http://localhost:3001 |
 | PostgreSQL | localhost:5432 |
 
-### Ejecucion manual
+### Ejecución manual
 
 ```bash
 # Backend
@@ -158,7 +123,7 @@ cd frontend && npm install && npm run dev
 
 ## Credenciales de desarrollo
 
-El repositorio no documenta credenciales demo fijas para uso general.
+El repositorio no publica credenciales demo fijas para uso general.
 
 Las cuentas iniciales dependen de tus variables de entorno locales:
 
@@ -166,11 +131,36 @@ Las cuentas iniciales dependen de tus variables de entorno locales:
 - `USER_STANDARD` / `USER_PASS`
 - `SOC_ADMIN_USER` / `SOC_ADMIN_PASS`
 
-Aunque sea un entorno local, usa valores no triviales.
+Aunque sea un entorno local, conviene usar valores no triviales.
 
 ## Variables de entorno
 
-Los archivos `.env.example` y `backend/.env.example` son plantillas orientadas a desarrollo local. Sirven como referencia de estructura, no como configuracion endurecida ni como ejemplo valido para produccion.
+Los archivos `.env.example` y `backend/.env.example` son plantillas de desarrollo local. Sirven como referencia de estructura, no como configuración endurecida ni como ejemplo válido para producción.
+
+## Endpoints destacados
+
+### Aplicación principal
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/api/productos` | Lista de productos |
+| GET | `/api/productos/:id` | Detalle de producto |
+| POST | `/api/login` | Login de la aplicación principal |
+| POST | `/api/register` | Registro de clientes |
+| POST | `/api/logout` | Cierre de sesión |
+| GET | `/api/usuario` | Usuario autenticado |
+| PUT | `/api/usuario/perfil` | Actualización de perfil |
+| PUT | `/api/usuario/password` | Cambio de contraseña |
+| GET | `/api/mis-pedidos` | Pedidos del usuario |
+
+### SOC
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/api/security/login` | Login independiente del SOC |
+| POST | `/api/security/logout` | Logout independiente del SOC |
+| GET | `/api/security/stats` | Métricas del SOC |
+| GET | `/api/security/events` | Eventos de seguridad |
 
 ## Estructura del proyecto
 
@@ -180,14 +170,24 @@ proyecto/
 |-- backend/                   # API Hono + Drizzle + PostgreSQL
 |-- nginx/                     # reverse proxy HTTPS para desarrollo local
 |-- docs/                      # capturas, notas y documentos auxiliares
-|-- nextjs/                    # experimento paralelo, no es la app principal desplegada
+|-- scripts/                   # utilidades puntuales de validación y testing
+|-- nextjs/                    # exploración paralela, no es la app principal desplegada
 |-- docker-compose.yml         # stack local de desarrollo
-|-- package.json               # scripts raiz para coordinar el workspace
-|-- scripts/                   # utilidades puntuales de validacion y testing
+|-- package.json               # scripts raíz para coordinar el workspace
 |-- correcciones_seguridad.md  # historial de hardening y remediaciones
 |-- README.md
 ```
 
 ## Nota sobre `nextjs/`
 
-Existe una carpeta `nextjs/` porque hubo una exploracion de migracion. A dia de hoy no es el frontend canonico del proyecto ni la superficie que sirve Docker por defecto. La implementacion principal sigue siendo `frontend/`.
+La carpeta `nextjs/` existe porque hubo una exploración de migración. A día de hoy no es el frontend canónico del proyecto ni la superficie que Docker sirve por defecto. La implementación principal sigue siendo `frontend/`.
+
+## Capturas
+
+### Catálogo principal
+
+![Catalogo principal](docs/screenshots/home-catalogo.png)
+
+### Panel de administración
+
+![Panel de administracion](docs/screenshots/admin-dashboard.png)
