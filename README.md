@@ -183,7 +183,7 @@ proyecto/
 |-- nextjs/                    # experimento paralelo, no es la app principal desplegada
 |-- docker-compose.yml         # stack local de desarrollo
 |-- package.json               # scripts raiz para coordinar el workspace
-|-- simulate_attacks.mjs       # utilidades puntuales de validacion y testing
+|-- scripts/                   # utilidades puntuales de validacion y testing
 |-- correcciones_seguridad.md  # historial de hardening y remediaciones
 |-- README.md
 ```
