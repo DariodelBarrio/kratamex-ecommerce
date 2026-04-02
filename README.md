@@ -191,3 +191,7 @@ La carpeta `nextjs/` existe porque hubo una exploración de migración. A día d
 ### Panel de administración
 
 ![Panel de administracion](docs/screenshots/admin-dashboard.png)
+
+### Panel SOC
+
+![Panel SOC](docs/screenshots/soc-panel-20260402.png)
