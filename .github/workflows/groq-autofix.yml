@@ -76,6 +76,7 @@ jobs:
 
       - name: Verify TypeScript (frontend + backend)
         id: tsc
+        if: steps.autofix.outcome == 'success'
         run: |
           cd frontend && npx tsc --noEmit
           cd ../backend && npx tsc --noEmit
@@ -96,8 +97,8 @@ jobs:
           git config user.email "groq-autofix[bot]@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then
-            echo "No changes to commit"
-            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Autofix step reported success but no diff was produced"
+            exit 1
           else
             git commit -m "fix: autofix issues SonarCloud via Groq 🤖"
             git push
@@ -105,7 +106,7 @@ jobs:
           fi
 
       - name: SonarCloud Scan (actualiza issues tras fixes)
-        if: steps.tsc.outcome == 'success'
+        if: steps.tsc.outcome == 'success' && steps.commit.outputs.changed == 'true'
         uses: SonarSource/sonarcloud-github-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
