@@ -12,6 +12,9 @@ import {
   exportPedidosCsv, exportProductosCsv, patchProductoStock, getAuditLog,
 } from '../../api';
 
+const AUTH_TOKEN_KEY = 'kratamex_token';
+const AUTH_USER_KEY = 'kratamex_user';
+
 function Admin() {
   const [autenticado, setAutenticado] = useState(false);
   const [username, setUsername] = useState('');
@@ -35,14 +38,18 @@ function Admin() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
-      if (response.ok) {
-        const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.user?.role === 'admin') {
         setAutenticado(true);
         setToken(data.token);
-        localStorage.setItem('kratamex_token', data.token);
+        localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user));
         setError('');
+      } else if (response.ok) {
+        setError('Acceso denegado: se requiere rol admin');
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(AUTH_USER_KEY);
       } else {
-        const data = await response.json();
         setError(data.error || 'Credenciales incorrectas');
       }
     } catch {
@@ -93,7 +100,8 @@ function Admin() {
     setFormProducto={setFormProducto}
     onLogout={async () => {
       await fetch('/api/logout', { method: 'POST', headers: { 'Authorization': token } });
-      localStorage.removeItem('kratamex_token');
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_USER_KEY);
       setAutenticado(false); setUsername(''); setPassword(''); setToken('');
     }} />;
 }

@@ -1,6 +1,7 @@
 name: kratamex
 
 # =================================================================
+# SOLO DESARROLLO LOCAL. NO USAR EN PRODUCCION.
 # SERVICIOS
 # =================================================================
 services:
@@ -47,6 +48,18 @@ services:
       DB_NAME:       ${POSTGRES_DB:-kratamex}
       DB_USER:       ${POSTGRES_USER:-kratamex}
       DB_PASSWORD:   ${POSTGRES_PASSWORD:-kratamex_dev}
+      CLIENT_DB_HOST: postgres
+      CLIENT_DB_PORT: 5432
+      CLIENT_DB_NAME: ${CLIENT_DB_NAME:-kratamex_clientes}
+      CLIENT_DB_USER: ${POSTGRES_USER:-kratamex}
+      CLIENT_DB_PASSWORD: ${POSTGRES_PASSWORD:-kratamex_dev}
+      SOC_DB_HOST:   postgres
+      SOC_DB_PORT:   5432
+      SOC_DB_NAME:   ${SOC_DB_NAME:-kratamex_soc}
+      SOC_DB_USER:   ${POSTGRES_USER:-kratamex}
+      SOC_DB_PASSWORD: ${POSTGRES_PASSWORD:-kratamex_dev}
+      SOC_ADMIN_USER: ${SOC_ADMIN_USER:-soc_admin_local}
+      SOC_ADMIN_PASS: ${SOC_ADMIN_PASS:-CAMBIAR_SOC_ADMIN_PASS_LOCAL}
       CORS_ORIGIN:   https://localhost
     depends_on:
       postgres:

@@ -250,7 +250,7 @@ function EventLog({ events, tipoFiltro, setTipoFiltro, exportEvents, renderVtBad
 const SOC_TOKEN_KEY = 'kratamex_soc_token';
 
 export default function SecurityDashboard() {
-  const [token, setToken] = useState(() => localStorage.getItem(SOC_TOKEN_KEY) ?? '');
+  const [token, setToken] = useState('');
   const [authed, setAuthed] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -268,16 +268,6 @@ export default function SecurityDashboard() {
   const [blockIpInput, setBlockIpInput] = useState('');
   const [blockMotivo, setBlockMotivo] = useState('');
   const [blockLoading, setBlockLoading] = useState(false);
-
-  // Restaurar sesi&oacute;n al montar si hay token guardado
-  useEffect(() => {
-    const saved = localStorage.getItem(SOC_TOKEN_KEY);
-    if (!saved) return;
-    fetch('/api/security/stats', { headers: { Authorization: saved } }).then(r => {
-      if (r.ok) { setAuthed(true); }
-      else { localStorage.removeItem(SOC_TOKEN_KEY); setToken(''); }
-    }).catch(() => { /* sin conexi&oacute;n -- dejamos el token para reintentar */ });
-  }, []);
 
   const loadData = useCallback(async (tk: string) => {
     setLoading(true);
@@ -369,14 +359,14 @@ export default function SecurityDashboard() {
   const handleLogin = async () => {
     setLoginErr('');
     try {
-      const res = await fetch('/api/login', {
+      const res = await fetch('/api/security/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
       const data = await res.json();
-      if (!res.ok || data.user?.role !== 'admin') {
-        setLoginErr(data.error || 'Acceso denegado: se requiere rol admin');
+      if (!res.ok) {
+        setLoginErr(data.error || 'Acceso denegado al SOC');
         return;
       }
       localStorage.setItem(SOC_TOKEN_KEY, data.token);
@@ -388,7 +378,7 @@ export default function SecurityDashboard() {
   };
 
   const handleLogout = () => {
-    fetch('/api/logout', { method: 'POST', headers: { Authorization: token } });
+    fetch('/api/security/logout', { method: 'POST', headers: { Authorization: token } });
     localStorage.removeItem(SOC_TOKEN_KEY);
     setAuthed(false); setToken(''); setUsername(''); setPassword('');
   };

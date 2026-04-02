@@ -431,7 +431,7 @@ npm run db:studio     # Abre GUI visual de la DB en el navegador
 
 Al arrancar, el backend crea las tablas (`CREATE TABLE IF NOT EXISTS`) y hace seed de:
 - **15 productos** (6 portátiles, 6 gaming, 3 sobremesa) con imágenes de Unsplash
-- **2 usuarios**: `admin` (argon2id de `admin123`) y `user` (argon2id de `user123`)
+- **Cuentas locales de desarrollo** definidas por variables de entorno (`ADMIN_USER` / `ADMIN_PASS` y `USER_STANDARD` / `USER_PASS`)
 - **Reseñas de ejemplo** en varios productos
 
 ---
@@ -585,7 +585,7 @@ const threatLevel =
 ```bash
 node simulate_attacks.mjs [URL] [ADMIN_PASSWORD]
 # Ejemplo:
-node simulate_attacks.mjs http://localhost:3000 admin123
+node simulate_attacks.mjs http://localhost:3000 <ADMIN_PASS>
 ```
 
 Secuencia de eventos generados:
@@ -713,6 +713,8 @@ docker compose up --build -d
 docker compose logs -f backend
 docker compose logs -f frontend
 ```
+
+> ADVERTENCIA: `docker-compose.yml`, `.env.example` y `backend/.env.example` son solo para desarrollo local. No los trates como base de una configuracion de produccion.
 
 ### Accesos
 
@@ -912,18 +914,20 @@ cd backend && npm run db:studio
 
 ```bash
 # Genera eventos de seguridad para probar el panel SOC
-node simulate_attacks.mjs http://localhost:3000 admin123
+node simulate_attacks.mjs http://localhost:3000 <ADMIN_PASS>
 
 # Personalizar URL si usas otro puerto
-node simulate_attacks.mjs http://localhost:3001 admin123
+node simulate_attacks.mjs http://localhost:3001 <ADMIN_PASS>
 ```
 
 ### Usuarios de ejemplo
 
+ADVERTENCIA: estas cuentas son solo para desarrollo local y dependen de tus variables de entorno. No documentes ni reutilices credenciales triviales en entornos compartidos o produccion.
+
 | Username | Password | Rol |
 |----------|----------|-----|
-| admin | admin123 | admin |
-| user | user123 | standard |
+| `ADMIN_USER` | `ADMIN_PASS` | admin |
+| `USER_STANDARD` | `USER_PASS` | standard |
 
 ### Estructura de interfaces TypeScript
 

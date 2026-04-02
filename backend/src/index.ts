@@ -26,6 +26,7 @@ import fs from 'node:fs';
 import argon2 from 'argon2';
 import nodemailer from 'nodemailer';
 import { v2 as cloudinary } from 'cloudinary';
+import { Pool as PgPool } from 'pg';
 
 import { db, pool } from './db/index';
 import {
@@ -49,6 +50,31 @@ import { anomalyDetector } from './ip-anomaly';
 
 const PORT = 3001;
 const IVA_RATE = 0.21;
+const CLIENT_DB_HOST = process.env.CLIENT_DB_HOST || process.env.DB_HOST || 'localhost';
+const CLIENT_DB_PORT = Number.parseInt(process.env.CLIENT_DB_PORT || process.env.DB_PORT || '5432');
+const CLIENT_DB_NAME = process.env.CLIENT_DB_NAME || 'kratamex_clientes';
+const CLIENT_DB_USER = process.env.CLIENT_DB_USER || process.env.DB_USER || 'kratamex';
+const CLIENT_DB_PASSWORD = process.env.CLIENT_DB_PASSWORD || process.env.DB_PASSWORD;
+const SOC_DB_HOST = process.env.SOC_DB_HOST || process.env.DB_HOST || 'localhost';
+const SOC_DB_PORT = Number.parseInt(process.env.SOC_DB_PORT || process.env.DB_PORT || '5432');
+const SOC_DB_NAME = process.env.SOC_DB_NAME || 'kratamex_soc';
+const SOC_DB_USER = process.env.SOC_DB_USER || process.env.DB_USER || 'kratamex';
+const SOC_DB_PASSWORD = process.env.SOC_DB_PASSWORD || process.env.DB_PASSWORD;
+
+const socPool = new PgPool({
+  host: SOC_DB_HOST,
+  port: SOC_DB_PORT,
+  database: SOC_DB_NAME,
+  user: SOC_DB_USER,
+  password: SOC_DB_PASSWORD,
+});
+const clientPool = new PgPool({
+  host: CLIENT_DB_HOST,
+  port: CLIENT_DB_PORT,
+  database: CLIENT_DB_NAME,
+  user: CLIENT_DB_USER,
+  password: CLIENT_DB_PASSWORD,
+});
 
 // =================================================================
 // WEB PUSH (VAPID) — genera claves con: npx web-push generate-vapid-keys
@@ -291,13 +317,24 @@ type SessionData = {
   twoFactorVerified?: boolean;
 };
 
+type SocSessionData = {
+  id: number;
+  username: string;
+  createdAt: number;
+};
+
 const sessions: Record<string, SessionData> = {};
+const socSessions: Record<string, SocSessionData> = {};
 const SESSION_TTL = 8 * 60 * 60 * 1000;
+const SOC_SESSION_TTL = 8 * 60 * 60 * 1000;
 
 setInterval(() => {
   const now = Date.now();
   for (const [token, session] of Object.entries(sessions)) {
     if (now - session.createdAt > SESSION_TTL) delete sessions[token];
+  }
+  for (const [token, session] of Object.entries(socSessions)) {
+    if (now - session.createdAt > SOC_SESSION_TTL) delete socSessions[token];
   }
 }, 15 * 60 * 1000);
 
@@ -374,7 +411,7 @@ setInterval(() => {
 // =================================================================
 // HONO APP
 // =================================================================
-type Variables = { user: SessionData };
+type Variables = { user: SessionData; socUser: SocSessionData };
 const app = new Hono<{ Variables: Variables }>();
 
 // IPs de proxies de confianza (nginx en Docker usa la red interna 172.x.x.x)
@@ -559,6 +596,20 @@ const requireAdmin: MiddlewareHandler<{ Variables: Variables }> = async (c, next
   await next();
 };
 
+const authenticateSoc: MiddlewareHandler<{ Variables: Variables }> = async (c, next) => {
+  const token = c.req.header('authorization');
+  if (!token || !socSessions[token]) {
+    return c.json({ error: 'No autenticado en SOC' }, 401);
+  }
+  const session = socSessions[token];
+  if (Date.now() - session.createdAt > SOC_SESSION_TTL) {
+    delete socSessions[token];
+    return c.json({ error: 'Sesion SOC expirada' }, 401);
+  }
+  c.set('socUser', session);
+  await next();
+};
+
 const optionalAuth: MiddlewareHandler<{ Variables: Variables }> = async (c, next) => {
   const token = c.req.header('authorization');
   if (token && sessions[token]) {
@@ -653,6 +704,77 @@ async function logAudit(adminId: number, adminUsername: string, accion: string, 
   try {
     await db.insert(auditLog).values({ adminId, adminUsername, accion, entidad, entidadId, detalles });
   } catch (err) { console.error('[logAudit]', err); }
+}
+
+type ClientUserRow = {
+  id: number;
+  username: string;
+  password: string;
+  email: string | null;
+  nombre: string | null;
+  direccion: string | null;
+  telefono: string | null;
+  idioma: string | null;
+  avatar: string | null;
+  puntos: number | null;
+};
+
+async function getClientUserByUsername(username: string): Promise<ClientUserRow | null> {
+  const result = await clientPool.query(
+    `SELECT id, username, password, email, nombre, direccion, telefono, idioma, avatar, puntos
+     FROM client_users WHERE username = $1`,
+    [username],
+  );
+  return result.rows[0] ?? null;
+}
+
+async function getClientUserByEmail(email: string): Promise<ClientUserRow | null> {
+  const result = await clientPool.query(
+    `SELECT id, username, password, email, nombre, direccion, telefono, idioma, avatar, puntos
+     FROM client_users WHERE email = $1`,
+    [email],
+  );
+  return result.rows[0] ?? null;
+}
+
+async function ensureClientShadowUser(data: {
+  username: string;
+  password: string;
+  email?: string | null;
+  nombre?: string | null;
+  direccion?: string | null;
+  telefono?: string | null;
+  idioma?: string | null;
+  avatar?: string | null;
+  puntos?: number | null;
+}) {
+  const [existing] = await db.select().from(usuarios).where(eq(usuarios.username, data.username));
+  const payload = {
+    username: data.username,
+    password: data.password,
+    email: data.email ?? null,
+    nombre: data.nombre ?? null,
+    direccion: data.direccion ?? null,
+    telefono: data.telefono ?? null,
+    idioma: data.idioma ?? 'es',
+    avatar: data.avatar ?? null,
+    puntos: data.puntos ?? 0,
+    role: 'standard' as const,
+  };
+  if (existing) {
+    await db.update(usuarios).set(payload).where(eq(usuarios.id, existing.id));
+    return existing;
+  }
+  const [created] = await db.insert(usuarios).values(payload).returning({
+    id: usuarios.id,
+    username: usuarios.username,
+    role: usuarios.role,
+    avatar: usuarios.avatar,
+    nombre: usuarios.nombre,
+    email: usuarios.email,
+    puntos: usuarios.puntos,
+  });
+  return created;
 }
 
 // =================================================================
@@ -1535,26 +1657,36 @@ const honeypotAuth: MiddlewareHandler = async (c, next) => {
 app.post('/api/register', honeypotAuth, loginRateLimiter, zValidator('json', RegisterSchema), async (c) => {
   const { username, password, email, nombre } = c.req.valid('json');
   try {
-    const [existing] = await db.select({ id: usuarios.id }).from(usuarios)
-      .where(or(eq(usuarios.username, username), eq(usuarios.email, email)));
-    if (existing) return c.json({ error: 'El usuario o email ya existe' }, 409);
+    const [existingAdmin] = await db.select({ id: usuarios.id }).from(usuarios)
+      .where(and(or(eq(usuarios.username, username), eq(usuarios.email, email)), eq(usuarios.role, 'admin')));
+    const existingClientByUsername = await getClientUserByUsername(username);
+    const existingClientByEmail = await getClientUserByEmail(email);
+    if (existingAdmin || existingClientByUsername || existingClientByEmail) return c.json({ error: 'El usuario o email ya existe' }, 409);
 
     const hashedPassword = await argon2.hash(password);
-    const [user] = await db.insert(usuarios).values({
-      username: sanitizeText(username),
+    const cleanUsername = sanitizeText(username);
+    const cleanNombre = nombre ? sanitizeText(nombre) : null;
+    await clientPool.query(
+      `INSERT INTO client_users (username, password, email, nombre, idioma, puntos)
+       VALUES ($1, $2, $3, $4, 'es', 0)`,
+      [cleanUsername, hashedPassword, email, cleanNombre],
+    );
+    const user = await ensureClientShadowUser({
+      username: cleanUsername,
       password: hashedPassword,
       email,
-      nombre:  nombre ? sanitizeText(nombre) : null,
-      role:    'standard',
-    }).returning({ id: usuarios.id, username: usuarios.username, role: usuarios.role });
+      nombre: cleanNombre,
+      idioma: 'es',
+      puntos: 0,
+    });
 
     const token = crypto.randomBytes(32).toString('hex');
-    sessions[token] = { id: user.id, username: user.username, role: user.role ?? 'standard', avatar: null, createdAt: Date.now() };
+    sessions[token] = { id: user.id, username: user.username, role: 'standard', avatar: null, createdAt: Date.now() };
 
     return c.json({
       success: true,
       token,
-      user: { id: user.id, username: user.username, role: user.role },
+      user: { id: user.id, username: user.username, role: 'standard', email, nombre: cleanNombre, puntos: 0 },
       message: 'Cuenta creada correctamente',
     }, 201);
   } catch (err) {
@@ -1580,10 +1712,27 @@ app.post('/api/login', honeypotAuth, loginRateLimiter, zValidator('json', LoginS
   }
 
   try {
-    const [user] = await db.select().from(usuarios).where(eq(usuarios.username, username));
+    const [adminUser] = await db.select().from(usuarios)
+      .where(and(eq(usuarios.username, username), eq(usuarios.role, 'admin')));
+    let user: any = adminUser;
+    if (!user) {
+      const clientUser = await getClientUserByUsername(username);
+      if (clientUser) {
+        const shadowUser = await ensureClientShadowUser(clientUser);
+        user = {
+          ...shadowUser,
+          password: clientUser.password,
+          avatar: clientUser.avatar,
+          nombre: clientUser.nombre,
+          email: clientUser.email,
+          puntos: clientUser.puntos ?? 0,
+          role: 'standard',
+        };
+      }
+    }
     let passwordValida = false;
-    if (user) {
-      try { passwordValida = await argon2.verify(user.password, password); }
+    if (adminUser) {
+      try { passwordValida = await argon2.verify(adminUser.password, password); }
       catch { passwordValida = false; }
     }
     if (!user || !passwordValida) {
@@ -1607,10 +1756,66 @@ app.post('/api/login', honeypotAuth, loginRateLimiter, zValidator('json', LoginS
   }
 });
 
+app.post('/api/security/login', loginRateLimiter, zValidator('json', LoginSchema), async (c) => {
+  const { username, password } = c.req.valid('json');
+  const ip = getClientIP(c);
+
+  try {
+    const result = await socPool.query(
+      'SELECT id, username, password FROM soc_admins WHERE username = $1',
+      [username],
+    );
+    const admin = result.rows[0];
+    let passwordValida = false;
+    if (admin?.password) {
+      try { passwordValida = await argon2.verify(admin.password, password); }
+      catch { passwordValida = false; }
+    }
+    if (!admin || !passwordValida) {
+      await logSecEvent('login_fail', {
+        ip,
+        username,
+        endpoint: '/api/security/login',
+        metodo: 'POST',
+        userAgent: c.req.header('user-agent'),
+        detalles: 'Credenciales SOC incorrectas',
+      });
+      return c.json({ error: 'Credenciales SOC incorrectas' }, 401);
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    socSessions[token] = { id: admin.id, username: admin.username, createdAt: Date.now() };
+    await logSecEvent('login_ok', {
+      ip,
+      username,
+      endpoint: '/api/security/login',
+      metodo: 'POST',
+      userAgent: c.req.header('user-agent'),
+      detalles: 'Sesion SOC iniciada',
+    });
+    return c.json({
+      success: true,
+      token,
+      user: { id: admin.id, username: admin.username, role: 'soc_admin' },
+      message: 'Inicio de sesion SOC correcto',
+    });
+  } catch (err) {
+    console.error(err);
+    return c.json({ error: 'Error interno del servidor' }, 500);
+  }
+});
+
 app.post('/api/logout', (c) => {
   const token = c.req.header('authorization');
   if (token && sessions[token]) delete sessions[token];
+  if (token && socSessions[token]) delete socSessions[token];
   return c.json({ message: 'Sesión cerrada' });
+});
+
+app.post('/api/security/logout', (c) => {
+  const token = c.req.header('authorization');
+  if (token && socSessions[token]) delete socSessions[token];
+  return c.json({ message: 'Sesion SOC cerrada' });
 });
 
 app.get('/api/usuario', authenticate, (c) => {
@@ -1706,6 +1911,19 @@ app.put('/api/usuario/perfil', authenticate, zValidator('json', PerfilSchema), a
     if (data.idioma !== undefined) updateData.idioma = data.idioma;
 
     await db.update(usuarios).set(updateData).where(eq(usuarios.id, user.id));
+    if (user.role !== 'admin') {
+      const sets: string[] = [];
+      const values: unknown[] = [];
+      let idx = 1;
+      for (const [key, value] of Object.entries(updateData)) {
+        sets.push(`${key} = $${idx++}`);
+        values.push(value);
+      }
+      if (sets.length) {
+        values.push(user.username);
+        await clientPool.query(`UPDATE client_users SET ${sets.join(', ')} WHERE username = $${idx}`, values);
+      }
+    }
     return c.json({ mensaje: 'Perfil actualizado' });
   } catch (err) {
     console.error(err);
@@ -1739,12 +1957,20 @@ app.put('/api/usuario/password', authenticate, zValidator('json', CambiarPasswor
   try {
     const user = c.get('user');
     const { passwordActual, passwordNueva } = c.req.valid('json');
-    const [row] = await db.select().from(usuarios).where(eq(usuarios.id, user.id));
+    let row;
+    if (user.role === 'admin') {
+      [row] = await db.select().from(usuarios).where(eq(usuarios.id, user.id));
+    } else {
+      row = await getClientUserByUsername(user.username);
+    }
     if (!row) return c.json({ error: 'Usuario no encontrado' }, 404);
     const valida = await argon2.verify(row.password, passwordActual);
     if (!valida) return c.json({ error: 'Contraseña actual incorrecta' }, 400);
     const hash = await argon2.hash(passwordNueva);
     await db.update(usuarios).set({ password: hash }).where(eq(usuarios.id, user.id));
+    if (user.role !== 'admin') {
+      await clientPool.query('UPDATE client_users SET password = $1 WHERE username = $2', [hash, user.username]);
+    }
     // Invalidar todas las sesiones del usuario excepto la actual
     const tokenActual = c.req.header('authorization');
     for (const [t, s] of Object.entries(sessions)) {
@@ -1785,7 +2011,7 @@ app.get('/api/admin/usuarios', authenticate, requireTwoFactorVerified, requireAd
 // =================================================================
 // RUTAS — SECURITY OPERATIONS CENTER
 // =================================================================
-app.get('/api/security/events', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
+app.get('/api/security/events', authenticateSoc, async (c) => {
   try {
     const limit = Math.min(Number(c.req.query('limit') || 100), 500);
     const tipo  = c.req.query('tipo');
@@ -1797,7 +2023,7 @@ app.get('/api/security/events', authenticate, requireTwoFactorVerified, requireA
   } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
 });
 
-app.get('/api/security/stats', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
+app.get('/api/security/stats', authenticateSoc, async (c) => {
   try {
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
@@ -1831,7 +2057,7 @@ app.get('/api/security/stats', authenticate, requireTwoFactorVerified, requireAd
     `);
 
     // Active sessions count
-    const activeSessions = Object.keys(sessions).filter(t => Date.now() - sessions[t].createdAt < SESSION_TTL).length;
+    const activeSessions = Object.keys(socSessions).filter(t => Date.now() - socSessions[t].createdAt < SOC_SESSION_TTL).length;
 
     return c.json({
       total:          Number(total.c),
@@ -1855,7 +2081,7 @@ const VT_CACHE_TTL = 60 * 60 * 1000; // 1h — no quemar cuota en cada refresh
 
 const VALID_IP = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/;
 
-app.get('/api/security/ip/:ip/threat', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
+app.get('/api/security/ip/:ip/threat', authenticateSoc, async (c) => {
   const ip = c.req.param('ip');
 
   if (!VALID_IP.test(ip)) return c.json({ error: 'IP inválida' }, 400);
@@ -1906,14 +2132,14 @@ app.get('/api/security/ip/:ip/threat', authenticate, requireTwoFactorVerified, r
 // =================================================================
 // RUTAS — BLOCKED IPs (SOC)
 // =================================================================
-app.get('/api/security/blocked-ips', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
+app.get('/api/security/blocked-ips', authenticateSoc, async (c) => {
   try {
     const rows = await db.select().from(blockedIps).orderBy(desc(blockedIps.createdAt));
     return c.json(rows);
   } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
 });
 
-app.post('/api/security/blocked-ips', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
+app.post('/api/security/blocked-ips', authenticateSoc, async (c) => {
   try {
     const body = await c.req.json();
     const ip = String(body.ip || '').trim();
@@ -1933,7 +2159,7 @@ app.post('/api/security/blocked-ips', authenticate, requireTwoFactorVerified, re
   } catch (err) { console.error(err); return c.json({ error: 'Error' }, 500); }
 });
 
-app.delete('/api/security/blocked-ips/:ip', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
+app.delete('/api/security/blocked-ips/:ip', authenticateSoc, async (c) => {
   const ip = decodeURIComponent(c.req.param('ip'));
   try {
     await db.delete(blockedIps).where(eq(blockedIps.ip, ip));
@@ -1945,7 +2171,7 @@ app.delete('/api/security/blocked-ips/:ip', authenticate, requireTwoFactorVerifi
 // =================================================================
 // RUTAS — SOC EXPORT (CSV / JSON)
 // =================================================================
-app.get('/api/security/events/export', authenticate, requireTwoFactorVerified, requireAdmin, async (c) => {
+app.get('/api/security/events/export', authenticateSoc, async (c) => {
   const format = c.req.query('format') === 'csv' ? 'csv' : 'json';
   const limit  = Math.min(Number(c.req.query('limit') || 1000), 5000);
   try {
@@ -2230,15 +2456,17 @@ app.post('/api/forgot-password', generalRateLimiter, async (c) => {
   const ok = { ok: true, message: 'Si ese email está registrado, recibirás un enlace en breve.' };
 
   try {
-    const [user] = await db.select({ id: usuarios.id, email: usuarios.email, username: usuarios.username })
-      .from(usuarios).where(eq(usuarios.email, email.toLowerCase().trim()));
+    const user = await getClientUserByEmail(email.toLowerCase().trim());
 
     if (!user?.email) return c.json(ok);
 
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
 
-    await db.insert(passwordResetTokens).values({ usuarioId: user.id, token, expiresAt });
+    await clientPool.query(
+      'INSERT INTO customer_password_reset_tokens (username, token, expires_at) VALUES ($1, $2, $3)',
+      [user.username, token, expiresAt.toISOString()],
+    );
     await sendResetEmail(user.email, token, user.username);
 
     return c.json(ok);
@@ -2257,16 +2485,22 @@ app.post('/api/reset-password', generalRateLimiter, async (c) => {
 
   try {
     const now = new Date();
-    const [record] = await db.select().from(passwordResetTokens)
-      .where(eq(passwordResetTokens.token, token));
+    const result = await clientPool.query(
+      `SELECT id, username, expires_at, used_at
+       FROM customer_password_reset_tokens
+       WHERE token = $1`,
+      [token],
+    );
+    const record = result.rows[0];
 
     if (!record) return c.json({ error: 'Enlace inválido o expirado' }, 400);
-    if (record.usedAt) return c.json({ error: 'Este enlace ya fue utilizado' }, 400);
-    if (record.expiresAt < now) return c.json({ error: 'El enlace ha expirado. Solicita uno nuevo.' }, 400);
+    if (record.used_at) return c.json({ error: 'Este enlace ya fue utilizado' }, 400);
+    if (new Date(record.expires_at) < now) return c.json({ error: 'El enlace ha expirado. Solicita uno nuevo.' }, 400);
 
     const hash = await argon2.hash(password);
-    await db.update(usuarios).set({ password: hash }).where(eq(usuarios.id, record.usuarioId));
-    await db.update(passwordResetTokens).set({ usedAt: now }).where(eq(passwordResetTokens.id, record.id));
+    await clientPool.query('UPDATE client_users SET password = $1 WHERE username = $2', [hash, record.username]);
+    await db.update(usuarios).set({ password: hash }).where(eq(usuarios.username, record.username));
+    await clientPool.query('UPDATE customer_password_reset_tokens SET used_at = $1 WHERE id = $2', [now.toISOString(), record.id]);
 
     return c.json({ ok: true, message: 'Contraseña actualizada correctamente' });
   } catch (err) {
@@ -2289,6 +2523,191 @@ app.notFound((c) => c.json({ error: 'Ruta no encontrada' }, 404));
 // =================================================================
 // INICIALIZACIÓN
 // =================================================================
+async function ensureSocDatabaseExists() {
+  const adminPool = new PgPool({
+    host: SOC_DB_HOST,
+    port: SOC_DB_PORT,
+    database: 'postgres',
+    user: SOC_DB_USER,
+    password: SOC_DB_PASSWORD,
+  });
+  try {
+    const { rows } = await adminPool.query('SELECT 1 FROM pg_database WHERE datname = $1', [SOC_DB_NAME]);
+    if (rows.length === 0) {
+      await adminPool.query(`CREATE DATABASE "${SOC_DB_NAME.replace(/"/g, '""')}"`);
+      console.log(`SOC DB creada: ${SOC_DB_NAME}`);
+    }
+  } finally {
+    await adminPool.end();
+  }
+}
+
+async function ensureClientDatabaseExists() {
+  const adminPool = new PgPool({
+    host: CLIENT_DB_HOST,
+    port: CLIENT_DB_PORT,
+    database: 'postgres',
+    user: CLIENT_DB_USER,
+    password: CLIENT_DB_PASSWORD,
+  });
+  try {
+    const { rows } = await adminPool.query('SELECT 1 FROM pg_database WHERE datname = $1', [CLIENT_DB_NAME]);
+    if (rows.length === 0) {
+      await adminPool.query(`CREATE DATABASE "${CLIENT_DB_NAME.replace(/"/g, '""')}"`);
+      console.log(`CLIENT DB creada: ${CLIENT_DB_NAME}`);
+    }
+  } finally {
+    await adminPool.end();
+  }
+}
+
+async function waitForClientDB(maxAttempts = 15, delayMs = 2000) {
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      await clientPool.query('SELECT 1');
+      console.log('CLIENT PostgreSQL: conexion establecida');
+      return;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`CLIENT PostgreSQL: intento ${i}/${maxAttempts} fallido (${msg}). Reintentando en ${delayMs}ms...`);
+      if (i === maxAttempts) throw err;
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+}
+
+async function initClientDB() {
+  await clientPool.query(`
+    CREATE TABLE IF NOT EXISTS client_users (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password TEXT NOT NULL,
+      email TEXT UNIQUE,
+      nombre TEXT,
+      direccion TEXT,
+      telefono TEXT,
+      idioma TEXT DEFAULT 'es',
+      avatar TEXT,
+      puntos INTEGER DEFAULT 0 NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await clientPool.query(`
+    CREATE TABLE IF NOT EXISTS customer_password_reset_tokens (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  console.log('CLIENT PostgreSQL: tablas verificadas');
+}
+
+async function seedClientUsers() {
+  const stdUser = process.env.USER_STANDARD ?? 'user';
+  const stdPass = process.env.USER_PASS;
+  if (!stdPass) {
+    console.error('BLOCKER: USER_PASS env var is required');
+    process.exit(1);
+  }
+
+  const result = await clientPool.query('SELECT id, password, email, nombre, avatar, puntos, idioma, direccion, telefono FROM client_users WHERE username = $1', [stdUser]);
+  if (result.rows.length === 0) {
+    const hash = await argon2.hash(stdPass);
+    await clientPool.query(
+      `INSERT INTO client_users (username, password, email, nombre, idioma, puntos)
+       VALUES ($1, $2, $3, $4, 'es', 0)`,
+      [stdUser, hash, 'user@kratamex.com', 'Usuario Demo'],
+    );
+    await ensureClientShadowUser({
+      username: stdUser,
+      password: hash,
+      email: 'user@kratamex.com',
+      nombre: 'Usuario Demo',
+      idioma: 'es',
+      puntos: 0,
+    });
+    console.log('Cliente demo creado');
+    return;
+  }
+
+  const current = result.rows[0];
+  let hash = current.password;
+  if (!String(hash).startsWith('$argon2')) {
+    hash = await argon2.hash(stdPass);
+    await clientPool.query('UPDATE client_users SET password = $1 WHERE username = $2', [hash, stdUser]);
+    console.log('Cliente demo migrado a argon2id');
+  }
+  await ensureClientShadowUser({
+    username: stdUser,
+    password: hash,
+    email: current.email,
+    nombre: current.nombre,
+    avatar: current.avatar,
+    puntos: current.puntos ?? 0,
+    idioma: current.idioma,
+    direccion: current.direccion,
+    telefono: current.telefono,
+  });
+}
+
+async function waitForSocDB(maxAttempts = 15, delayMs = 2000) {
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      await socPool.query('SELECT 1');
+      console.log('SOC PostgreSQL: conexion establecida');
+      return;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`SOC PostgreSQL: intento ${i}/${maxAttempts} fallido (${msg}). Reintentando en ${delayMs}ms...`);
+      if (i === maxAttempts) throw err;
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+}
+
+async function initSocDB() {
+  await socPool.query(`
+    CREATE TABLE IF NOT EXISTS soc_admins (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  console.log('SOC PostgreSQL: tablas verificadas');
+}
+
+async function seedSocAdmins() {
+  const username = process.env.SOC_ADMIN_USER ?? 'soc_admin';
+  const password = process.env.SOC_ADMIN_PASS;
+  if (!password) {
+    console.error('BLOCKER: SOC_ADMIN_PASS env var is required');
+    process.exit(1);
+  }
+
+  const result = await socPool.query('SELECT id, password FROM soc_admins WHERE username = $1', [username]);
+  if (result.rows.length === 0) {
+    await socPool.query(
+      'INSERT INTO soc_admins (username, password) VALUES ($1, $2)',
+      [username, await argon2.hash(password)],
+    );
+    console.log('SOC admin creado');
+    return;
+  }
+
+  const current = result.rows[0];
+  if (!String(current.password).startsWith('$argon2')) {
+    await socPool.query(
+      'UPDATE soc_admins SET password = $1 WHERE id = $2',
+      [await argon2.hash(password), current.id],
+    );
+    console.log('SOC admin migrado a argon2id');
+  }
+}
+
 async function initDB() {
   const createTableQueries = [
     `CREATE TABLE IF NOT EXISTS categorias (
@@ -2845,12 +3264,20 @@ if (process.env.NODE_ENV !== 'test') {
   (async () => {
     try {
       await waitForDB();
+      await ensureClientDatabaseExists();
+      await waitForClientDB();
+      await ensureSocDatabaseExists();
+      await waitForSocDB();
       await initDB();
+      await initClientDB();
+      await initSocDB();
       await seedProductos();
       await seedUsuarios();
+      await seedClientUsers();
       await seedPedidos();
       await seedCupones();
       await seedCategorias();
+      await seedSocAdmins();
       serve({ fetch: app.fetch, port: PORT }, () =>
         console.log(`Backend Hono v3 corriendo en http://localhost:${PORT}`)
       );
