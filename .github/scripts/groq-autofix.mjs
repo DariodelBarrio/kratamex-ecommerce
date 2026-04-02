@@ -14,6 +14,9 @@ const REPLICATE_API_KEY = process.env.REPLICATE_API_KEY;
 const COHERE_API_KEY = process.env.COHERE_API_KEY;
 const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
 const PAGE_SIZE = 100;
+const MAX_FILE_CHARS = 30000;
+const MAX_ISSUES_PER_FILE = 8;
+const API_COOLDOWN_MS = 5000;
 
 // ── Fetch all open issues from SonarCloud ──────────────────────────────────
 
@@ -72,6 +75,19 @@ function readLocal(filePath) {
   }
 }
 
+function isEligibleFile(filePath, code, issues) {
+  if (!filePath.startsWith("frontend/src/") && !filePath.startsWith("backend/src/")) {
+    return { ok: false, reason: "outside frontend/src or backend/src" };
+  }
+  if (code.length > MAX_FILE_CHARS) {
+    return { ok: false, reason: `file too large (${code.length} chars)` };
+  }
+  if (issues.length > MAX_ISSUES_PER_FILE) {
+    return { ok: false, reason: `too many issues in one file (${issues.length})` };
+  }
+  return { ok: true };
+}
+
 // ── Build prompt ───────────────────────────────────────────────────────────
 
 function buildPrompt(filePath, code, issues) {
@@ -79,7 +95,22 @@ function buildPrompt(filePath, code, issues) {
     .map((i) => `  - Line ${i.line ?? "?"}: [${i.severity}] ${i.rule} — ${i.message}`)
     .join("\n");
 
-  return `Fix the following SonarCloud issues in this file. Return ONLY the complete corrected file content, no explanations, no markdown fences.\n\nFile: ${filePath}\n\nIssues to fix:\n${issueList}\n\nCurrent file content:\n${code}`;
+  return `Fix the following SonarCloud issues in this file.
+
+Rules:
+- Return ONLY the complete corrected file content.
+- Do not wrap the answer in markdown fences.
+- Preserve existing behavior unless required to fix the listed issues.
+- Make the smallest safe changes possible.
+- If you cannot produce a safe fix, return the original file content exactly.
+
+File: ${filePath}
+
+Issues to fix:
+${issueList}
+
+Current file content:
+${code}`;
 }
 
 // ── Call Gemini ────────────────────────────────────────────────────────────
@@ -346,19 +377,29 @@ async function tryFix(filePath, code, issues) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function normalizeModelOutput(text) {
+  if (typeof text !== "string") return "";
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/^```(?:\w+)?\n([\s\S]*?)\n```$/);
+  return fenced ? fenced[1] : trimmed;
+}
+
 // ── Validate fix with tsc before writing ───────────────────────────────────
 
 function validateAndWrite(filePath, originalCode, fixedCode) {
   const fullPath = join(process.cwd(), filePath);
+  const normalizedCode = normalizeModelOutput(fixedCode);
+
+  if (!normalizedCode || normalizedCode === originalCode) {
+    return false;
+  }
 
   // Write the fixed code temporarily
-  writeFileSync(fullPath, fixedCode, "utf8");
+  writeFileSync(fullPath, normalizedCode, "utf8");
 
   try {
     // Determine which tsc to run based on file path
-    const tscDir = filePath.startsWith("src/") || filePath.startsWith("backend/")
-      ? "backend"
-      : "frontend";
+    const tscDir = filePath.startsWith("backend/") ? "backend" : "frontend";
 
     execSync("npx tsc --noEmit", {
       cwd: join(process.cwd(), tscDir),
@@ -430,11 +471,13 @@ async function main() {
     return;
   }
 
-  const byFile = groupByFile(issues);
+  const byFile = new Map(
+    [...groupByFile(issues).entries()].sort((a, b) => a[1].length - b[1].length)
+  );
   let fixed = 0;
   let skipped = 0;
-  let consecutiveFails = 0;
-  const MAX_CONSECUTIVE_FAILS = 3;
+  let attempted = 0;
+  const skippedReasons = [];
 
   for (const [filePath, fileIssues] of byFile.entries()) {
     console.log(`\nProcessing: ${filePath} (${fileIssues.length} issues)`);
@@ -442,47 +485,80 @@ async function main() {
     const code = readLocal(filePath);
     if (!code) {
       console.log(`  → Skipped (file not found locally)`);
+      skippedReasons.push(`${filePath}: file not found locally`);
       skipped++;
       continue;
     }
 
+    const eligibility = isEligibleFile(filePath, code, fileIssues);
+    if (!eligibility.ok) {
+      console.log(`  → Skipped (${eligibility.reason})`);
+      skippedReasons.push(`${filePath}: ${eligibility.reason}`);
+      skipped++;
+      continue;
+    }
+
+    attempted++;
+
     try {
       const result = await tryFixWithValidation(filePath, code, fileIssues);
 
-      // CRITICAL: Last API failed — stop immediately
       if (result && result.exhausted) {
-        console.log(`\n🛑 CRITICAL SATURATION: All 9 APIs completely exhausted`);
-        console.log(`Stopping workflow immediately to preserve GitHub minutes...\n`);
-        break;
+        console.log(`  → Skipped (all APIs exhausted for this file)`);
+        skippedReasons.push(`${filePath}: all APIs exhausted`);
+        skipped++;
+        continue;
       }
 
-      // Normal handling
       if (result === null || !result.success) {
-        consecutiveFails++;
-        console.log(`  → Skipped (all APIs exhausted) [${consecutiveFails}/${MAX_CONSECUTIVE_FAILS}]`);
-
-        // Detectar saturación: si N archivos seguidos fallan, parar
-        if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
-          console.log(`\n⚠️  SATURATION DETECTED: All APIs exhausted for ${consecutiveFails} consecutive files`);
-          console.log(`Stopping workflow to avoid wasting GitHub minutes...\n`);
-          break;
-        }
-
+        console.log(`  → Skipped (no valid fix produced)`);
+        skippedReasons.push(`${filePath}: no valid fix produced`);
         skipped++;
       } else {
-        consecutiveFails = 0;
         console.log(`  → Written to ${filePath}`);
         fixed++;
       }
     } catch (err) {
       console.error(`  → Error: ${err.message}`);
+      skippedReasons.push(`${filePath}: ${err.message}`);
       skipped++;
     }
 
-    await sleep(120000);
+    await sleep(API_COOLDOWN_MS);
   }
 
-  console.log(`\nDone. Fixed: ${fixed} files. Skipped: ${skipped} files.`);
+  const summary = [
+    `Attempted: ${attempted}`,
+    `Fixed: ${fixed}`,
+    `Skipped: ${skipped}`,
+  ];
+  console.log(`\nDone. ${summary.join(" | ")}`);
+
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    const summaryLines = [
+      "## Groq Autofix Summary",
+      "",
+      `- Attempted files: ${attempted}`,
+      `- Fixed files: ${fixed}`,
+      `- Skipped files: ${skipped}`,
+    ];
+    if (skippedReasons.length) {
+      summaryLines.push("", "### Skipped details", ...skippedReasons.slice(0, 20).map((reason) => `- ${reason}`));
+    }
+    writeFileSync(
+      process.env.GITHUB_STEP_SUMMARY,
+      summaryLines.join("\n"),
+      { flag: "a" }
+    );
+  }
+
+  if (process.env.GITHUB_OUTPUT) {
+    writeFileSync(process.env.GITHUB_OUTPUT, `fixed_count=${fixed}\nattempted_count=${attempted}\n`, { flag: "a" });
+  }
+
+  if (fixed === 0) {
+    throw new Error("Autofix completed without producing any valid code changes");
+  }
 }
 
 main().catch((err) => {
