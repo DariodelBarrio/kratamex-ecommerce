@@ -125,7 +125,7 @@ export function BrandCarousel() {
   }, [moveDrag])
 
   return (
-    <section className="bc-outer" aria-label="Carrusel de marcas">
+    <div className="bc-outer" aria-label="Carrusel de marcas">
       <div className="bc-fade-left" aria-hidden="true" />
       <div
         className="bc-track"
@@ -151,6 +151,6 @@ export function BrandCarousel() {
         ))}
       </div>
       <div className="bc-fade-right" aria-hidden="true" />
-    </section>
+    </div>
   )
 }
