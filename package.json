@@ -1,0 +1,21 @@
+{
+  "name": "kratamex-workspace",
+  "private": true,
+  "description": "Workspace raiz para coordinar frontend, backend y utilidades locales de Kratamex.",
+  "scripts": {
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "build:backend": "npm --prefix backend run build",
+    "test:frontend": "npm --prefix frontend run test",
+    "test:backend": "npm --prefix backend run test",
+    "build": "npm run build:backend && npm run build:frontend",
+    "test": "npm run test:backend && npm run test:frontend",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  }
+}
