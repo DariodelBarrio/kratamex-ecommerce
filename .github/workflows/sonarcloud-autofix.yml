@@ -1,0 +1,94 @@
+name: SonarCloud AutoFix
+
+on:
+  repository_dispatch:
+    types: [sonarcloud_critical_issue]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sonarcloud-autofix
+  cancel-in-progress: false
+
+jobs:
+  autofix:
+    name: Auto-fix SonarCloud issue
+    runs-on: ubuntu-latest
+
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      TOGETHER_API_KEY: ${{ secrets.TOGETHER_API_KEY }}
+      MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+      REPLICATE_API_KEY: ${{ secrets.REPLICATE_API_KEY }}
+      COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+      HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY }}
+      ISSUE_KEY: ${{ github.event.client_payload.issueKey }}
+      ISSUE_MESSAGE: ${{ github.event.client_payload.message }}
+      ISSUE_FILE_PATH: ${{ github.event.client_payload.filePath }}
+      ISSUE_LINE: ${{ github.event.client_payload.line }}
+      ISSUE_RULE: ${{ github.event.client_payload.rule }}
+      ISSUE_SEVERITY: ${{ github.event.client_payload.severity }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        run: npm --prefix backend ci
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci --legacy-peer-deps
+
+      - name: Run autofix script
+        id: autofix
+        run: node .github/scripts/groq-autofix.mjs
+
+      - name: Validate build and tests
+        run: |
+          npm run build
+          npm run test
+
+      - name: Commit and push to main
+        if: steps.autofix.outputs.fixed_count != '0'
+        run: |
+          git config user.name "SonarCloud AutoFix Bot"
+          git config user.email "sonarcloud-autofix@github.local"
+
+          if git diff --quiet; then
+            echo "No changes detected after autofix"
+            exit 0
+          fi
+
+          git add -A
+          git commit -m "fix: SonarCloud autofix ${ISSUE_KEY:-manual} (${{ steps.autofix.outputs.fixed_count }} files)"
+          git pull --rebase origin main
+          git push origin main
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Autofix failed for issue ${ISSUE_KEY:-manual}"
+          echo "Manual review required"

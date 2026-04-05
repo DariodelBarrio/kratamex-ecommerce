@@ -1,0 +1,265 @@
+import { pgTable, serial, text, real, integer, timestamp, boolean, unique } from 'drizzle-orm/pg-core';
+
+// =================================================================
+// CATEGORÍAS
+// =================================================================
+export const categorias = pgTable('categorias', {
+  id:          serial('id').primaryKey(),
+  nombre:      text('nombre').notNull().unique(),
+  descripcion: text('descripcion'),
+  imagen:      text('imagen'),
+  orden:       integer('orden').default(0),
+  activa:      boolean('activa').default(true),
+  createdAt:   timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// =================================================================
+// PRODUCTOS
+// =================================================================
+export const productos = pgTable('productos', {
+  id:          serial('id').primaryKey(),
+  nombre:      text('nombre').notNull(),
+  descripcion: text('descripcion'),
+  precio:      real('precio').notNull(),
+  imagen:      text('imagen'),
+  categoria:   text('categoria'),
+  stock:       integer('stock').default(0).notNull(),
+  sku:         text('sku'),
+  destacado:   boolean('destacado').default(false),
+  activo:      boolean('activo').default(true),
+  fecha:       timestamp('fecha', { withTimezone: true }).defaultNow(),
+  deletedAt:   timestamp('deleted_at', { withTimezone: true }),
+  cpu:         text('cpu'),
+  gpu:         text('gpu'),
+  ram:         text('ram'),
+  almacenamiento: text('almacenamiento'),
+});
+
+// =================================================================
+// GALERÍA DE IMÁGENES (múltiples por producto)
+// =================================================================
+export const productoImagenes = pgTable('producto_imagenes', {
+  id:         serial('id').primaryKey(),
+  productoId: integer('producto_id').notNull().references(() => productos.id, { onDelete: 'cascade' }),
+  url:        text('url').notNull(),
+  orden:      integer('orden').default(0),
+  createdAt:  timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// =================================================================
+// PEDIDOS
+// =================================================================
+export const pedidos = pgTable('pedidos', {
+  id:          serial('id').primaryKey(),
+  usuarioId:   integer('usuario_id').references(() => usuarios.id, { onDelete: 'set null' }),
+  cliente:     text('cliente').notNull(),
+  email:       text('email').notNull(),
+  direccion:   text('direccion').notNull(),
+  total:       real('total').notNull(),
+  subtotal:    real('subtotal'),
+  impuestos:   real('impuestos'),
+  envio:       real('envio'),
+  cuponId:     integer('cupon_id').references(() => cupones.id, { onDelete: 'set null' }),
+  descuento:   real('descuento').default(0),
+  estado:      text('estado').default('pendiente'),
+  notas:       text('notas'),
+  fecha:       timestamp('fecha', { withTimezone: true }).defaultNow(),
+});
+
+export const pedidoItems = pgTable('pedido_items', {
+  id:         serial('id').primaryKey(),
+  pedidoId:   integer('pedido_id').notNull().references(() => pedidos.id, { onDelete: 'cascade' }),
+  productoId: integer('producto_id').notNull().references(() => productos.id, { onDelete: 'restrict' }),
+  cantidad:   integer('cantidad').notNull(),
+  precio:     real('precio').notNull(),
+});
+
+// =================================================================
+// USUARIOS
+// =================================================================
+export const usuarios = pgTable('usuarios', {
+  id:        serial('id').primaryKey(),
+  username:  text('username').notNull().unique(),
+  password:  text('password').notNull(),
+  email:     text('email'),
+  nombre:    text('nombre'),
+  direccion: text('direccion'),
+  telefono:  text('telefono'),
+  role:      text('role').default('standard'),
+  avatar:    text('avatar'),
+  idioma:    text('idioma').default('es'),
+  puntos:    integer('puntos').default(0).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  twoFactorSecret: text('two_factor_secret'),
+  twoFactorEnabled: boolean('two_factor_enabled').default(false),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+});
+
+// =================================================================
+// COMENTARIOS
+// =================================================================
+export const comentarios = pgTable('comentarios', {
+  id:         serial('id').primaryKey(),
+  productoId: integer('producto_id').notNull().references(() => productos.id, { onDelete: 'cascade' }),
+  autor:      text('autor').notNull(),
+  contenido:  text('contenido').notNull(),
+  fecha:      timestamp('fecha', { withTimezone: true }).defaultNow(),
+});
+
+// =================================================================
+// VALORACIONES (ratings)
+// =================================================================
+export const valoraciones = pgTable('valoraciones', {
+  id:         serial('id').primaryKey(),
+  productoId: integer('producto_id').notNull().references(() => productos.id, { onDelete: 'cascade' }),
+  usuarioId:  integer('usuario_id').notNull().references(() => usuarios.id, { onDelete: 'cascade' }),
+  puntuacion: integer('puntuacion').notNull(), // 1-5
+  titulo:     text('titulo'),
+  comentario: text('comentario'),
+  fecha:      timestamp('fecha', { withTimezone: true }).defaultNow(),
+}, (t) => [
+  unique('uq_valoracion_producto_usuario').on(t.productoId, t.usuarioId),
+]);
+
+// =================================================================
+// FAVORITOS (wishlist persistente)
+// =================================================================
+export const favoritos = pgTable('favoritos', {
+  id:         serial('id').primaryKey(),
+  usuarioId:  integer('usuario_id').notNull().references(() => usuarios.id, { onDelete: 'cascade' }),
+  productoId: integer('producto_id').notNull().references(() => productos.id, { onDelete: 'cascade' }),
+  createdAt:  timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (t) => [
+  unique('uq_favorito_usuario_producto').on(t.usuarioId, t.productoId),
+]);
+
+// =================================================================
+// CUPONES
+// =================================================================
+export const cupones = pgTable('cupones', {
+  id:          serial('id').primaryKey(),
+  codigo:      text('codigo').notNull().unique(),
+  tipo:        text('tipo').notNull().default('porcentaje'), // 'porcentaje' | 'fijo'
+  valor:       real('valor').notNull(),
+  minCompra:   real('min_compra').default(0),
+  maxUsos:     integer('max_usos'),
+  usosActuales: integer('usos_actuales').default(0),
+  activo:      boolean('activo').default(true),
+  fechaInicio: timestamp('fecha_inicio', { withTimezone: true }),
+  fechaFin:    timestamp('fecha_fin', { withTimezone: true }),
+  createdAt:   timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// =================================================================
+// SUSCRIPCIONES PUSH
+// =================================================================
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  id:         serial('id').primaryKey(),
+  usuarioId:  integer('usuario_id').references(() => usuarios.id, { onDelete: 'cascade' }),
+  endpoint:   text('endpoint').notNull().unique(),
+  p256dh:     text('p256dh').notNull(),
+  auth:       text('auth').notNull(),
+  createdAt:  timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// =================================================================
+// SECURITY EVENTS (SOC log)
+// =================================================================
+export const securityEvents = pgTable('security_events', {
+  id:        serial('id').primaryKey(),
+  tipo:      text('tipo').notNull(), // login_ok | login_fail | auth_invalid | forbidden | brute_force | register | honeypot | blocked_request
+  ip:        text('ip'),
+  username:  text('username'),
+  endpoint:  text('endpoint'),
+  metodo:    text('metodo'),
+  userAgent: text('user_agent'),
+  detalles:  text('detalles'),
+  fecha:     timestamp('fecha', { withTimezone: true }).defaultNow(),
+});
+
+// =================================================================
+// PASSWORD RESET TOKENS
+// =================================================================
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+  id:        serial('id').primaryKey(),
+  usuarioId: integer('usuario_id').notNull().references(() => usuarios.id, { onDelete: 'cascade' }),
+  token:     text('token').notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt:    timestamp('used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// =================================================================
+// AUTH SESSIONS (persistentes)
+// =================================================================
+export const authSessions = pgTable('auth_sessions', {
+  id:                serial('id').primaryKey(),
+  token:             text('token').notNull().unique(),
+  scope:             text('scope').notNull(),
+  userId:            integer('user_id').notNull(),
+  username:          text('username').notNull(),
+  role:              text('role').notNull(),
+  avatar:            text('avatar'),
+  twoFactorVerified: boolean('two_factor_verified').default(false).notNull(),
+  createdAt:         timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt:         timestamp('expires_at', { withTimezone: true }).notNull(),
+});
+
+// =================================================================
+// RATE LIMIT COUNTERS (persistentes)
+// =================================================================
+export const rateLimitCounters = pgTable('rate_limit_counters', {
+  id:            serial('id').primaryKey(),
+  scope:         text('scope').notNull(),
+  key:           text('key').notNull(),
+  count:         integer('count').default(0).notNull(),
+  windowStartedAt: timestamp('window_started_at', { withTimezone: true }).notNull(),
+  blockedUntil:  timestamp('blocked_until', { withTimezone: true }),
+  updatedAt:     timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  unique('uq_rate_limit_scope_key').on(t.scope, t.key),
+]);
+
+// =================================================================
+// BLOCKED IPs (auto-block + manual)
+// =================================================================
+export const blockedIps = pgTable('blocked_ips', {
+  id:            serial('id').primaryKey(),
+  ip:            text('ip').notNull().unique(),
+  motivo:        text('motivo'),
+  bloqueadoHasta: timestamp('bloqueado_hasta', { withTimezone: true }),
+  createdAt:     timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// =================================================================
+// AUDIT LOG (acciones de administrador)
+// =================================================================
+export const auditLog = pgTable('audit_log', {
+  id:            serial('id').primaryKey(),
+  adminId:       integer('admin_id').references(() => usuarios.id, { onDelete: 'set null' }),
+  adminUsername: text('admin_username').notNull(),
+  accion:        text('accion').notNull(), // 'crear' | 'actualizar' | 'eliminar' | 'cambio_estado'
+  entidad:       text('entidad').notNull(), // 'producto' | 'pedido' | 'categoria' | 'cupon' | 'valoracion'
+  entidadId:     integer('entidad_id'),
+  detalles:      text('detalles'),
+  fecha:         timestamp('fecha', { withTimezone: true }).defaultNow(),
+});
+
+// =================================================================
+// Tipos inferidos
+// =================================================================
+export type Producto      = typeof productos.$inferSelect;
+export type Pedido        = typeof pedidos.$inferSelect;
+export type PedidoItem    = typeof pedidoItems.$inferSelect;
+export type Usuario       = typeof usuarios.$inferSelect;
+export type Comentario    = typeof comentarios.$inferSelect;
+export type Categoria     = typeof categorias.$inferSelect;
+export type Valoracion    = typeof valoraciones.$inferSelect;
+export type Favorito      = typeof favoritos.$inferSelect;
+export type Cupon         = typeof cupones.$inferSelect;
+export type ProductoImagen = typeof productoImagenes.$inferSelect;
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type BlockedIp        = typeof blockedIps.$inferSelect;
+export type AuditLogEntry    = typeof auditLog.$inferSelect;
+export type AuthSession      = typeof authSessions.$inferSelect;
+export type RateLimitCounter = typeof rateLimitCounters.$inferSelect;
