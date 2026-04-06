@@ -44,7 +44,6 @@ export default function Auth({ onAuth, defaultMode = 'login' }: Readonly<AuthPro
         });
       }
 
-      localStorage.setItem('kratamex_token', data.token);
       onAuth(data);
     } catch (err: any) {
       setError(err.message || 'Error inesperado');

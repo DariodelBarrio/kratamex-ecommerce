@@ -2,43 +2,45 @@ import { useRef, useCallback } from 'react'
 
 function HPLogo() {
   return (
-    <svg width="44" height="44" viewBox="0 0 44 44" aria-label="HP">
-      <circle cx="22" cy="22" r="20" stroke="#0096D6" strokeWidth="2.2" fill="none" />
-      <text x="22" y="27" textAnchor="middle" fill="#0096D6"
-        fontSize="16" fontWeight="900" fontFamily="Arial, sans-serif">hp</text>
-    </svg>
+    <img
+      src={`data:image/svg+xml;utf8,<svg width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><circle cx="22" cy="22" r="20" stroke="#0096D6" strokeWidth="2.2" fill="none" /><text x="22" y="27" textAnchor="middle" fill="#0096D6" fontSize="16" fontWeight="900" fontFamily="Arial, sans-serif">hp</text></svg>`}
+      alt="HP"
+      width="44"
+      height="44"
+    />
   )
 }
 
 function IntelLogo() {
   return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-      <span style={{ color: '#0068B5', fontWeight: 300, fontSize: '1.45rem', fontFamily: 'Georgia, serif', fontStyle: 'italic' }}>intel</span>
-      <span style={{ color: '#0068B5', fontWeight: 900, fontSize: '1.6rem', lineHeight: 1 }}>.</span>
-    </span>
+    <img
+      src={`data:image/svg+xml;utf8,<svg width="100" height="30" viewBox="0 0 100 30" xmlns="http://www.w3.org/2000/svg"><text x="50" y="20" textAnchor="middle" fill="#0068B5" fontSize="16" fontWeight="300" fontFamily="Georgia, serif" fontStyle="italic">intel</text><text x="70" y="20" textAnchor="middle" fill="#0068B5" fontSize="18" fontWeight="900" fontFamily="Georgia, serif">.</text></svg>`}
+      alt="Intel"
+      width="100"
+      height="30"
+    />
   )
 }
 
 function NvidiaLogo() {
   return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-        <polygon points="0,18 18,0 18,18" fill="#76B900" />
-      </svg>
-      <span style={{ color: '#76B900', fontWeight: 700, fontSize: '0.95rem', letterSpacing: '0.05em' }}>NVIDIA</span>
-    </span>
+    <img
+      src={`data:image/svg+xml;utf8,<svg width="100" height="30" viewBox="0 0 100 30" xmlns="http://www.w3.org/2000/svg"><polygon points="0,18 18,0 18,18" fill="#76B900" transform="translate(10, 5)" /><text x="50" y="25" textAnchor="middle" fill="#76B900" fontSize="14" fontWeight="700" fontFamily="Arial, sans-serif">NVIDIA</text></svg>`}
+      alt="Nvidia"
+      width="100"
+      height="30"
+    />
   )
 }
 
 function AmdLogo() {
   return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
-        <rect x="4" y="4" width="14" height="14" rx="2" fill="none" stroke="#ED1C24" strokeWidth="2" />
-        <line x1="4" y1="18" x2="18" y2="4" stroke="#ED1C24" strokeWidth="2" />
-      </svg>
-      <span style={{ color: '#ED1C24', fontWeight: 900, fontSize: '1.25rem', letterSpacing: '-0.02em' }}>AMD</span>
-    </span>
+    <img
+      src={`data:image/svg+xml;utf8,<svg width="100" height="30" viewBox="0 0 100 30" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="5" width="14" height="14" rx="2" fill="none" stroke="#ED1C24" strokeWidth="2" /><line x1="10" y1="18" x2="24" y2="4" stroke="#ED1C24" strokeWidth="2" /><text x="50" y="25" textAnchor="middle" fill="#ED1C24" fontSize="18" fontWeight="900" fontFamily="Arial, sans-serif">AMD</text></svg>`}
+      alt="AMD"
+      width="100"
+      height="30"
+    />
   )
 }
 
@@ -79,7 +81,7 @@ export function BrandCarousel() {
     const el = trackRef.current
     if (!el) return
     // Capturar posición actual de la animación CSS
-    const matrix = new DOMMatrix(window.getComputedStyle(el).transform)
+    const matrix = new DOMMatrix(globalThis.getComputedStyle(el).transform)
     dragX.current = matrix.m41
     // Congelar animación en esa posición
     el.style.animation = 'none'
@@ -123,7 +125,7 @@ export function BrandCarousel() {
   }, [moveDrag])
 
   return (
-    <section aria-label="Carrusel de marcas" className="bc-outer">
+    <div className="bc-outer" aria-label="Carrusel de marcas">
       <div className="bc-fade-left" aria-hidden="true" />
       <div
         className="bc-track"
@@ -135,14 +137,20 @@ export function BrandCarousel() {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={stopDrag}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === ' ') {
+            stopDrag();
+          }
+        }}
       >
         {BRANDS_QUAD.map(brand => (
-          <div key={brand.id} className="bc-item">
+          <div key={brand.id} className="bc-item" role="presentation">
             {brand.node}
           </div>
         ))}
       </div>
       <div className="bc-fade-right" aria-hidden="true" />
-    </section>
+    </div>
   )
 }

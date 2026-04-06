@@ -8,6 +8,13 @@
       "when": 1774560477028,
       "tag": "0000_woozy_tyger_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1775203200000,
+      "tag": "0001_security_state_persistence",
+      "breakpoints": true
     }
   ]
 }

@@ -7,14 +7,14 @@ import { X, Lock } from 'lucide-react'
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '')
 
 interface Props {
-  clientSecret: string
-  pedidoId: number
-  total: number
-  onSuccess: () => void
-  onClose: () => void
+  readonly clientSecret: string
+  readonly pedidoId: number
+  readonly total: number
+  readonly onSuccess: () => void
+  readonly onClose: () => void
 }
 
-function CheckoutForm({ pedidoId, total, onSuccess, onClose }: Omit<Props, 'clientSecret'>) {
+function CheckoutForm({ pedidoId, total, onSuccess, onClose }: Readonly<Omit<Props, 'clientSecret'>>) {
   const stripe = useStripe()
   const elements = useElements()
   const [error, setError] = useState('')
@@ -29,7 +29,7 @@ function CheckoutForm({ pedidoId, total, onSuccess, onClose }: Omit<Props, 'clie
 
     const result = await stripe.confirmPayment({
       elements,
-      confirmParams: { return_url: `${window.location.origin}/mis-pedidos` },
+      confirmParams: { return_url: `${globalThis.location.origin}/mis-pedidos` },
       redirect: 'if_required',
     })
 
@@ -71,7 +71,7 @@ function CheckoutForm({ pedidoId, total, onSuccess, onClose }: Omit<Props, 'clie
   )
 }
 
-export function StripeCheckoutModal({ clientSecret, pedidoId, total, onSuccess, onClose }: Props) {
+export function StripeCheckoutModal({ clientSecret, pedidoId, total, onSuccess, onClose }: Readonly<Props>) {
   return (
     <motion.div
       className="stripe-overlay"

@@ -222,6 +222,7 @@ describe('Backend API', () => {
     // block (que devuelve 403).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (pool.query as any).mockRejectedValueOnce(new Error('DB unavailable'));
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     // 12 intentos fallidos — db.select devuelve [] → usuario no existe → 401
     for (let i = 0; i < 12; i++) {
@@ -233,6 +234,7 @@ describe('Backend API', () => {
     expect(res.status).toBe(429);
     const json = await res.json() as { error: string };
     expect(json.error).toMatch(/intentos|bloqueado|tarde/i);
+    consoleErrorSpy.mockRestore();
   });
 
   // ── Register ────────────────────────────────────────────────────

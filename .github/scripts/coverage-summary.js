@@ -127,7 +127,7 @@ function generateParagraph(jobStatus, data, jobName) {
   if (isBackend) {
     return [
       `Excelente — todos los tests del backend pasan y la cobertura de líneas está al ${linesPct}%, por encima del umbral del ${THRESHOLD}%.`,
-      `Como mejora concreta al proyecto (no a los tests), considera migrar el almacenamiento de sesiones de la memoria RAM del servidor a Redis: actualmente, si el servidor se reinicia o se añade una segunda instancia, todos los usuarios pierden su sesión inmediatamente.`,
+      `Como mejora concreta al proyecto (no a los tests), considera mover la persistencia de sesiones y rate limits desde PostgreSQL a Redis si priorizas latencia o ráfagas de tráfico elevadas: hoy ya sobreviven reinicios, pero PostgreSQL no es el almacén óptimo para throttling de muy alta frecuencia.`,
       `Redis resolvería ambos problemas con un cambio relativamente pequeño en la función que crea y valida los tokens de sesión en \`backend/src/index.ts\`.`,
     ].join(' ');
   } else {

@@ -1,9 +1,7 @@
-name: Groq Autofix Sweep
+name: Autofix Manual
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 */4 * * *'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -12,12 +10,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: groq-autofix-sweep
+  group: autofix-manual
   cancel-in-progress: false
 
 jobs:
   autofix:
-    name: Scheduled SonarCloud sweep
+    name: Manual SonarCloud sweep
     runs-on: ubuntu-latest
 
     env:
@@ -69,8 +67,8 @@ jobs:
       - name: Commit and push to main
         if: steps.autofix.outputs.fixed_count != '0'
         run: |
-          git config user.name "Groq Autofix Bot"
-          git config user.email "groq-autofix@github.local"
+          git config user.name "Autofix Manual Bot"
+          git config user.email "autofix-manual@github.local"
 
           if git diff --quiet; then
             echo "No changes detected after autofix"
@@ -78,6 +76,6 @@ jobs:
           fi
 
           git add -A
-          git commit -m "fix: scheduled SonarCloud autofix (${{ steps.autofix.outputs.fixed_count }} files)"
+          git commit -m "fix: manual SonarCloud autofix (${{ steps.autofix.outputs.fixed_count }} files)"
           git pull --rebase origin main
           git push origin main

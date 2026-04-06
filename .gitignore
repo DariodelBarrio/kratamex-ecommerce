@@ -23,6 +23,8 @@ frontend/.env
 .vscode/
 .idea/
 .obsidian/
+.swarm/
+nextjs/
 .claude/
 .claude-flow/
 CLAUDE.md
