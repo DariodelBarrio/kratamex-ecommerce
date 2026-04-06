@@ -12,7 +12,7 @@
 
 .admin-link:hover {
   background: var(--background);
-  color: #1a202c;
+  color: #111827;
   text-decoration: underline;
   font-weight: 600;
 }
@@ -205,13 +205,13 @@
 
 .login-box h2 {
   margin-bottom: 8px;
-  color: #1a202c;
+  color: #111827;
   font-size: 1.75rem;
   font-weight: 700;
 }
 
 .login-box p {
-  color: #4a5568;
+  color: #4b5563;
   margin-bottom: 32px;
   font-size: 0.95rem;
 }
@@ -230,7 +230,7 @@
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #4a5568;
+  color: #4b5563;
   margin-bottom: 8px;
 }
 
@@ -315,14 +315,14 @@
 .back-link {
   display: inline-block;
   margin-top: 28px;
-  color: #4a5568;
+  color: #4b5563;
   text-decoration: none;
   font-size: 0.9rem;
   transition: color 0.2s;
 }
 
 .back-link:hover {
-  color: #1a202c;
+  color: #111827;
 }
 
 .charts-row {
