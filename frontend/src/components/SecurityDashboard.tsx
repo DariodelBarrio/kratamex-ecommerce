@@ -156,7 +156,7 @@ function SocLoginForm({ username, setUsername, password, setPassword, showPass, 
               value={password}
               onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && onLogin()}
-              placeholder="&&bull;&&bull;&&bull;&&bull;&&bull;&&bull;&&bull;&&bull;"
+              placeholder="********"
               autoComplete="off"
               name="soc-pass"
               id="soc-pass"

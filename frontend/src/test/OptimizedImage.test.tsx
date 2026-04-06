@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { OptimizedImage } from '../components/OptimizedImage';
 
 describe('OptimizedImage', () => {
@@ -41,7 +41,9 @@ describe('OptimizedImage', () => {
     );
 
     const img = screen.getByTestId('img');
-    img.dispatchEvent(new Event('load'));
+    await act(async () => {
+      fireEvent.load(img);
+    });
 
     await waitFor(() => {
       expect(img).toHaveAttribute('src', 'test.jpg');

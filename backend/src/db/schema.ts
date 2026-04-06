@@ -190,6 +190,37 @@ export const passwordResetTokens = pgTable('password_reset_tokens', {
 });
 
 // =================================================================
+// AUTH SESSIONS (persistentes)
+// =================================================================
+export const authSessions = pgTable('auth_sessions', {
+  id:                serial('id').primaryKey(),
+  token:             text('token').notNull().unique(),
+  scope:             text('scope').notNull(),
+  userId:            integer('user_id').notNull(),
+  username:          text('username').notNull(),
+  role:              text('role').notNull(),
+  avatar:            text('avatar'),
+  twoFactorVerified: boolean('two_factor_verified').default(false).notNull(),
+  createdAt:         timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt:         timestamp('expires_at', { withTimezone: true }).notNull(),
+});
+
+// =================================================================
+// RATE LIMIT COUNTERS (persistentes)
+// =================================================================
+export const rateLimitCounters = pgTable('rate_limit_counters', {
+  id:            serial('id').primaryKey(),
+  scope:         text('scope').notNull(),
+  key:           text('key').notNull(),
+  count:         integer('count').default(0).notNull(),
+  windowStartedAt: timestamp('window_started_at', { withTimezone: true }).notNull(),
+  blockedUntil:  timestamp('blocked_until', { withTimezone: true }),
+  updatedAt:     timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  unique('uq_rate_limit_scope_key').on(t.scope, t.key),
+]);
+
+// =================================================================
 // BLOCKED IPs (auto-block + manual)
 // =================================================================
 export const blockedIps = pgTable('blocked_ips', {
@@ -230,3 +261,5 @@ export type ProductoImagen = typeof productoImagenes.$inferSelect;
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type BlockedIp        = typeof blockedIps.$inferSelect;
 export type AuditLogEntry    = typeof auditLog.$inferSelect;
+export type AuthSession      = typeof authSessions.$inferSelect;
+export type RateLimitCounter = typeof rateLimitCounters.$inferSelect;

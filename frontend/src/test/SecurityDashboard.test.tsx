@@ -20,7 +20,7 @@ vi.mock('lucide-react', () => ({
 
 // ── Recharts mock ───────────────────────────────────────────────────
 vi.mock('recharts', () => ({
-  AreaChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AreaChart: () => <div data-testid="mock-area-chart" />,
   Area: () => null, XAxis: () => null, YAxis: () => null,
   CartesianGrid: () => null, Tooltip: () => null,
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

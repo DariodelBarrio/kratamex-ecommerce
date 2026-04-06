@@ -41,7 +41,7 @@
 | ID-033 | Static files serving sin protección dotfiles | 🟡 Medio | ✅ Corregido |
 | ID-034 | Validaciones manuales inconsistentes → Zod | 🟡 Medio | ✅ Corregido |
 | ID-035 | CSP misconfiguration — Google Fonts bloqueadas | 🟡 Medio | ✅ Corregido |
-| ID-036 | Sesiones y rate limits en memoria RAM — pérdida en restart | 🟠 Alto | ⚠️ Conocido |
+| ID-036 | Sesiones y rate limits en memoria RAM — pérdida en restart | 🟠 Alto | ✅ Corregido |
 | ID-037 | handleLogout no invalida sesión en servidor | 🔴 Crítico | ✅ Corregido |
 
 ---
