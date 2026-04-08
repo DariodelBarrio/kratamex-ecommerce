@@ -145,7 +145,7 @@ export function BrandCarousel() {
         }}
       >
         {BRANDS_QUAD.map(brand => (
-          <div key={brand.id} className="bc-item">
+          <div key={brand.id} className="bc-item" role="listitem">
             {brand.node}
           </div>
         ))}
