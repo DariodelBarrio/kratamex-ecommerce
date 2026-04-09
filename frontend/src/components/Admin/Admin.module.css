@@ -12,7 +12,7 @@
 
 .admin-link:hover {
   background: var(--background);
-  color: #1a1a1a; /* Changed from #333 to #1a1a1a for better contrast */
+  color: #000000; /* Changed from #1a1a1a to #000000 for better contrast */
   text-decoration: underline;
   font-weight: 600;
 }
