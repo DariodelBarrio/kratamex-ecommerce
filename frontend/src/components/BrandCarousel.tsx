@@ -151,6 +151,46 @@ export function BrandCarousel() {
         ))}
       </div>
       <div className="bc-fade-right" aria-hidden="true" />
+      <div className="bc-controls">
+        <button
+          className="bc-button bc-button-prev"
+          onClick={() => {
+            const el = trackRef.current
+            if (!el) return
+            const single = el.scrollWidth / 4
+            const matrix = new DOMMatrix(globalThis.getComputedStyle(el).transform)
+            const current = matrix.m41
+            el.style.animation = 'none'
+            el.style.transform = `translateX(${current + single}px)`
+            setTimeout(() => {
+              el.style.transform = ''
+              el.style.animation = `bc-scroll ${DURATION}s linear infinite`
+            }, 100)
+          }}
+          aria-label="Marcas anteriores"
+        >
+          ‹
+        </button>
+        <button
+          className="bc-button bc-button-next"
+          onClick={() => {
+            const el = trackRef.current
+            if (!el) return
+            const single = el.scrollWidth / 4
+            const matrix = new DOMMatrix(globalThis.getComputedStyle(el).transform)
+            const current = matrix.m41
+            el.style.animation = 'none'
+            el.style.transform = `translateX(${current - single}px)`
+            setTimeout(() => {
+              el.style.transform = ''
+              el.style.animation = `bc-scroll ${DURATION}s linear infinite`
+            }, 100)
+          }}
+          aria-label="Marcas siguientes"
+        >
+          ›
+        </button>
+      </div>
     </div>
   )
 }
