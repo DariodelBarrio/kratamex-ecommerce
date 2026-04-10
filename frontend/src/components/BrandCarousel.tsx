@@ -143,6 +143,7 @@ export function BrandCarousel() {
             stopDrag();
           }
         }}
+        role="region"
       >
         {BRANDS_QUAD.map(brand => (
           <div key={brand.id} className="bc-item">
