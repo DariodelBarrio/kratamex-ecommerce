@@ -315,14 +315,14 @@
 .back-link {
   display: inline-block;
   margin-top: 28px;
-  color: #4b5563;
+  color: #111827;
   text-decoration: none;
   font-size: 0.9rem;
   transition: color 0.2s;
 }
 
 .back-link:hover {
-  color: #111827;
+  color: #1e293b;
 }
 
 .charts-row {
