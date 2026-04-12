@@ -151,7 +151,7 @@ export function BrandCarousel() {
         ))}
       </div>
       <div className="bc-fade-right" aria-hidden="true" />
-      <div className="bc-controls">
+      <div>
         <button
           className="bc-button bc-button-prev"
           onClick={() => {
