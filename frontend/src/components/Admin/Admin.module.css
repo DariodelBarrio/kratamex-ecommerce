@@ -12,7 +12,7 @@
 
 .admin-link:hover {
   background: var(--background);
-  color: #000000;
+  color: #111827;
   text-decoration: underline;
   font-weight: 600;
 }
@@ -678,8 +678,4 @@
   color: var(--text-muted);
   line-height: 1.5;
   margin: 0;
-}
-
-.review-date {
-  color: #111827;
 }
