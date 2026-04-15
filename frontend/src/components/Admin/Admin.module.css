@@ -686,4 +686,5 @@
   font-size: 0.9rem;
   transition: color 0.2s;
   text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
 }
