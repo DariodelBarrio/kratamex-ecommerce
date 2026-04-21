@@ -688,3 +688,7 @@
   text-decoration-thickness: 1.5px;
   text-underline-offset: 2px;
 }
+
+.back-link:hover {
+  color: #0f172a;
+}
