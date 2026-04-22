@@ -12,7 +12,7 @@
 
 .admin-link:hover {
   background: var(--background);
-  color: #1e293b;
+  color: #0f172a;
   text-decoration: underline;
   font-weight: 600;
 }
@@ -322,7 +322,7 @@
 }
 
 .back-link:hover {
-  color: #1e293b;
+  color: #0f172a;
 }
 
 .charts-row {
@@ -356,7 +356,7 @@
 
 .order-id {
   background: #e0e7ff;
-  color: #1e293b;
+  color: #0f172a;
   padding: 2px 8px;
   border-radius: 6px;
   font-size: 0.8rem;
