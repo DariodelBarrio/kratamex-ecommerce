@@ -7,7 +7,6 @@ function HPLogo() {
       alt="HP"
       width="44"
       height="44"
-      role="presentation"
     />
   )
 }
@@ -19,7 +18,6 @@ function IntelLogo() {
       alt="Intel"
       width="100"
       height="30"
-      role="presentation"
     />
   )
 }
@@ -31,7 +29,6 @@ function NvidiaLogo() {
       alt="Nvidia"
       width="100"
       height="30"
-      role="presentation"
     />
   )
 }
@@ -43,7 +40,6 @@ function AmdLogo() {
       alt="AMD"
       width="100"
       height="30"
-      role="presentation"
     />
   )
 }
