@@ -12,7 +12,7 @@
 
 .admin-link:hover {
   background: var(--background);
-  color: #111111;
+  color: #000000;
   text-decoration: underline;
   font-weight: 600;
 }
@@ -205,7 +205,7 @@
 
 .login-box h2 {
   margin-bottom: 8px;
-  color: #111111;
+  color: #000000;
   font-size: 1.75rem;
   font-weight: 700;
 }
@@ -230,7 +230,7 @@
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #111111;
+  color: #000000;
   margin-bottom: 8px;
 }
 
@@ -315,7 +315,7 @@
 .back-link {
   display: inline-block;
   margin-top: 28px;
-  color: #111111;
+  color: #000000;
   text-decoration: none;
   font-size: 0.9rem;
   transition: color 0.2s;
@@ -324,7 +324,7 @@
 }
 
 .back-link:hover {
-  color: #000000;
+  color: #111111;
 }
 
 .charts-row {
