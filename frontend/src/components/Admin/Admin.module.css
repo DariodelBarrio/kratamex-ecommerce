@@ -344,7 +344,7 @@
 .chart-title {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text-light);
+  color: var(--text);
   margin-bottom: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
