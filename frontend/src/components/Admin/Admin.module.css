@@ -391,7 +391,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: var(--text-light);
+  color: var(--text);
   font-size: 0.875rem;
   transition: border-color 0.2s, background 0.2s;
   padding: 20px;
