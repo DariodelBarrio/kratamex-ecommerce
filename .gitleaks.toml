@@ -1,10 +1,13 @@
 [allowlist]
-  description = "Global allowlist for false positives"
+  description = "Allowlist only audited historical false positives; never exclude private-key paths globally"
+  # This commit is retained only to document the historical TLS exposure.
+  # The key was rotated/removed; keep the exception narrowly scoped to this
+  # known historical commit while allowing future key files to be detected.
+  commits = [
+    "25fda80495fd2dcbed2d9cf59f7eb1fc7dd24471",
+  ]
   paths = [
     '''\.github/workflows/sonar-rebind\.yml$''',
-    '''nginx/certs/.*\.pem$''',
-    '''nginx/certs/.*\.key$''',
-    '''nginx/certs/.*\.crt$''',
   ]
   regexes = [
     '''project_key=\$''',

@@ -396,20 +396,22 @@ docker compose up --build -d
 
 ### Variables importantes
 
+> Los valores `CAMBIAR_*` son obligatorios: sustitúyelos por valores locales únicos antes de iniciar sesión o usar el stack fuera de una máquina desechable.
+
 ```env
 POSTGRES_DB=kratamex
 POSTGRES_USER=kratamex
-POSTGRES_PASSWORD=kratamex_dev
+POSTGRES_PASSWORD=CAMBIAR_POSTGRES_PASS_LOCAL
 SOC_DB_NAME=kratamex_soc
 CLIENT_DB_NAME=kratamex_clientes
-SOC_ADMIN_USER=admin
+SOC_ADMIN_USER=CAMBIAR_SOC_ADMIN_USER_LOCAL
 SOC_ADMIN_PASS=CAMBIAR_SOC_ADMIN_PASS_LOCAL
 ```
 
 ```env
-ADMIN_USER=admin
+ADMIN_USER=CAMBIAR_ADMIN_USER_LOCAL
 ADMIN_PASS=CAMBIAR_ADMIN_PASS_LOCAL
-USER_STANDARD=user
+USER_STANDARD=CAMBIAR_USER_LOCAL
 USER_PASS=CAMBIAR_USER_PASS_LOCAL
 ```
 
